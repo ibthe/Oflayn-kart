@@ -4,11 +4,11 @@
 
 Workflow `.github/workflows/android-ci.yml` запускает unit tests и собирает
 `app/build/outputs/apk/debug/` на каждом push/PR. APK загружается как артефакт
-GitHub Actions на 14 дней. CI использует Android SDK Platform 37, Build Tools 36.0.0, AGP 9.3.1, Gradle 9.6.0, Kotlin 2.4.21 и JDK 21.
+GitHub Actions на 14 дней. CI использует Android SDK Platform 36, Build Tools 36.0.0, AGP 9.3.1, Gradle 9.6.0, Kotlin 2.4.21 и JDK 21.
 
 ## Локальная сборка
 
-Требуются Android Studio с поддержкой AGP 9.3.1, Android SDK Platform 37,
+Требуются Android Studio с поддержкой AGP 9.3.1, Android SDK Platform 36,
 Build Tools 36.0.0 и JDK 17 или новее. В `gradle.properties` временно отключён встроенный Kotlin AGP 9, чтобы использовать внешний Kotlin Gradle Plugin 2.4.21 и Compose compiler той же версии. Если в окружении нет Gradle Wrapper,
 установить Gradle 9.6.0 и выполнить:
 
