@@ -37,13 +37,13 @@ class LocalSettings(context: Context) {
         preferences.edit().putBoolean("language_$code", enabled).apply()
     }
 
-    fun setAppTheme(value: String) {
+    fun updateAppTheme(value: String) {
         if (value !in APP_THEMES) return
         appTheme = value
         preferences.edit().putString("app_theme", value).apply()
     }
 
-    fun setMapTheme(value: String) {
+    fun updateMapTheme(value: String) {
         if (value !in MAP_THEMES) return
         mapTheme = value
         preferences.edit().putString("map_theme", value).apply()

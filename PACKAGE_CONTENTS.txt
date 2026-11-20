@@ -1,6 +1,5 @@
-Georgia Offline — полный пакет исходников
-
-Скрытые файлы и папки включены.
+Georgia Offline — полный пакет проекта
+Архив содержит содержимое корня репозитория. Копировать всё содержимое архива прямо в папку существующего репозитория.
 
 .github/workflows/android-ci.yml
 .gitignore
@@ -32,4 +31,3 @@ gradle/wrapper/gradle-wrapper.properties
 scripts/bootstrap-wrapper.sh
 scripts/verify_offline_manifest.py
 settings.gradle.kts
-PACKAGE_CONTENTS.txt

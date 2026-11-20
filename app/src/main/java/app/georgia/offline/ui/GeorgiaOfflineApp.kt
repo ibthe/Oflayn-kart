@@ -230,13 +230,13 @@ private fun SettingsScreen(modifier: Modifier, settings: LocalSettings) {
         Card {
             Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
                 Text("Тема приложения", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
-                ChoiceRow(listOf("system" to "Системная", "light" to "Светлая", "dark" to "Тёмная"), settings.appTheme, settings::setAppTheme)
+                ChoiceRow(listOf("system" to "Системная", "light" to "Светлая", "dark" to "Тёмная"), settings.appTheme, settings::updateAppTheme)
                 HorizontalDivider()
                 Text("Стиль карты", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
                 ChoiceRow(
                     listOf("classic" to "Классика", "outdoor" to "Топография", "night" to "Ночной", "high_contrast" to "Контрастный"),
                     settings.mapTheme,
-                    settings::setMapTheme
+                    settings::updateMapTheme
                 )
             }
         }

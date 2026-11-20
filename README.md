@@ -93,3 +93,8 @@ Android SDK Platform 36; workflow устанавливает `platforms;android-
 Чтобы сохранить стабильную сборку на доступной платформе API 36, зависимости
 зафиксированы на Compose BOM 2026.03.00 (Compose 1.10.5), Activity Compose 1.11.0
 и Lifecycle 2.10.0. См. `docs/BUILD_ERROR_ANALYSIS.md`.
+
+
+### Последнее исправление сборки
+
+Исправлен конфликт JVM-сеттеров в `LocalSettings`: обработчики темы переименованы в `updateAppTheme` и `updateMapTheme`. Смотрите `docs/BUILD_ERROR_ANALYSIS.md`.
