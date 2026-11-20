@@ -28,6 +28,12 @@ class LocalSettings(context: Context) {
     var storageTreeUri by mutableStateOf(preferences.getString("storage_tree_uri", null))
         private set
 
+    var carLatitude by mutableStateOf(preferences.getString("car_latitude", null)?.toDoubleOrNull())
+        private set
+
+    var carLongitude by mutableStateOf(preferences.getString("car_longitude", null)?.toDoubleOrNull())
+        private set
+
     fun setLanguage(code: String, enabled: Boolean) {
         if (code !in SUPPORTED_LANGUAGES) return
         val updated = enabledLanguages.toMutableSet().apply {
@@ -55,6 +61,27 @@ class LocalSettings(context: Context) {
     }
 
     fun storageUri(): Uri? = storageTreeUri?.let(Uri::parse)
+
+    /** Save a car marker only after the user explicitly taps the save action. */
+    fun saveCarLocation(latitude: Double, longitude: Double) {
+        if (!latitude.isFinite() || !longitude.isFinite()) return
+        if (latitude !in -90.0..90.0 || longitude !in -180.0..180.0) return
+        carLatitude = latitude
+        carLongitude = longitude
+        preferences.edit()
+            .putString("car_latitude", latitude.toString())
+            .putString("car_longitude", longitude.toString())
+            .apply()
+    }
+
+    fun clearCarLocation() {
+        carLatitude = null
+        carLongitude = null
+        preferences.edit()
+            .remove("car_latitude")
+            .remove("car_longitude")
+            .apply()
+    }
 
     companion object {
         val SUPPORTED_LANGUAGES = setOf("en", "ru", "ka")

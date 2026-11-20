@@ -30,3 +30,8 @@ APK assets
 - All region data is built at development/release time, not downloaded by the installed app.
 - The one-APK decision is implemented by putting binary assets in `app/src/main/assets/offline/`; some files are extracted locally for random access.
 - The SD-card choice uses SAF tree URI permissions; physical paths are not hard-coded.
+
+
+## GPS tools implementation
+
+`ToolsScreen` uses Android `LocationManager` with `GPS_PROVIDER` only after the user taps the GPS start action and grants location permission. Updates are removed when the screen leaves composition or GPS is stopped. The implementation does not request background location or internet access. Compass azimuth uses `Sensor.TYPE_ROTATION_VECTOR`; the local car marker is stored in app-private SharedPreferences. Coordinate formatting is isolated in the pure `GeoFormatting` domain helper and covered by unit tests.

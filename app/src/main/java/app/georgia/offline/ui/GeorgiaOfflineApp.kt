@@ -72,7 +72,7 @@ fun GeorgiaOfflineApp(settings: LocalSettings) {
                 AppTab.DISCOVER -> DiscoverScreen(Modifier.padding(padding))
                 AppTab.ROUTE -> RouteScreen(Modifier.padding(padding))
                 AppTab.SAVED -> SavedScreen(Modifier.padding(padding))
-                AppTab.TOOLS -> ToolsScreen(Modifier.padding(padding))
+                AppTab.TOOLS -> ToolsScreen(Modifier.padding(padding), settings)
                 AppTab.SETTINGS -> SettingsScreen(Modifier.padding(padding), settings)
             }
         }
@@ -184,20 +184,6 @@ private fun SavedScreen(modifier: Modifier) {
         PageTitle("Мои места и поездки", "Личные данные будут храниться только на устройстве")
         InfoCard("Избранное", "Папки «Хочу посетить», «Посещено» и пользовательские метки появятся вместе с локальной базой POI.")
         InfoCard("Путевой журнал", "Заметки, фотографии, даты поездок и GPX-треки будут сохраняться локально.")
-    }
-}
-
-@Composable
-private fun ToolsScreen(modifier: Modifier) {
-    PageColumn(modifier) {
-        PageTitle("Инструменты путешественника", "Локальные датчики и справочники")
-        listOf(
-            "Компас" to "Ориентация по магнитному датчику телефона.",
-            "GPS и координаты" to "Текущие координаты, точность и отметка местоположения.",
-            "Высота и скорость" to "Данные GPS и барометрического датчика, если он есть.",
-            "Измерения" to "Расстояния, площади, профиль высот и уклон.",
-            "Безопасность" to "Координаты для передачи спасателям и локальные справочные номера."
-        ).forEach { (title, body) -> InfoCard(title, body) }
     }
 }
 

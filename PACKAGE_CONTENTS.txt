@@ -1,10 +1,16 @@
 GEORGIA OFFLINE — ПОЛНЫЙ ПАКЕТ РЕПОЗИТОРИЯ
 
-Этот архив содержит содержимое корня репозитория. Распакуйте и скопируйте ВСЁ содержимое архива прямо в существующую папку репозитория GeorgiaOffline. Скрытая папка .github включена.
+Этот архив содержит полное содержимое корня репозитория. Скопируйте всё содержимое
+архива прямо в папку вашего репозитория с объединением папок и заменой файлов.
+Скрытая папка .github включена. Служебная папка .git не включается.
+
+Версия приложения: 0.2.0 (versionCode 2).
 
 Пути файлов:
 .github/workflows/android-ci.yml
 .gitignore
+CHANGELOG.md
+PACKAGE_CONTENTS.txt
 README.md
 START_HERE_RU.txt
 THIRD_PARTY_NOTICES.md
@@ -15,10 +21,13 @@ app/src/main/assets/offline/data-manifest.json
 app/src/main/java/app/georgia/offline/MainActivity.kt
 app/src/main/java/app/georgia/offline/data/LocalSettings.kt
 app/src/main/java/app/georgia/offline/domain/FeatureCatalog.kt
+app/src/main/java/app/georgia/offline/domain/GeoFormatting.kt
 app/src/main/java/app/georgia/offline/ui/GeorgiaOfflineApp.kt
+app/src/main/java/app/georgia/offline/ui/ToolsScreen.kt
 app/src/main/java/app/georgia/offline/ui/theme/GeorgiaTheme.kt
 app/src/main/res/values/strings.xml
 app/src/test/java/app/georgia/offline/FeatureCatalogTest.kt
+app/src/test/java/app/georgia/offline/GeoFormattingTest.kt
 build.gradle.kts
 data/assets/README.md
 docs/ARCHITECTURE.md
