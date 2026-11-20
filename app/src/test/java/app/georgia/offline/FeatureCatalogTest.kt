@@ -13,9 +13,12 @@ class FeatureCatalogTest {
 
     @Test
     fun containsAllFourTravelModes() {
-        val routeModule = FeatureCatalog.groups.first { it.id == "C" }
-        assertTrue(routeModule.features.any { it.contains("4×4") })
         val mountainModule = FeatureCatalog.groups.first { it.id == "B" }
+        assertTrue(mountainModule.features.any { it.contains("Пешие") })
         assertTrue(mountainModule.features.any { it.contains("велосипедные") })
+
+        val routeModule = FeatureCatalog.groups.first { it.id == "C" }
+        assertTrue(routeModule.features.any { it.contains("Автомобильная") })
+        assertTrue(routeModule.features.any { it.contains("4×4") })
     }
 }
