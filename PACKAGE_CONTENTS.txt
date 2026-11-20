@@ -1,12 +1,11 @@
 GEORGIA OFFLINE — ПОЛНЫЙ ПАКЕТ РЕПОЗИТОРИЯ
+Версия приложения: 0.4.1 (versionCode 5).
 
-Этот архив содержит полное содержимое корня репозитория. Скопируйте всё содержимое
-архива прямо в папку вашего репозитория с объединением папок и заменой файлов.
+Скопируйте всё содержимое ZIP прямо в корень вашего локального репозитория.
 Скрытая папка .github включена. Служебная папка .git не включается.
+Бинарная карта Грузии будет сформирована GitHub Actions и встроена в APK.
 
-Версия приложения: 0.2.0 (versionCode 2).
-
-Пути файлов:
+ПУТИ ФАЙЛОВ:
 .github/workflows/android-ci.yml
 .gitignore
 CHANGELOG.md
@@ -20,14 +19,18 @@ app/src/main/AndroidManifest.xml
 app/src/main/assets/offline/data-manifest.json
 app/src/main/java/app/georgia/offline/MainActivity.kt
 app/src/main/java/app/georgia/offline/data/LocalSettings.kt
+app/src/main/java/app/georgia/offline/data/MapFileRepository.kt
 app/src/main/java/app/georgia/offline/domain/FeatureCatalog.kt
 app/src/main/java/app/georgia/offline/domain/GeoFormatting.kt
+app/src/main/java/app/georgia/offline/domain/MapLanguageResolver.kt
 app/src/main/java/app/georgia/offline/ui/GeorgiaOfflineApp.kt
+app/src/main/java/app/georgia/offline/ui/MapsforgeMapSurface.kt
 app/src/main/java/app/georgia/offline/ui/ToolsScreen.kt
 app/src/main/java/app/georgia/offline/ui/theme/GeorgiaTheme.kt
 app/src/main/res/values/strings.xml
 app/src/test/java/app/georgia/offline/FeatureCatalogTest.kt
 app/src/test/java/app/georgia/offline/GeoFormattingTest.kt
+app/src/test/java/app/georgia/offline/MapLanguageResolverTest.kt
 build.gradle.kts
 data/assets/README.md
 docs/ARCHITECTURE.md
@@ -37,8 +40,12 @@ docs/DATA_SOURCES.md
 docs/GITHUB_SETUP.md
 docs/ROADMAP.md
 docs/TECHNICAL_SPEC.md
-gradle.properties
 gradle/wrapper/gradle-wrapper.properties
+gradle.properties
 scripts/bootstrap-wrapper.sh
+scripts/build_georgia_map.sh
+scripts/install_mapsforge_writer.sh
+scripts/verify_apk_bundle.py
+scripts/verify_bundled_map.py
 scripts/verify_offline_manifest.py
 settings.gradle.kts

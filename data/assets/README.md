@@ -1,25 +1,20 @@
-# Offline data assets (single-APK policy)
+# Offline data assets — single APK
 
-The release APK will embed the preprocessed Georgia data under this directory.
-The current starter repository intentionally contains no generated binary map
-files yet; the first real data build must be produced from recorded source dates
-and license notices.
+The full country vector map is generated during GitHub Actions and added to this directory before Gradle packages the APK. The source ZIP intentionally does not include the generated binary: the `.map` file is recreated or restored from a checksum-keyed CI cache.
 
-Planned release assets:
+## Generated in v0.4.0
 
-- `georgia.map` — Mapsforge vector map for the country.
-- `georgia-poi.sqlite` — searchable local POI database, including localized names.
-- `georgia-routing/` — BRouter-compatible route data and project profiles.
-- `georgia-dem/` — Copernicus DEM GLO-30 or SRTM-derived tiles and contours.
-- `georgia-satellite/` — preprocessed Copernicus/Sentinel imagery, only after
-  package-size and coverage validation.
-- `data-manifest.json` — data source, extraction timestamp, license, checksum,
-  geographic bounds and schema version.
+- `georgia.map` — Mapsforge vector map built from Geofabrik Georgia country PBF, using Map Writer 0.25.0 and `preferred-languages=en,ru,ka`.
+- `georgia-map-build.json` — source PBF URL, retrieval time, source MD5, map SHA-256 and size, writer version, language variants requested, ODbL license and OSM attribution.
 
-The user selected one APK. Therefore the intended distribution is a single
-APK containing all release assets. Assets that need random file access will be
-unpacked once, on-device, into app-managed storage chosen by the user (internal
-storage by default, SD card through Android's Storage Access Framework when
-supported). The app must show the required free space before extraction.
+## Planned data packs
 
-Do not place copyrighted commercial basemaps or tiles in this directory.
+- `georgia-poi.sqlite` — searchable local POI database, including available localized names.
+- `georgia-routing/` — BRouter-compatible route data and profiles for car, 4×4, bicycle and foot.
+- `georgia-dem/` — DEM tiles, contours and hillshade.
+- `georgia-satellite/` — preprocessed Sentinel imagery only after size and redistribution review.
+- `data-manifest.json` — static bundle descriptor.
+
+The selected distribution is one APK. Assets needing random access are copied from APK assets to app-private storage on first run. SD-card destination selection exists in the UI; direct writing to the selected Storage Access Framework directory is a later milestone.
+
+The `.map` is not checked into Git to avoid adding a large generated binary to every source update. `.gitignore` excludes `*.map`; the CI job inserts the generated asset before `assembleDebug`.

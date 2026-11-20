@@ -10,6 +10,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 SOURCE_MANIFEST = ROOT / "app/src/main/AndroidManifest.xml"
 ANDROID_NS = "{http://schemas.android.com/apk/res/android}"
+TOOLS_NS = "{http://schemas.android.com/tools}"
 FORBIDDEN = {
     "android.permission.INTERNET",
     "android.permission.ACCESS_NETWORK_STATE",
@@ -25,7 +26,8 @@ def permissions_in(path: Path) -> set[str]:
         tag = element.tag.rsplit("}", 1)[-1]
         if tag.startswith("uses-permission"):
             name = element.attrib.get(ANDROID_NS + "name", "")
-            if name:
+            merge_action = element.attrib.get(TOOLS_NS + "node", "")
+            if name and merge_action != "remove":
                 found.add(name)
     return found
 

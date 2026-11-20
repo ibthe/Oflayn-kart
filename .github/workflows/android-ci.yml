@@ -9,9 +9,14 @@ on:
 permissions:
   contents: read
 
+concurrency:
+  group: android-ci-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   build:
     runs-on: ubuntu-latest
+    timeout-minutes: 90
     steps:
       - name: Checkout
         uses: actions/checkout@v6
@@ -26,7 +31,6 @@ jobs:
         uses: android-actions/setup-android@v4.0.2
         with:
           # The old `tools` package was removed from Google's SDK repository.
-          # setup-android v4.0.2 no longer requests it; platform-tools is sufficient here.
           packages: 'platform-tools'
 
       - name: Install Android SDK platform and build tools
@@ -37,14 +41,70 @@ jobs:
         with:
           gradle-version: '9.6.0'
 
-      - name: Verify offline manifest
+      - name: Verify source manifest is offline
         run: python3 scripts/verify_offline_manifest.py
 
       - name: Run unit tests
         run: gradle --no-daemon --stacktrace --console=plain :app:testDebugUnitTest
 
-      - name: Assemble debug APK
+      # The map is generated in CI, not committed to Git. Runtime APK access is
+      # fully offline. Cache key changes when Geofabrik publishes a new PBF.
+      - name: Read current Geofabrik extract checksum
+        id: georgia-source
+        shell: bash
+        run: |
+          curl --fail --location --retry 3 \
+            https://download.geofabrik.de/europe/georgia-latest.osm.pbf.md5 \
+            --output "$RUNNER_TEMP/georgia-latest.osm.pbf.md5"
+          checksum="$(awk 'NR == 1 { print $1 }' "$RUNNER_TEMP/georgia-latest.osm.pbf.md5")"
+          if [[ ! "$checksum" =~ ^[0-9a-fA-F]{32}$ ]]; then
+            echo "Invalid Geofabrik checksum response" >&2
+            cat "$RUNNER_TEMP/georgia-latest.osm.pbf.md5" >&2
+            exit 1
+          fi
+          echo "md5=$checksum" >> "$GITHUB_OUTPUT"
+
+      - name: Restore generated Georgia map cache
+        id: georgia-map-cache
+        uses: actions/cache/restore@v4
+        with:
+          path: |
+            app/src/main/assets/offline/georgia.map
+            app/src/main/assets/offline/georgia-map-build.json
+          key: mapsforge-georgia-v0.25.0-${{ steps.georgia-source.outputs.md5 }}
+
+      - name: Install Osmosis
+        if: steps.georgia-map-cache.outputs.cache-hit != 'true'
+        run: |
+          sudo apt-get update
+          sudo apt-get install --yes osmosis
+          osmosis --version
+
+      - name: Build Mapsforge map-writer plugin
+        if: steps.georgia-map-cache.outputs.cache-hit != 'true'
+        run: bash scripts/install_mapsforge_writer.sh
+
+      - name: Generate multilingual offline map of Georgia
+        if: steps.georgia-map-cache.outputs.cache-hit != 'true'
+        run: bash scripts/build_georgia_map.sh
+
+      - name: Cache generated Georgia map
+        if: success() && steps.georgia-map-cache.outputs.cache-hit != 'true'
+        uses: actions/cache/save@v4
+        with:
+          path: |
+            app/src/main/assets/offline/georgia.map
+            app/src/main/assets/offline/georgia-map-build.json
+          key: mapsforge-georgia-v0.25.0-${{ steps.georgia-source.outputs.md5 }}
+
+      - name: Verify generated country map and multilingual metadata
+        run: python3 scripts/verify_bundled_map.py
+
+      - name: Assemble debug APK with the complete offline map
         run: gradle --no-daemon --stacktrace --console=plain :app:assembleDebug
+
+      - name: Verify the APK contains the full offline map
+        run: python3 scripts/verify_apk_bundle.py
 
       - name: Verify merged manifest remains offline
         run: python3 scripts/verify_offline_manifest.py --include-merged

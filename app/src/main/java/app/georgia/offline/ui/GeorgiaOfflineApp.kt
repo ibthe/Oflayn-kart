@@ -13,6 +13,7 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.HorizontalDivider
@@ -26,6 +27,8 @@ import androidx.compose.material3.Surface
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -36,7 +39,13 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
+import java.io.File
 import app.georgia.offline.data.LocalSettings
+import app.georgia.offline.data.MapFileRepository
+import app.georgia.offline.domain.MapLanguageResolver
 import app.georgia.offline.domain.FeatureCatalog
 import app.georgia.offline.ui.theme.GeorgiaTheme
 
@@ -90,6 +99,66 @@ private fun PageColumn(modifier: Modifier = Modifier, content: @Composable Colum
 
 @Composable
 private fun MapScreen(modifier: Modifier, settings: LocalSettings) {
+    val context = LocalContext.current
+    val coroutineScope = rememberCoroutineScope()
+    var isImporting by remember { mutableStateOf(false) }
+    var importMessage by remember { mutableStateOf<String?>(null) }
+    var importError by remember { mutableStateOf(false) }
+
+    // A full-map CI build packages offline/georgia.map in the APK. Keep imported
+    // maps untouched; refresh only the bundled copy when its embedded SHA-256 changes.
+    LaunchedEffect(settings.mapDisabled, settings.mapFilePath, settings.mapFileIsBundled) {
+        val savedPath = settings.mapFilePath
+        val savedFileExists = !savedPath.isNullOrBlank() && File(savedPath).isFile
+        val keepUserImportedMap = savedFileExists && !settings.mapFileIsBundled
+        if (!settings.mapDisabled && !keepUserImportedMap) {
+            isImporting = true
+            try {
+                val bundled = withContext(Dispatchers.IO) {
+                    MapFileRepository.installBundledMap(context)
+                }
+                if (bundled != null) {
+                    val wasExistingBundled = settings.mapFileIsBundled && savedPath == bundled.absolutePath
+                    settings.setMapFilePath(bundled.absolutePath, bundled = true)
+                    if (!wasExistingBundled) {
+                        importMessage = "Встроенная карта Грузии установлена (${bundled.length() / (1024 * 1024)} МБ)."
+                    } else {
+                        importMessage = "Встроенная карта Грузии проверена и актуальна."
+                    }
+                }
+            } catch (error: Exception) {
+                importError = true
+                importMessage = error.message ?: "Не удалось установить встроенную карту."
+            } finally {
+                isImporting = false
+            }
+        }
+    }
+
+    val mapPicker = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
+        if (uri != null) {
+            coroutineScope.launch {
+                isImporting = true
+                importMessage = "Копирую и проверяю файл карты…"
+                importError = false
+                try {
+                    val file = withContext(Dispatchers.IO) {
+                        MapFileRepository.importGeorgiaMap(context, uri)
+                    }
+                    settings.setMapFilePath(file.absolutePath, bundled = false)
+                    importMessage = "Карта проверена: ${file.length() / (1024 * 1024)} МБ"
+                } catch (error: Exception) {
+                    importError = true
+                    importMessage = error.message ?: "Не удалось импортировать файл карты."
+                } finally {
+                    isImporting = false
+                }
+            }
+        }
+    }
+    val mapFile = settings.mapFilePath?.let(::File)?.takeIf { it.isFile && it.length() > 0L }
+    val preferredLanguage = MapLanguageResolver.preferredLanguage(settings.enabledLanguages)
+
     PageColumn(modifier) {
         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
             Column {
@@ -100,21 +169,71 @@ private fun MapScreen(modifier: Modifier, settings: LocalSettings) {
                 Text("OFFLINE", modifier = Modifier.padding(horizontal = 12.dp, vertical = 7.dp), fontWeight = FontWeight.Bold)
             }
         }
-        Card(colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant)) {
-            Column(Modifier.padding(18.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                Text("Карта Грузии", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
-                Box(
-                    Modifier.fillMaxWidth().height(210.dp),
-                    contentAlignment = Alignment.Center
-                ) {
-                    Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                        Text("🗺️", style = MaterialTheme.typography.displayMedium)
-                        Text("Картографический пакет ещё не подключён", fontWeight = FontWeight.SemiBold)
-                        Text("Векторная карта, рельеф и POI будут добавлены на следующих этапах.", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+
+        if (mapFile != null) {
+            MapsforgeMapSurface(
+                mapFile = mapFile,
+                preferredLanguage = preferredLanguage,
+                mapTheme = settings.mapTheme,
+                modifier = Modifier.fillMaxWidth().height(430.dp)
+            )
+            Text("Подключён локальный файл: ${mapFile.name}", style = MaterialTheme.typography.bodySmall)
+            Text("© OpenStreetMap contributors · данные ODbL 1.0", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            Text(
+                "Язык подписей Mapsforge: ${preferredLanguage ?: "по умолчанию"}. Сейчас движок выбирает один предпочтительный язык; показ нескольких языков одновременно добавим отдельным слоем.",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                OutlinedButton(
+                    onClick = { mapPicker.launch(arrayOf("*/*")) },
+                    modifier = Modifier.fillMaxWidth(),
+                    enabled = !isImporting
+                ) { Text("Заменить файл карты") }
+                if (!settings.mapFileIsBundled) {
+                    OutlinedButton(
+                        onClick = { settings.restoreBundledMap() },
+                        modifier = Modifier.fillMaxWidth(),
+                        enabled = !isImporting
+                    ) { Text("Вернуть встроенную карту из APK") }
+                }
+                OutlinedButton(
+                    onClick = { settings.setMapFilePath(null) },
+                    modifier = Modifier.fillMaxWidth()
+                ) { Text("Отключить карту") }
+            }
+        } else {
+            Card(colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant)) {
+                Column(Modifier.fillMaxWidth().padding(18.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                    Text("Векторная карта Mapsforge", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
+                    Box(Modifier.fillMaxWidth().height(170.dp), contentAlignment = Alignment.Center) {
+                        Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                            Text("🗺️", style = MaterialTheme.typography.displayMedium)
+                            Text("Движок карты подключён", fontWeight = FontWeight.SemiBold)
+                            Text("В этой сборке нет встроенного файла карты. Полная сборка GitHub Actions создаёт и добавляет его в APK.", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                        }
                     }
+                    if (settings.mapDisabled) {
+                        Button(onClick = { settings.enableBundledMap() }, enabled = !isImporting) {
+                            Text("Включить встроенную карту")
+                        }
+                    }
+                    Button(onClick = { mapPicker.launch(arrayOf("*/*")) }, enabled = !isImporting) {
+                        Text(if (isImporting) "Проверка карты…" else "Выбрать локальный .map-файл")
+                    }
+                    Text("Если APK был собран вне GitHub Actions, можно выбрать Mapsforge .map-файл Грузии вручную. Приложение скопирует его во внутреннюю папку и проверит заголовок и пересечение области карты с Грузией.", style = MaterialTheme.typography.bodySmall)
                 }
             }
         }
+
+        if (importMessage != null) {
+            Text(
+                importMessage!!,
+                color = if (importError) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.onSurfaceVariant,
+                style = MaterialTheme.typography.bodySmall
+            )
+        }
+
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             StatusPill("GPS: по запросу")
             StatusPill("3 языка")
@@ -124,12 +243,12 @@ private fun MapScreen(modifier: Modifier, settings: LocalSettings) {
             Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 Text("Языки названий", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
                 Text(languageSummary(settings.enabledLanguages), style = MaterialTheme.typography.bodyMedium)
-                Text("Изменить языки можно в настройках. Несколько выбранных языков планируется показывать одновременно.", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                Text("В сборках GitHub Actions файл карты содержит доступные варианты en / ru / ka. Сейчас отображается один выбранный предпочтительный язык; одновременные многострочные подписи будут добавлены отдельным слоем.", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
             }
         }
         InfoCard(
-            title = "Проект в разработке",
-            body = "Это первый каркас приложения. Реальные карты и маршрутизация пока не встроены; приложение не загружает тайлы и не делает сетевых запросов."
+            title = "Офлайн-карта",
+            body = "Отрисовка работает только с локальными файлами Mapsforge. В полной сборке GitHub Actions карта Грузии создаётся из Geofabrik OpenStreetMap и встраивается прямо в APK; при первом запуске она копируется во внутреннюю папку приложения. Сетевые источники тайлов и загрузка карт во время работы приложения не используются."
         )
     }
 }
@@ -210,7 +329,7 @@ private fun SettingsScreen(modifier: Modifier, settings: LocalSettings) {
                 LanguageSwitch("English", "en", settings)
                 LanguageSwitch("Русский", "ru", settings)
                 LanguageSwitch("ქართული", "ka", settings)
-                Text("Включённые языки будут показываться одновременно, если для объекта доступны соответствующие названия.", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                Text("Когда включено несколько языков, текущая версия карты выбирает один предпочтительный: English → Русский → ქართული. Отдельный режим одновременных многострочных подписей будет добавлен следующим картографическим этапом.", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
             }
         }
         Card {
@@ -220,7 +339,7 @@ private fun SettingsScreen(modifier: Modifier, settings: LocalSettings) {
                 HorizontalDivider()
                 Text("Стиль карты", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
                 ChoiceRow(
-                    listOf("classic" to "Классика", "outdoor" to "Топография", "night" to "Ночной", "high_contrast" to "Контрастный"),
+                    listOf("classic" to "Классика", "outdoor" to "Рельеф", "motorider" to "Автомобильная", "biker" to "Велосипедная"),
                     settings.mapTheme,
                     settings::updateMapTheme
                 )
@@ -237,7 +356,7 @@ private fun SettingsScreen(modifier: Modifier, settings: LocalSettings) {
                     Text("Выбрать папку на SD-карте")
                 }
                 if (settings.storageTreeUri != null) {
-                    Text("Папка сохранена. Реальное размещение файлов будет активировано вместе с менеджером карт.", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    Text("Папка выбрана и сохранена. В этой версии карта копируется в защищённую папку приложения; прямое хранение крупных файлов на SD-карте подключим вместе с менеджером данных.", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                     OutlinedButton(onClick = { settings.setStorageTree(null) }) { Text("Сбросить выбор") }
                 }
             }

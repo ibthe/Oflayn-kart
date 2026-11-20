@@ -12,8 +12,8 @@ android {
         applicationId = "app.georgia.offline"
         minSdk = 26
         targetSdk = 36
-        versionCode = 2
-        versionName = "0.2.0"
+        versionCode = 5
+        versionName = "0.4.1"
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
 
@@ -79,6 +79,11 @@ dependencies {
     implementation("androidx.compose.ui:ui-tooling-preview")
     implementation("androidx.compose.foundation:foundation")
     implementation("androidx.compose.material3:material3")
+
+    // Mapsforge 0.25.0 is the latest release currently published to Maven Central.
+    // The newer upstream GitHub releases are not published to Central.
+    implementation("org.mapsforge:mapsforge-map-android:0.25.0")
+    implementation("org.mapsforge:mapsforge-themes:0.25.0")
 
     testImplementation("junit:junit:4.13.2")
     androidTestImplementation("androidx.test.ext:junit:1.3.0")

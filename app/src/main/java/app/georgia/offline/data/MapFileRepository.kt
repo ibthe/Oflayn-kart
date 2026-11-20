@@ -1,0 +1,174 @@
+package app.georgia.offline.data
+
+import android.content.Context
+import android.net.Uri
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
+import org.mapsforge.map.reader.MapFile
+import org.json.JSONObject
+import java.io.File
+import java.io.FileNotFoundException
+import java.nio.file.AtomicMoveNotSupportedException
+import java.nio.file.Files
+import java.nio.file.StandardCopyOption
+import java.security.MessageDigest
+
+/** Installs, imports and validates Mapsforge .map files without network access. */
+object MapFileRepository {
+    private const val BUNDLED_ASSET = "offline/georgia.map"
+    private const val BUNDLED_MANIFEST = "offline/georgia-map-build.json"
+    private const val MINIMUM_MAP_BYTES = 1024L
+    private const val BUNDLED_HASH_MARKER = ".georgia-bundled.sha256"
+
+    /**
+     * Installs the map embedded in this APK and refreshes it when a newer APK contains
+     * a different SHA-256. The caller must not invoke this for a user-imported map.
+     */
+    suspend fun installBundledMap(context: Context): File? = withContext(Dispatchers.IO) {
+        val destination = mapDestination(context)
+        val marker = File(destination.parentFile, BUNDLED_HASH_MARKER)
+        val expectedSha = readBundledMapSha256(context)
+        val expectedSize = readBundledMapSize(context)
+
+        val existingIsValid = destination.isFile &&
+            destination.length() >= MINIMUM_MAP_BYTES &&
+            runCatching { isGeorgiaMap(destination) }.getOrDefault(false)
+        if (existingIsValid && expectedSha != null && marker.isFile &&
+            marker.readText(Charsets.UTF_8).trim().equals(expectedSha, ignoreCase = true)
+        ) {
+            return@withContext destination
+        }
+
+        if (expectedSize != null) {
+            val minimumFreeSpace = expectedSize + 32L * 1024L * 1024L
+            val availableSpace = destination.parentFile?.usableSpace ?: Long.MAX_VALUE
+            if (availableSpace < minimumFreeSpace) {
+                val requiredMb = (minimumFreeSpace + 1024L * 1024L - 1L) / (1024L * 1024L)
+                error("Недостаточно свободного места для установки карты. Освободи примерно $requiredMb МБ и попробуй снова.")
+            }
+        }
+
+        val input = try {
+            context.assets.open(BUNDLED_ASSET)
+        } catch (_: FileNotFoundException) {
+            return@withContext null
+        }
+
+        val temporary = File(destination.parentFile, "georgia-bundled.map.part")
+        try {
+            val digest = MessageDigest.getInstance("SHA-256")
+            input.use { source ->
+                temporary.outputStream().buffered().use { target ->
+                    val buffer = ByteArray(1024 * 1024)
+                    while (true) {
+                        val count = source.read(buffer)
+                        if (count < 0) break
+                        digest.update(buffer, 0, count)
+                        target.write(buffer, 0, count)
+                    }
+                }
+            }
+            val actualSha = digest.digest().joinToString("") { byte -> "%02x".format(byte) }
+            if (expectedSha != null && !actualSha.equals(expectedSha, ignoreCase = true)) {
+                error("SHA-256 встроенной карты не совпадает с картографическим манифестом.")
+            }
+            validateGeorgiaMap(temporary)
+            moveIntoPlace(temporary, destination)
+            marker.writeText(actualSha, Charsets.UTF_8)
+            destination
+        } catch (error: Exception) {
+            temporary.delete()
+            throw IllegalArgumentException(
+                error.message ?: "Не удалось установить встроенную карту Грузии.",
+                error
+            )
+        }
+    }
+
+    private fun readBundledMapSha256(context: Context): String? = readBundledManifest(context)
+        ?.optString("mapFileSha256")
+        ?.takeIf { it.matches(Regex("[0-9a-fA-F]{64}")) }
+
+    private fun readBundledMapSize(context: Context): Long? = readBundledManifest(context)
+        ?.optLong("mapFileSizeBytes", -1L)
+        ?.takeIf { it > 0L }
+
+    private fun readBundledManifest(context: Context): JSONObject? {
+        return try {
+            val json = context.assets.open(BUNDLED_MANIFEST).bufferedReader(Charsets.UTF_8).use { it.readText() }
+            JSONObject(json)
+        } catch (_: FileNotFoundException) {
+            null
+        }
+    }
+
+    /** Imports a Mapsforge file selected via Android's Storage Access Framework. */
+    suspend fun importGeorgiaMap(context: Context, source: Uri): File = withContext(Dispatchers.IO) {
+        val destination = mapDestination(context)
+        val temporary = File(destination.parentFile, "georgia-import.map.part")
+
+        try {
+            val input = context.contentResolver.openInputStream(source)
+                ?: error("Android не смог открыть выбранный файл.")
+            input.use { sourceStream ->
+                temporary.outputStream().buffered().use { destinationStream ->
+                    sourceStream.copyTo(destinationStream, bufferSize = 1024 * 1024)
+                }
+            }
+            validateGeorgiaMap(temporary)
+            moveIntoPlace(temporary, destination)
+            // A manually imported file must never be mistaken for the previous APK bundle.
+            File(destination.parentFile, BUNDLED_HASH_MARKER).delete()
+            destination
+        } catch (error: Exception) {
+            temporary.delete()
+            throw IllegalArgumentException(
+                error.message ?: "Не удалось импортировать карту. Проверь, что это файл Mapsforge .map.",
+                error
+            )
+        }
+    }
+
+    private fun mapDestination(context: Context): File {
+        val directory = File(context.filesDir, "maps")
+        if (!directory.exists() && !directory.mkdirs()) {
+            error("Не удалось создать папку для карты.")
+        }
+        return File(directory, "georgia.map")
+    }
+
+    private fun validateGeorgiaMap(file: File) {
+        if (!file.isFile || file.length() < MINIMUM_MAP_BYTES) {
+            error("Файл слишком мал или пуст. Нужен полноценный Mapsforge .map.")
+        }
+        if (!isGeorgiaMap(file)) {
+            error("Выбранная карта не пересекается с территорией Грузии или имеет неверный формат.")
+        }
+    }
+
+    private fun isGeorgiaMap(file: File): Boolean {
+        val probe = MapFile(file)
+        return try {
+            val bounds = probe.boundingBox()
+            bounds.maxLatitude >= 40.0 &&
+                bounds.minLatitude <= 44.0 &&
+                bounds.maxLongitude >= 39.5 &&
+                bounds.minLongitude <= 47.0
+        } finally {
+            probe.close()
+        }
+    }
+
+    private fun moveIntoPlace(temporary: File, destination: File) {
+        try {
+            Files.move(
+                temporary.toPath(),
+                destination.toPath(),
+                StandardCopyOption.REPLACE_EXISTING,
+                StandardCopyOption.ATOMIC_MOVE
+            )
+        } catch (_: AtomicMoveNotSupportedException) {
+            Files.move(temporary.toPath(), destination.toPath(), StandardCopyOption.REPLACE_EXISTING)
+        }
+    }
+}
