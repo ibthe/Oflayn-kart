@@ -1,6 +1,6 @@
 {
   "bundleId": "georgia-offline",
-  "bundleVersion": 5,
+  "bundleVersion": 6,
   "schemaVersion": 1,
   "country": "Georgia",
   "mapFormat": "Mapsforge",
@@ -35,5 +35,5 @@
   "languageCoverage": "Only OSM name variants present in source data are written; no automatic translation.",
   "status": "country-map-built-by-github-actions-and-embedded-in-apk",
   "mapBuildPipeline": "GitHub Actions: Geofabrik OSM PBF -> Mapsforge Map Writer -> APK assets",
-  "appVersion": "0.4.1"
+  "appVersion": "0.4.2"
 }

@@ -157,3 +157,49 @@ java.lang.AssertionError at FeatureCatalogTest.kt:17
 Добавлены unit-тесты `GeoFormattingTest` для координат, DMS, нормализации азимута и сторон света. Чистая функция `GeoFormatting.kt` отдельно скомпилирована установленным Kotlin-компилятором и прошла smoke-тесты.
 
 CI теперь дополнительно проверяет merged AndroidManifest после сборки, чтобы обнаружить сетевые или фоновые геолокационные разрешения, которые могут быть добавлены зависимостью. В этом окружении отсутствуют Gradle и Android SDK, поэтому полную компиляцию Android-приложения не подтверждаю.
+
+
+---
+
+## Шестая ошибка из журнала `logs_121364396961.zip` (21 ноября 2026)
+
+### Что прошло успешно
+
+- Android SDK Platform 36 и Build Tools 36.0.0 установились.
+- Проверка исходного Android Manifest прошла.
+- Unit-тесты прошли: `BUILD SUCCESSFUL` для `:app:testDebugUnitTest`.
+- Geofabrik checksum metadata загрузилась успешно.
+- Cache miss штатно привёл workflow к шагу подготовки Osmosis.
+
+### Симптом
+
+Job остановился в шаге `Install Osmosis` после установки системного пакета:
+
+```text
+Osmosis Version 0.49.2
+Preparing pipeline.
+SEVERE: Execution aborted.
+OsmosisRuntimeException: Task type version doesn't exist.
+```
+
+Команда, вызвавшая ошибку:
+
+```bash
+osmosis --version
+```
+
+### Причина
+
+Osmosis — CLI для запуска задач-потоков (pipeline). Аргументы CLI интерпретируются как имена задач; команда `--version` была воспринята как задача `version`, которой нет. Поэтому сама установка пакета `osmosis` прошла успешно, но неверная проверочная команда завершила шаг с кодом 1. Документация Mapsforge рекомендует проверять регистрацию Map Writer plugin командой `osmosis --help`, что и остаётся в `scripts/install_mapsforge_writer.sh`.
+
+### Исправление в версии 0.4.2
+
+1. Удалён вызов `osmosis --version` из GitHub Actions.
+2. Версия установленного Debian-пакета читается безопасно:
+   `dpkg-query -W -f='${Version}' osmosis`.
+3. Проверка регистрации Mapsforge plugin остаётся в следующем шаге через документированную команду `osmosis --help`.
+4. Android `versionName` обновлён до `0.4.2`, `versionCode` — до `6`.
+
+### Что ещё не подтверждено
+
+Этот журнал не дошёл до сборки Mapsforge Map Writer и создания `georgia.map`. Следующий запуск должен пройти установку Osmosis и продолжить на plugin build; возможные ошибки последующих этапов можно определить только по новому CI log.

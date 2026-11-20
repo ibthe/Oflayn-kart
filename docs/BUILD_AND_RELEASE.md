@@ -4,12 +4,12 @@
 
 Workflow `.github/workflows/android-ci.yml` запускается при push в `main`/`master`, pull request или вручную (`workflow_dispatch`). Он использует Ubuntu, JDK 21, Android SDK Platform 36, Build Tools 36.0.0 и Gradle 9.6.0.
 
-### Что происходит в полной CI-сборке 0.4.0
+### Что происходит в полной CI-сборке 0.4.2
 
 1. Проверяется исходный `AndroidManifest.xml` на сетевые и фоновые location-разрешения.
 2. Запускаются unit tests.
 3. Workflow получает MD5 текущего `georgia-latest.osm.pbf.md5` у Geofabrik и использует его как cache key.
-4. Если map cache отсутствует, устанавливается Osmosis, собирается Mapsforge Map Writer 0.25.0 и устанавливается как Osmosis plugin.
+4. Если map cache отсутствует, устанавливается Osmosis (версия пакета читается через `dpkg-query`; не вызывайте `osmosis --version`, так как Osmosis воспринимает это как неизвестную задачу), собирается Mapsforge Map Writer 0.25.0 и устанавливается как Osmosis plugin.
 5. Загружается Geofabrik Georgia country PBF, сравнивается MD5, собирается `.map` с `preferred-languages=en,ru,ka` в режиме `type=hd`.
 6. Проверяются размер, языковой список и SHA-256 карты. Кешируются `georgia.map` и `georgia-map-build.json`.
 7. Gradle собирает APK, затем отдельный скрипт проверяет, что оба файла действительно включены в APK и checksum карты совпадает.

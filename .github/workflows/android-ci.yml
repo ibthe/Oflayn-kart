@@ -75,10 +75,20 @@ jobs:
 
       - name: Install Osmosis
         if: steps.georgia-map-cache.outputs.cache-hit != 'true'
+        shell: bash
         run: |
           sudo apt-get update
           sudo apt-get install --yes osmosis
-          osmosis --version
+
+          # Osmosis is a task-pipeline CLI, not a conventional --version CLI.
+          # Calling `osmosis --version` makes it interpret "version" as a task
+          # name and fail with: "Task type version doesn't exist."
+          osmosis_package_version="$(dpkg-query -W -f='${Version}' osmosis)"
+          if [[ -z "$osmosis_package_version" ]]; then
+            echo "Could not determine the installed Osmosis package version." >&2
+            exit 1
+          fi
+          echo "Installed Osmosis Debian package: ${osmosis_package_version}"
 
       - name: Build Mapsforge map-writer plugin
         if: steps.georgia-map-cache.outputs.cache-hit != 'true'

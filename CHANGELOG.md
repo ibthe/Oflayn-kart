@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.4.2 — fix Osmosis version check in map CI
+
+- Fixed the map-generation workflow failing immediately after installing Osmosis.
+- Removed the unsupported `osmosis --version` invocation. Osmosis treats command-line arguments as pipeline tasks, so `version` was interpreted as an unknown task type.
+- The workflow now reads the installed Debian package version with `dpkg-query`, while the Mapsforge installer still validates plugin registration with the documented `osmosis --help` check.
+- Bumped Android `versionCode` to 6 and `versionName` to 0.4.2.
+
 ## 0.4.1 — map update safety
 
 - The app stores whether the active map is bundled with the APK or imported by the user.
