@@ -68,3 +68,55 @@ Process completed with exit code 1
 конкретную ошибку отсутствующей платформы, но успешную компиляцию APK можно
 подтвердить только новым зелёным запуском GitHub Actions. Если следующий лог
 покажет ошибку Gradle/Kotlin/Compose, её нужно будет исправлять уже по этому логу.
+
+
+---
+
+## Третья ошибка из журнала `logs_121331828445.zip` (21 ноября 2026)
+
+### Симптом
+
+Android SDK Platform 36 установилась, Gradle 9.6.0 запустился, но задача
+`:app:checkDebugAarMetadata` остановила сборку с 12 несовместимостями AAR.
+Журнал показал, что Compose 1.12.1 и Lifecycle 2.11.0 требуют `compileSdk 37`,
+тогда как приложение собрано с `compileSdk 36`.
+
+Основные строки:
+
+```text
+Dependency 'androidx.compose.animation:animation-core-android:1.12.1'
+requires ... compile against version 37 or later
+:app is currently compiled against android-36
+
+Dependency 'androidx.lifecycle:lifecycle-runtime-compose-android:2.11.0'
+requires ... compile against version 37 or later
+:app is currently compiled against android-36
+
+12 issues were found when checking AAR metadata
+```
+
+### Причина
+
+В предыдущем пакете был выбран Compose BOM `2026.09.00`, который подтягивает
+Compose `1.12.1`, а также Activity Compose `1.13.0` и Lifecycle `2.11.0`.
+Начиная с Compose 1.12.0, Android официально требует `compileSdk 37`.
+Lifecycle 2.11.0 также получил обновление Compose compileSdk до API 37.
+При этом доступный CI SDK настроен на Android Platform 36.
+
+### Исправление в этом полном пакете
+
+1. Compose BOM понижен до `2026.03.00`, который управляет Compose 1.10.5.
+2. Activity Compose закреплён на версии `1.11.0`, выпущенной для API 36.
+3. Lifecycle `runtime-ktx` и `runtime-compose` закреплены на `2.10.0`, до перехода
+   следующей версии Lifecycle на API 37.
+4. `compileSdk`, `targetSdk` и CI SDK остаются на Android API 36.
+5. Остальные настройки приложения и отсутствие `INTERNET`/`ACCESS_NETWORK_STATE`
+   не изменялись.
+
+### Что подтверждено и что нет
+
+Точное несоответствие из журнала устранено выбором библиотек предыдущего поколения,
+не требующих API 37. Архив и пути файлов проверяются автоматически. В этом
+окружении нет установленного Gradle и Android SDK, поэтому полную компиляцию APK
+здесь выполнить и подтвердить нельзя. Окончательный результат проверяется новым
+запуском GitHub Actions.

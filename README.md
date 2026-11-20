@@ -27,7 +27,7 @@
 1. Установить актуальный Android Studio и Android SDK Platform 36.
 2. Открыть папку `GeorgiaOffline` в Android Studio.
 3. Использовать JDK 17 или JDK 21 (CI использует JDK 21).
-4. В проекте зафиксированы AGP 9.3.1, Gradle 9.6.0, Kotlin 2.4.21 и Compose BOM 2026.09.00.
+4. Зафиксированы AGP 9.3.1, Gradle 9.6.0, Kotlin 2.4.21, Compose BOM 2026.03.00, Activity Compose 1.11.0 и Lifecycle 2.10.0.
 5. Собрать `app` → `assembleDebug`.
 
 В starter-архив не включён бинарный `gradle-wrapper.jar`. Если Gradle установлен,
@@ -85,3 +85,11 @@ GitHub Actions uses `android-actions/setup-android@v4.0.2`. The previous v3 acti
 `compileSdk` также был установлен в 37. Оба значения приведены к доступному
 Android SDK Platform 36; workflow устанавливает `platforms;android-36` и
 `build-tools;36.0.0`. Подробности — в `docs/BUILD_ERROR_ANALYSIS.md`.
+
+
+## Исправление зависимостей для Android API 36 (21 ноября 2026)
+
+Новый CI-журнал показал, что Compose 1.12.1 и Lifecycle 2.11.0 требуют compileSdk 37.
+Чтобы сохранить стабильную сборку на доступной платформе API 36, зависимости
+зафиксированы на Compose BOM 2026.03.00 (Compose 1.10.5), Activity Compose 1.11.0
+и Lifecycle 2.10.0. См. `docs/BUILD_ERROR_ANALYSIS.md`.
