@@ -1,0 +1,31 @@
+Georgia Offline — package contents
+Archive includes hidden directories (including .github) and all tracked source/documentation files currently present.
+
+.github/workflows/android-ci.yml
+.gitignore
+README.md
+THIRD_PARTY_NOTICES.md
+app/build.gradle.kts
+app/proguard-rules.pro
+app/src/main/AndroidManifest.xml
+app/src/main/assets/offline/data-manifest.json
+app/src/main/java/app/georgia/offline/MainActivity.kt
+app/src/main/java/app/georgia/offline/data/LocalSettings.kt
+app/src/main/java/app/georgia/offline/domain/FeatureCatalog.kt
+app/src/main/java/app/georgia/offline/ui/GeorgiaOfflineApp.kt
+app/src/main/java/app/georgia/offline/ui/theme/GeorgiaTheme.kt
+app/src/main/res/values/strings.xml
+app/src/test/java/app/georgia/offline/FeatureCatalogTest.kt
+build.gradle.kts
+data/assets/README.md
+docs/ARCHITECTURE.md
+docs/BUILD_AND_RELEASE.md
+docs/DATA_SOURCES.md
+docs/GITHUB_SETUP.md
+docs/ROADMAP.md
+docs/TECHNICAL_SPEC.md
+gradle/wrapper/gradle-wrapper.properties
+gradle.properties
+scripts/bootstrap-wrapper.sh
+scripts/verify_offline_manifest.py
+settings.gradle.kts

@@ -1,0 +1,18 @@
+{
+  "bundleId": "georgia-offline",
+  "bundleVersion": 0,
+  "schemaVersion": 1,
+  "country": "Georgia",
+  "status": "starter-without-map-data",
+  "languages": ["en", "ru", "ka"],
+  "requiredAssets": [
+    "georgia.map",
+    "georgia-poi.sqlite",
+    "georgia-routing/",
+    "georgia-dem/"
+  ],
+  "optionalAssets": [
+    "georgia-satellite/"
+  ],
+  "notes": "Starter scaffold only. Replace this manifest when the signed and checksummed offline data bundle is generated."
+}
