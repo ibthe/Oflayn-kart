@@ -1,5 +1,6 @@
-Georgia Offline — package contents
-Archive includes hidden directories (including .github) and all tracked source/documentation files currently present.
+Georgia Offline — полный исходный пакет
+
+Скрытые файлы/папки включены.
 
 .github/workflows/android-ci.yml
 .gitignore
@@ -20,12 +21,13 @@ build.gradle.kts
 data/assets/README.md
 docs/ARCHITECTURE.md
 docs/BUILD_AND_RELEASE.md
+docs/BUILD_ERROR_ANALYSIS.md
 docs/DATA_SOURCES.md
 docs/GITHUB_SETUP.md
 docs/ROADMAP.md
 docs/TECHNICAL_SPEC.md
-gradle/wrapper/gradle-wrapper.properties
 gradle.properties
+gradle/wrapper/gradle-wrapper.properties
 scripts/bootstrap-wrapper.sh
 scripts/verify_offline_manifest.py
 settings.gradle.kts

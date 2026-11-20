@@ -27,7 +27,7 @@
 1. Установить актуальный Android Studio и Android SDK Platform 37.
 2. Открыть папку `GeorgiaOffline` в Android Studio.
 3. Использовать JDK 17 или JDK 21 (CI использует JDK 21).
-4. В проекте зафиксированы AGP 9.4.0, Gradle 9.6.0, Kotlin 2.4.21 и Compose BOM 2026.09.00.
+4. В проекте зафиксированы AGP 9.3.1, Gradle 9.6.0, Kotlin 2.4.21 и Compose BOM 2026.09.00.
 5. Собрать `app` → `assembleDebug`.
 
 В starter-архив не включён бинарный `gradle-wrapper.jar`. Если Gradle установлен,
@@ -71,3 +71,8 @@ python3 scripts/verify_offline_manifest.py
 репозитория нужно решить, будет ли он публичным/частным и какую лицензию кода
 использовать. Географические данные и сторонние библиотеки в любом случае
 регулируются собственными лицензиями; см. `THIRD_PARTY_NOTICES.md`.
+
+
+## CI build fix
+
+GitHub Actions uses `android-actions/setup-android@v4.0.2`. The previous v3 action attempted to install the retired Android SDK package `tools`, causing `Failed to find package 'tools'`. The workflow no longer requests that package.
