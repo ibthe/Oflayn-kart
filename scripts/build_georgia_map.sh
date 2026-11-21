@@ -21,6 +21,16 @@ POI_SUMMARY="${WORK_DIR}/georgia-poi-summary.json"
 
 mkdir -p "$WORK_DIR" "$OUTPUT_DIR"
 
+# Temporary outputs live next to the final assets, which Gradle packages into the APK.
+# Remove them on any exit (failure, signal) so a failed refresh cannot leak half-written
+# *.new files into the APK when CI falls back to a previously cached verified map.
+cleanup_temp_outputs() {
+  rm -f "$MAP_TEMP" "$MANIFEST_TEMP" "$POI_TEMP"
+}
+trap cleanup_temp_outputs EXIT
+trap 'exit 143' TERM
+trap 'exit 130' INT
+
 if [[ ! "$GEORGIA_BBOX" =~ ^[0-9]+([.][0-9]+)?,[0-9]+([.][0-9]+)?,[0-9]+([.][0-9]+)?,[0-9]+([.][0-9]+)?$ ]]; then
   echo "ERROR: GEORGIA_BBOX must be minLat,minLon,maxLat,maxLon with decimal degrees; got: ${GEORGIA_BBOX}" >&2
   exit 2

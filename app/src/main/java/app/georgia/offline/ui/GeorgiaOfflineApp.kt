@@ -39,8 +39,6 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.platform.LocalClipboardManager
-import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import kotlinx.coroutines.Dispatchers
@@ -51,6 +49,7 @@ import java.io.File
 import app.georgia.offline.data.LocalSettings
 import app.georgia.offline.data.MapFileRepository
 import app.georgia.offline.data.PoiRepository
+import app.georgia.offline.domain.GeoFormatting
 import app.georgia.offline.domain.MapLanguageResolver
 import app.georgia.offline.domain.FeatureCatalog
 import app.georgia.offline.ui.theme.GeorgiaTheme
@@ -269,7 +268,6 @@ private fun StatusPill(text: String) {
 @Composable
 private fun DiscoverScreen(modifier: Modifier, settings: LocalSettings) {
     val context = LocalContext.current
-    val clipboard = LocalClipboardManager.current
     var query by rememberSaveable { mutableStateOf("") }
     var selectedCategory by rememberSaveable { mutableStateOf("all") }
     var database by remember { mutableStateOf<File?>(null) }
@@ -384,7 +382,7 @@ private fun DiscoverScreen(modifier: Modifier, settings: LocalSettings) {
                             style = MaterialTheme.typography.labelMedium
                         )
                         OutlinedButton(
-                            onClick = { clipboard.setText(AnnotatedString("${poi.latitude}, ${poi.longitude}")) }
+                            onClick = { copyToClipboard(context, GeoFormatting.decimalCoordinates(poi.latitude, poi.longitude)) }
                         ) { Text("Копировать координаты") }
                     }
                 }
