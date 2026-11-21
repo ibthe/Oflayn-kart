@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<osm version="0.6" generator="GeorgiaOffline Mapsforge writer smoke test">
+  <bounds minlat="41.7100" minlon="44.8200" maxlat="41.7200" maxlon="44.8350"/>
+  <node id="101" lat="41.7151" lon="44.8271" version="1"/>
+  <node id="102" lat="41.7160" lon="44.8290" version="1"/>
+  <node id="103" lat="41.7170" lon="44.8310" version="1">
+    <tag k="place" v="locality"/>
+    <tag k="name" v="GeorgiaOffline test point"/>
+  </node>
+  <way id="201" version="1">
+    <nd ref="101"/>
+    <nd ref="102"/>
+    <nd ref="103"/>
+    <tag k="highway" v="residential"/>
+    <tag k="name" v="GeorgiaOffline test road"/>
+  </way>
+</osm>

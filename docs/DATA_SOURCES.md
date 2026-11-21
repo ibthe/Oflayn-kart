@@ -43,7 +43,7 @@ Geofabrik Georgia extract здесь означает страну Грузию 
 Для каждого будущего набора хранить source URL, дату получения, исходную контрольную сумму, лицензию, attribution, bbox, SHA-256, версию схемы и notes. CI map manifest уже содержит source URL, UTC timestamp, source PBF MD5, map SHA-256, размер, версию Map Writer, ODbL и attribution.
 
 
-## Резервный источник выгрузки страны Georgia (CI 0.4.4)
+## Резервный источник выгрузки страны Georgia (CI 0.4.5)
 
 Основной источник: `https://download.geofabrik.de/europe/georgia-latest.osm.pbf`.
 
@@ -53,4 +53,4 @@ Geofabrik Georgia extract здесь означает страну Грузию 
 
 ## Сборка Mapsforge Writer в CI
 
-Для Osmosis используется опубликованный на Maven Central артефакт `org.mapsforge:mapsforge-map-writer:0.25.0` с его runtime-зависимостями. CI собирает отдельный fat JAR в изолированном Gradle-проекте, не конфигурируя все Android/sample-проекты полного репозитория Mapsforge. В объединённый JAR должен попасть `osmosis-plugins.conf`, а `osmosis --help` проверяет регистрацию `--mapfile-writer`.
+Для Osmosis используется опубликованный на Maven Central артефакт `org.mapsforge:mapsforge-map-writer:0.25.0`. На GitHub-hosted Ubuntu runner JAR устанавливается в `/usr/share/osmosis/`, а строка `load /usr/share/osmosis/<writer-jar>` добавляется в `/etc/osmosis/plexus.conf`, поскольку Debian launcher запускает Osmosis из системного Plexus classpath. Успешность проверяется реальным smoke-test `--read-xml` → `--mapfile-writer`, не командой `osmosis --help`. с его runtime-зависимостями. CI собирает отдельный fat JAR в изолированном Gradle-проекте, не конфигурируя все Android/sample-проекты полного репозитория Mapsforge. В объединённый JAR должен попасть `osmosis-plugins.conf`, а `osmosis --help` проверяет регистрацию `--mapfile-writer`.

@@ -1,11 +1,10 @@
-GEORGIA OFFLINE 0.4.4 — FULL REPOSITORY PACKAGE
+GEORGIA OFFLINE 0.4.5 — FULL REPOSITORY PACKAGE
 All paths are relative to the repository root. Hidden .github files are included.
 The generated binary georgia.map is not included; GitHub Actions generates it.
 
 .github/workflows/android-ci.yml
 .gitignore
 CHANGELOG.md
-PACKAGE_CONTENTS.txt
 README.md
 START_HERE_RU.txt
 THIRD_PARTY_NOTICES.md
@@ -36,10 +35,11 @@ docs/DATA_SOURCES.md
 docs/GITHUB_SETUP.md
 docs/ROADMAP.md
 docs/TECHNICAL_SPEC.md
-gradle.properties
 gradle/wrapper/gradle-wrapper.properties
+gradle.properties
 scripts/bootstrap-wrapper.sh
 scripts/build_georgia_map.sh
+scripts/fixtures/mapsforge-writer-smoke.osm
 scripts/install_mapsforge_writer.sh
 scripts/verify_apk_bundle.py
 scripts/verify_bundled_map.py

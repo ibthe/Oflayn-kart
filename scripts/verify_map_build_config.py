@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import sys
+import xml.etree.ElementTree as ET
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -10,6 +11,7 @@ MAP_SCRIPT = ROOT / "scripts/build_georgia_map.sh"
 WRITER_SCRIPT = ROOT / "scripts/install_mapsforge_writer.sh"
 WORKFLOW = ROOT / ".github/workflows/android-ci.yml"
 DATA_SOURCES = ROOT / "docs/DATA_SOURCES.md"
+SMOKE_FIXTURE = ROOT / "scripts/fixtures/mapsforge-writer-smoke.osm"
 
 EXPECTED_MIRROR = "https://download.openstreetmap.fr/extracts/asia/georgia.osm.pbf"
 EXPECTED_MIRROR_MD5 = "https://download.openstreetmap.fr/extracts/asia/georgia.osm.pbf.md5"
@@ -23,7 +25,7 @@ def fail(message: str) -> int:
 
 
 def main() -> int:
-    required = (MAP_SCRIPT, WRITER_SCRIPT, WORKFLOW, DATA_SOURCES)
+    required = (MAP_SCRIPT, WRITER_SCRIPT, WORKFLOW, DATA_SOURCES, SMOKE_FIXTURE)
     for path in required:
         if not path.is_file():
             return fail(f"required build file is missing: {path.relative_to(ROOT)}")
@@ -57,20 +59,33 @@ def main() -> int:
         EXPECTED_PLUGIN_LOADER,
         "osmosis-plugins.conf",
         "--mapfile-writer",
+        "/usr/share/osmosis",
+        "/etc/osmosis/plexus.conf",
+        "load ${jar_path}",
+        "mapsforge-writer-smoke.osm",
+        "--read-xml",
     ):
         if token not in writer_script:
-            return fail(f"isolated Mapsforge writer packaging is missing: {token}")
+            return fail(f"Debian Osmosis writer integration is missing: {token}")
     if "git clone" in writer_script or "mapsforge-map-writer:fatJar" in writer_script:
         return fail("do not build the full upstream Mapsforge multi-project in CI.")
     if "osmosis --version" in writer_script or "osmosis --version" in workflow:
         return fail("Osmosis must not be probed with the unsupported --version task.")
+    if "osmosis --help" in writer_script:
+        return fail("plugin registration must be tested by executing the writer task, not generic Osmosis help.")
+    try:
+        fixture = ET.parse(SMOKE_FIXTURE).getroot()
+    except ET.ParseError as exc:
+        return fail(f"Mapsforge writer smoke-test fixture is not valid OSM XML: {exc}")
+    if fixture.tag != "osm" or not fixture.findall("node") or not fixture.findall("way") or fixture.find("bounds") is None:
+        return fail("Mapsforge writer smoke-test fixture must contain OSM bounds, nodes, and a way.")
 
     if "scripts/verify_map_build_config.py" not in workflow:
         return fail("workflow must run the map builder preflight before the expensive steps.")
     if "continue-on-error: true" in workflow:
         return fail("map preparation must fail fast; do not hide failed prerequisites.")
 
-    print("OK: OSM source/checksum URLs, isolated Maven writer packaging, plugin descriptor, and fail-fast CI are configured.")
+    print("OK: OSM sources, isolated Maven writer, Debian Plexus classpath registration, real writer smoke test, and fail-fast CI are configured.")
     return 0
 
 

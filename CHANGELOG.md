@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.4.5 — Osmosis Debian classpath integration
+
+- Fixed Mapsforge Map Writer plugin loading for Ubuntu's Debian-packaged Osmosis.
+- Install the fat JAR under `/usr/share/osmosis/` and register it in `/etc/osmosis/plexus.conf`; the prior user JPF plugin directory did not place the `osmosis-plugins.conf` resource on the classpath used by the Debian launcher.
+- Added a real minimal OSM-to-Mapsforge smoke test before downloading the full Georgia extract.
+- Added a compact OSM XML fixture and preflight checks for the Plexus classpath directive and smoke-test fixture.
+- Version code raised to 9 so test APK upgrades can replace 0.4.4.
+
 ## 0.4.4 — corrected OSM fallback and isolated Mapsforge writer build
 
 - Corrected the OpenStreetMap France mirror URL to `georgia.osm.pbf`; the matching checksum endpoint is now `georgia.osm.pbf.md5`. The previous `georgia-latest.osm.pbf.md5` URL returned HTTP 404.

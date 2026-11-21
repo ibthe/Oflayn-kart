@@ -238,3 +238,36 @@ Osmosis — CLI для запуска задач-потоков (pipeline). Ар
 ### Что пока не подтверждено
 
 Новый workflow ещё не запускался с этими изменениями. Статические проверки проекта и скриптов можно выполнить локально в этом пакете, но реальное разрешение Maven-зависимостей, регистрацию Osmosis plugin, создание `georgia.map` и APK должен подтвердить GitHub Actions. Нельзя считать APK собранным до зелёного CI-run и появления artifact.
+
+
+## Ошибка CI 0.4.4 — Mapsforge plugin JAR не попадал в classpath Debian Osmosis
+
+### Симптом из журнала `logs_121374043594.zip` (21 ноября 2026)
+
+Установка Osmosis прошла успешно, отдельный fat JAR Mapsforge Map Writer также собрался:
+
+```text
+BUILD SUCCESSFUL in 9s
+ERROR: Osmosis did not register the Mapsforge --mapfile-writer plugin.
+```
+
+После проверки `osmosis-plugins.conf` скрипт запускал `osmosis --help`, но plugin task не обнаруживался. До скачивания PBF и генерации карты workflow не дошёл.
+
+### Причина
+
+В предыдущей версии JAR копировался только в пользовательский JPF-каталог `~/.openstreetmap/osmosis/plugins`. Но Ubuntu/Debian пакет Osmosis запускается через `/etc/osmosis/plexus.conf` и системный Plexus classpath. Mapsforge Map Writer поставляет loader через classpath-ресурс `osmosis-plugins.conf`; наличие JAR в произвольном пользовательском plugin-каталоге не гарантирует, что этот ресурс будет доступен системному classloader.
+
+Документация Osmosis описывает classpath plugin loaders и опцию `-plugin`, а пакетный Debian launcher явно использует системный classworlds/Plexus конфиг. Документация Mapsforge подтверждает имя loader-класса и формат `osmosis-plugins.conf`.
+
+### Исправление в 0.4.5
+
+1. Fat JAR устанавливается в `/usr/share/osmosis/mapsforge-map-writer-0.25.0-jar-with-dependencies.jar`.
+2. Скрипт добавляет `load /usr/share/osmosis/mapsforge-map-writer-0.25.0-jar-with-dependencies.jar` в `/etc/osmosis/plexus.conf` (без дублирования при повторном запуске).
+3. Старый пользовательский JPF-копируемый JAR удаляется, чтобы не создавать ложное впечатление успешной регистрации.
+4. Удалена ненадёжная проверка через `osmosis --help`. Вместо неё выполняется реальный smoke-test: Osmosis читает минимальный OSM XML fixture и пишет временный Mapsforge `.map` файл.
+5. Добавлен fixture `scripts/fixtures/mapsforge-writer-smoke.osm`; preflight проверяет наличие fixture и конфигурации системного classpath.
+6. Если реальная тестовая запись `.map` не проходит, CI прекращает работу до скачивания полной выгрузки Грузии.
+
+### Статус проверки
+
+В текущем рабочем окружении нет установленного Osmosis/Ubuntu package, поэтому настоящий plugin load против Debian-пакета здесь не запускался. Installer проверяется синтаксически и на mock-интеграции, а реальный plugin smoke-test будет выполнен первым делом в следующем GitHub Actions run. Не считать карту или APK сгенерированными до зелёной CI-сборки и загруженного APK artifact.
