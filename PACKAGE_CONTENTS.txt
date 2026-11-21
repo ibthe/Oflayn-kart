@@ -1,4 +1,4 @@
-GEORGIA OFFLINE 0.4.5 — FULL REPOSITORY PACKAGE
+GEORGIA OFFLINE 0.4.6 — FULL REPOSITORY PACKAGE
 All paths are relative to the repository root. Hidden .github files are included.
 The generated binary georgia.map is not included; GitHub Actions generates it.
 

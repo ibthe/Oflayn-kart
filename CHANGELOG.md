@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.4.6 — valid OSM timestamp metadata in writer smoke fixture
+
+- Fixed the real Mapsforge writer smoke test failure: the test OSM XML entities now include mandatory `timestamp` attributes in ISO-8601 UTC form.
+- Added standard OSM entity metadata (`changeset`, `uid`, `user`) to every fixture node and way so the smoke input represents a valid OSM XML extract.
+- Strengthened `verify_map_build_config.py` to fail before installing Osmosis if any fixture entity is missing required metadata or has an invalid timestamp.
+- Confirmed from the 0.4.5 CI log that the Mapsforge plugin was already loaded successfully: `MapFileWriterTask` was instantiated and started reading the XML. The failure occurred later, in the fixture parser, not in plugin registration.
+- Bumped Android `versionName` to `0.4.6` and `versionCode` to `10`.
+
 ## 0.4.5 — Osmosis Debian classpath integration
 
 - Fixed Mapsforge Map Writer plugin loading for Ubuntu's Debian-packaged Osmosis.

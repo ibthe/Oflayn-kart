@@ -271,3 +271,31 @@ ERROR: Osmosis did not register the Mapsforge --mapfile-writer plugin.
 ### Статус проверки
 
 В текущем рабочем окружении нет установленного Osmosis/Ubuntu package, поэтому настоящий plugin load против Debian-пакета здесь не запускался. Installer проверяется синтаксически и на mock-интеграции, а реальный plugin smoke-test будет выполнен первым делом в следующем GitHub Actions run. Не считать карту или APK сгенерированными до зелёной CI-сборки и загруженного APK artifact.
+
+
+## Ошибка CI 0.4.5 — отсутствовал timestamp в smoke-test OSM XML
+
+### Симптом из журнала `logs_121379795216.zip` (21 ноября 2026)
+
+```text
+mapfile-writer version: mapsforge-map-writer-0.25.0
+INFO: start reading data...
+OsmosisRuntimeException: The entity timestamp attribute is missing.
+```
+
+### Что это подтверждает
+
+Mapsforge plugin уже был найден и загружен: конструктор `MapFileWriterTask` выполнился и writer начал обработку входных данных. Следовательно, установка JAR и регистрация в `/etc/osmosis/plexus.conf` сработали. Ошибка была позже — при чтении собственного тестового OSM XML.
+
+### Причина
+
+Элементы `<node>` и `<way>` в `scripts/fixtures/mapsforge-writer-smoke.osm` имели `id`/`version`, но не имели обязательного `timestamp`. Osmosis XML reader требует timestamp для каждой OSM-сущности.
+
+### Исправление в 0.4.6
+
+1. Для каждого `node` и `way` добавлены UTC timestamps в ISO-8601 формате.
+2. Добавлены стандартные `changeset`, `uid` и `user`.
+3. `verify_map_build_config.py` теперь проверяет наличие обязательных атрибутов и формат timestamp у каждой сущности до запуска Osmosis.
+4. Повышен Android `versionCode` до 10, `versionName` — 0.4.6.
+
+Фактический smoke-test на Ubuntu/Osmosis должен быть повторно выполнен GitHub Actions. До его успеха нельзя утверждать, что карта или APK с картой готовы.

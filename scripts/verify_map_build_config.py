@@ -80,6 +80,24 @@ def main() -> int:
     if fixture.tag != "osm" or not fixture.findall("node") or not fixture.findall("way") or fixture.find("bounds") is None:
         return fail("Mapsforge writer smoke-test fixture must contain OSM bounds, nodes, and a way.")
 
+    # Osmosis' OSM XML reader requires a timestamp on every entity. Keep the
+    # smoke fixture representative of a real OSM export so the writer test
+    # reaches map generation instead of failing in the XML reader.
+    from datetime import datetime
+    entities = fixture.findall("node") + fixture.findall("way")
+    required_entity_attributes = ("id", "version", "timestamp", "changeset", "uid", "user")
+    for index, entity in enumerate(entities, start=1):
+        missing = [name for name in required_entity_attributes if not entity.get(name)]
+        if missing:
+            return fail(
+                f"Mapsforge smoke-test entity #{index} ({entity.tag}) lacks required OSM attributes: {', '.join(missing)}."
+            )
+        timestamp = entity.get("timestamp", "")
+        try:
+            datetime.fromisoformat(timestamp.replace("Z", "+00:00"))
+        except ValueError:
+            return fail(f"Mapsforge smoke-test entity #{index} has an invalid ISO-8601 timestamp: {timestamp!r}.")
+
     if "scripts/verify_map_build_config.py" not in workflow:
         return fail("workflow must run the map builder preflight before the expensive steps.")
     if "continue-on-error: true" in workflow:

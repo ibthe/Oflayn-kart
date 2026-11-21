@@ -4,7 +4,7 @@
 
 Workflow `.github/workflows/android-ci.yml` запускается при push в `main`/`master`, pull request или вручную (`workflow_dispatch`). Он использует Ubuntu, JDK 21, Android SDK Platform 36, Build Tools 36.0.0 и Gradle 9.6.0.
 
-### Что происходит в полной CI-сборке 0.4.5
+### Что происходит в полной CI-сборке 0.4.6
 
 1. Проверяется исходный `AndroidManifest.xml` на сетевые и фоновые location-разрешения; статический preflight проверяет адреса OSM/MD5, fixture и настройки регистрации Mapsforge Writer в Debian Plexus classpath.
 2. Запускаются unit tests.
