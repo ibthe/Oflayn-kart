@@ -22,6 +22,11 @@ class LocalSettings(context: Context) {
     var appTheme by mutableStateOf(preferences.getString("app_theme", "system") ?: "system")
         private set
 
+    var palette by mutableStateOf(
+        preferences.getString("color_palette", "mist")?.takeIf { it in PALETTES } ?: "mist"
+    )
+        private set
+
     var mapTheme by mutableStateOf(
         preferences.getString("map_theme", "classic")?.takeIf { it in MAP_THEMES } ?: "classic"
     )
@@ -60,6 +65,12 @@ class LocalSettings(context: Context) {
         if (value !in APP_THEMES) return
         appTheme = value
         preferences.edit().putString("app_theme", value).apply()
+    }
+
+    fun updatePalette(value: String) {
+        if (value !in PALETTES) return
+        palette = value
+        preferences.edit().putString("color_palette", value).apply()
     }
 
     fun updateMapTheme(value: String) {
@@ -126,6 +137,7 @@ class LocalSettings(context: Context) {
     companion object {
         val SUPPORTED_LANGUAGES = setOf("en", "ru", "ka")
         val APP_THEMES = setOf("system", "light", "dark")
+        val PALETTES = setOf("mist", "sage", "sand", "dusk", "graphite")
         val MAP_THEMES = setOf("classic", "outdoor", "motorider", "biker")
     }
 }

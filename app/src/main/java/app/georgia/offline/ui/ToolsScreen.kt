@@ -23,6 +23,7 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
+import app.georgia.offline.ui.theme.Space
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Surface
@@ -105,18 +106,12 @@ fun ToolsScreen(modifier: Modifier = Modifier, settings: LocalSettings) {
 
     val compassHeading = rememberCompassHeading(context)
 
-    Column(
-        modifier = modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(16.dp),
-        verticalArrangement = Arrangement.spacedBy(12.dp)
-    ) {
-        Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
-            Text("Инструменты путешественника", style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Bold)
-            Text("Локальные датчики телефона. Сетевое подключение не используется.", color = MaterialTheme.colorScheme.onSurfaceVariant)
-        }
+    PageColumn(modifier) {
+        PageTitle("Утилиты", "Локальные датчики телефона. Сетевое подключение не используется.")
 
         Card {
-            Column(Modifier.fillMaxWidth().padding(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                Text("GPS и координаты", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.SemiBold)
+            Column(Modifier.fillMaxWidth().padding(Space.card), verticalArrangement = Arrangement.spacedBy(Space.s)) {
+                Text("GPS и координаты", style = MaterialTheme.typography.titleMedium)
                 Text(
                     when {
                         gpsActive && currentLocation != null -> "GPS работает · получены координаты"
@@ -134,7 +129,7 @@ fun ToolsScreen(modifier: Modifier = Modifier, settings: LocalSettings) {
                     MetricRow("Высота GPS", if (location.hasAltitude()) String.format(Locale.getDefault(), "%.1f м", location.altitude) else "нет данных")
                     MetricRow("Скорость", if (location.hasSpeed()) String.format(Locale.getDefault(), "%.1f км/ч", location.speed * 3.6f) else "нет данных")
                     MetricRow("Направление движения", if (location.hasBearing()) String.format(Locale.getDefault(), "%.0f°", location.bearing) else "нет данных")
-                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Row(horizontalArrangement = Arrangement.spacedBy(Space.xs)) {
                         OutlinedButton(onClick = { copyToClipboard(context, GeoFormatting.decimalCoordinates(location.latitude, location.longitude)) }) {
                             Text("Копировать координаты")
                         }
@@ -148,7 +143,7 @@ fun ToolsScreen(modifier: Modifier = Modifier, settings: LocalSettings) {
                 if (gpsError != null) {
                     Text(gpsError!!, color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodySmall)
                 }
-                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                Row(horizontalArrangement = Arrangement.spacedBy(Space.xs)) {
                     Button(onClick = {
                         if (gpsActive) {
                             gpsActive = false
@@ -173,8 +168,8 @@ fun ToolsScreen(modifier: Modifier = Modifier, settings: LocalSettings) {
         }
 
         Card {
-            Column(Modifier.fillMaxWidth().padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                Text("Компас", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.SemiBold)
+            Column(Modifier.fillMaxWidth().padding(Space.card), verticalArrangement = Arrangement.spacedBy(Space.xs)) {
+                Text("Компас", style = MaterialTheme.typography.titleMedium)
                 if (compassHeading == null) {
                     Text("На устройстве нет датчика ориентации, необходимого для электронного компаса.", color = MaterialTheme.colorScheme.onSurfaceVariant)
                 } else {
@@ -185,11 +180,11 @@ fun ToolsScreen(modifier: Modifier = Modifier, settings: LocalSettings) {
         }
 
         Card {
-            Column(Modifier.fillMaxWidth().padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                Text("Метка автомобиля", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.SemiBold)
+            Column(Modifier.fillMaxWidth().padding(Space.card), verticalArrangement = Arrangement.spacedBy(Space.xs)) {
+                Text("Метка автомобиля", style = MaterialTheme.typography.titleMedium)
                 if (settings.carLatitude != null && settings.carLongitude != null) {
                     Text(GeoFormatting.decimalCoordinates(settings.carLatitude!!, settings.carLongitude!!))
-                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Row(horizontalArrangement = Arrangement.spacedBy(Space.xs)) {
                         OutlinedButton(onClick = { copyToClipboard(context, GeoFormatting.decimalCoordinates(settings.carLatitude!!, settings.carLongitude!!)) }) {
                             Text("Копировать")
                         }
@@ -203,8 +198,8 @@ fun ToolsScreen(modifier: Modifier = Modifier, settings: LocalSettings) {
         }
 
         Card {
-            Column(Modifier.fillMaxWidth().padding(16.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                Text("Важное ограничение", fontWeight = FontWeight.SemiBold)
+            Column(Modifier.fillMaxWidth().padding(Space.card), verticalArrangement = Arrangement.spacedBy(Space.xs)) {
+                Text("Важное ограничение", style = MaterialTheme.typography.titleMedium)
                 Text("Высота берётся из GPS устройства и может заметно ошибаться. Для безопасности сравнивай её с картой высот и не используй телефон как единственный навигационный прибор.", style = MaterialTheme.typography.bodySmall)
             }
         }

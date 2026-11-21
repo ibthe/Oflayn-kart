@@ -3,6 +3,7 @@ package app.georgia.offline.ui
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
+import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
@@ -10,6 +11,7 @@ import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material3.RadioButton
 import androidx.compose.material3.TextButton
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.text.style.TextOverflow
@@ -63,7 +65,11 @@ import app.georgia.offline.domain.PoiLabels
 import app.georgia.offline.domain.GeoFormatting
 import app.georgia.offline.domain.MapLanguageResolver
 import app.georgia.offline.domain.FeatureCatalog
+import app.georgia.offline.ui.theme.AppPalette
+import app.georgia.offline.ui.theme.AppPalettes
 import app.georgia.offline.ui.theme.GeorgiaTheme
+import app.georgia.offline.ui.theme.Radius
+import app.georgia.offline.ui.theme.Space
 
 private enum class AppTab(val label: String, val symbol: String) {
     MAP("Карта", "▦"),
@@ -77,7 +83,7 @@ private enum class AppTab(val label: String, val symbol: String) {
 @Composable
 fun GeorgiaOfflineApp(settings: LocalSettings) {
     var selectedTab by rememberSaveable { mutableStateOf(AppTab.MAP.name) }
-    GeorgiaTheme(themeMode = settings.appTheme) {
+    GeorgiaTheme(themeMode = settings.appTheme, palette = settings.palette) {
         Scaffold(
             bottomBar = { MinimalNavBar(selected = selectedTab, onSelect = { selectedTab = it }) }
         ) { padding ->
@@ -94,10 +100,11 @@ fun GeorgiaOfflineApp(settings: LocalSettings) {
 }
 
 @Composable
-private fun PageColumn(modifier: Modifier = Modifier, content: @Composable ColumnScope.() -> Unit) {
+internal fun PageColumn(modifier: Modifier = Modifier, content: @Composable ColumnScope.() -> Unit) {
     Column(
-        modifier = modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(start = 20.dp, end = 20.dp, top = 8.dp, bottom = 24.dp),
-        verticalArrangement = Arrangement.spacedBy(14.dp),
+        modifier = modifier.fillMaxSize().verticalScroll(rememberScrollState())
+            .padding(start = Space.screen, end = Space.screen, top = Space.m, bottom = Space.xl),
+        verticalArrangement = Arrangement.spacedBy(Space.m),
         content = content
     )
 }
@@ -108,23 +115,23 @@ private fun MinimalNavBar(selected: String, onSelect: (String) -> Unit) {
         Column {
             HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
             Row(
-                Modifier.fillMaxWidth().navigationBarsPadding().padding(horizontal = 6.dp, vertical = 4.dp),
+                Modifier.fillMaxWidth().navigationBarsPadding().padding(horizontal = Space.xs, vertical = Space.xxs),
                 horizontalArrangement = Arrangement.SpaceBetween
             ) {
                 AppTab.entries.forEach { tab ->
                     val active = selected == tab.name
                     Column(
-                        modifier = Modifier.weight(1f).clip(RoundedCornerShape(16.dp)).clickable { onSelect(tab.name) }.padding(vertical = 10.dp),
+                        modifier = Modifier.weight(1f).clip(RoundedCornerShape(Space.m)).clickable { onSelect(tab.name) }.padding(vertical = Space.s),
                         horizontalAlignment = Alignment.CenterHorizontally,
-                        verticalArrangement = Arrangement.spacedBy(6.dp)
+                        verticalArrangement = Arrangement.spacedBy(Space.xs)
                     ) {
                         Box(
-                            Modifier.size(width = 16.dp, height = 3.dp).clip(CircleShape)
+                            Modifier.size(width = 20.dp, height = 3.dp).clip(CircleShape)
                                 .background(if (active) MaterialTheme.colorScheme.tertiary else androidx.compose.ui.graphics.Color.Transparent)
                         )
                         Text(
                             tab.label,
-                            style = MaterialTheme.typography.labelMedium,
+                            style = MaterialTheme.typography.labelSmall,
                             color = if (active) MaterialTheme.colorScheme.onSurface else MaterialTheme.colorScheme.onSurfaceVariant,
                             fontWeight = if (active) FontWeight.SemiBold else FontWeight.Normal,
                             maxLines = 1,
@@ -140,15 +147,15 @@ private fun MinimalNavBar(selected: String, onSelect: (String) -> Unit) {
 @Composable
 private fun MapHeader() {
     Row(
-        Modifier.fillMaxWidth().padding(top = 8.dp),
+        Modifier.fillMaxWidth().padding(bottom = Space.xs),
         horizontalArrangement = Arrangement.SpaceBetween,
         verticalAlignment = Alignment.CenterVertically
     ) {
-        Column {
+        Column(verticalArrangement = Arrangement.spacedBy(Space.xxs)) {
             Text("Грузия", style = MaterialTheme.typography.headlineMedium)
             Text("Офлайн-атлас", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
         }
-        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(Space.xs)) {
             Box(Modifier.size(8.dp).clip(CircleShape).background(MaterialTheme.colorScheme.tertiary))
             Text("Без сети", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
         }
@@ -165,7 +172,7 @@ private fun MapDetails(
     importError: Boolean,
     onPickFile: () -> Unit
 ) {
-    Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+    Column(verticalArrangement = Arrangement.spacedBy(Space.s)) {
         if (hasMap) {
             Text("Язык подписей", style = MaterialTheme.typography.titleMedium)
             Text(
@@ -272,11 +279,11 @@ private fun MapScreen(modifier: Modifier, settings: LocalSettings) {
 
     if (mapFile != null) {
         Column(
-            modifier.fillMaxSize().padding(horizontal = 20.dp),
-            verticalArrangement = Arrangement.spacedBy(12.dp)
+            modifier.fillMaxSize().padding(start = Space.screen, end = Space.screen, top = Space.m),
+            verticalArrangement = Arrangement.spacedBy(Space.m)
         ) {
             MapHeader()
-            Box(Modifier.fillMaxWidth().weight(1f).clip(RoundedCornerShape(28.dp))) {
+            Box(Modifier.fillMaxWidth().weight(1f).clip(RoundedCornerShape(Radius.card))) {
                 MapsforgeMapSurface(
                     mapFile = mapFile,
                     preferredLanguage = preferredLanguage,
@@ -285,14 +292,14 @@ private fun MapScreen(modifier: Modifier, settings: LocalSettings) {
                 )
                 if (showDetails) {
                     Surface(modifier = Modifier.fillMaxSize(), color = MaterialTheme.colorScheme.background.copy(alpha = 0.97f)) {
-                        Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(20.dp)) {
+                        Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(Space.card)) {
                             MapDetails(settings, true, preferredLanguage, isImporting, importMessage, importError, openPicker)
                         }
                     }
                 }
             }
             Row(
-                Modifier.fillMaxWidth().padding(bottom = 4.dp),
+                Modifier.fillMaxWidth().padding(bottom = Space.xxs),
                 horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically
             ) {
@@ -308,7 +315,7 @@ private fun MapScreen(modifier: Modifier, settings: LocalSettings) {
         PageColumn(modifier) {
             MapHeader()
             Card {
-                Column(Modifier.fillMaxWidth().padding(20.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                Column(Modifier.fillMaxWidth().padding(Space.card), verticalArrangement = Arrangement.spacedBy(Space.xs)) {
                     Text("Карта не подключена", style = MaterialTheme.typography.titleMedium)
                     Text(
                         "В этой сборке нет встроенного файла карты. Полная сборка GitHub Actions добавляет его в APK; можно также выбрать Mapsforge .map-файл Грузии вручную.",
@@ -327,7 +334,7 @@ private fun StatusPill(text: String) {
     Surface(shape = CircleShape, color = MaterialTheme.colorScheme.surfaceVariant) {
         Text(
             text,
-            modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp),
+            modifier = Modifier.padding(horizontal = Space.s, vertical = Space.xs),
             style = MaterialTheme.typography.labelSmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant
         )
@@ -386,12 +393,12 @@ private fun DiscoverScreen(modifier: Modifier, settings: LocalSettings) {
             value = query,
             onValueChange = { query = it },
             modifier = Modifier.fillMaxWidth(),
-            shape = RoundedCornerShape(28.dp),
+            shape = RoundedCornerShape(50),
             label = { Text("Поиск места") },
             placeholder = { Text("Название, адрес, телефон, сайт или ქართულად") },
             singleLine = true
         )
-        Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+        Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(Space.xs)) {
             categories.forEach { (id, label) ->
                 FilterChip(
                     selected = selectedCategory == id,
@@ -404,7 +411,7 @@ private fun DiscoverScreen(modifier: Modifier, settings: LocalSettings) {
         Row(
             Modifier.fillMaxWidth(),
             verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(10.dp)
+            horizontalArrangement = Arrangement.spacedBy(Space.s)
         ) {
             if (loading) CircularProgressIndicator(modifier = Modifier.size(18.dp), strokeWidth = 2.dp)
             Text(
@@ -423,7 +430,7 @@ private fun DiscoverScreen(modifier: Modifier, settings: LocalSettings) {
         } else {
             results.forEach { poi ->
                 Card {
-                    Column(Modifier.fillMaxWidth().padding(14.dp), verticalArrangement = Arrangement.spacedBy(5.dp)) {
+                    Column(Modifier.fillMaxWidth().padding(Space.card), verticalArrangement = Arrangement.spacedBy(Space.xxs)) {
                         val labels = poi.namesFor(settings.enabledLanguages)
                         labels.forEachIndexed { index, label ->
                             Text(
@@ -483,8 +490,8 @@ private fun RouteScreen(modifier: Modifier) {
         PageTitle("Планирование маршрута", "Автономные режимы")
         listOf("Автомобиль", "Внедорожник 4×4", "Велосипед", "Пешком / треккинг").forEach { mode ->
             Card {
-                Row(Modifier.fillMaxWidth().padding(16.dp), verticalAlignment = Alignment.CenterVertically) {
-                    Text("○", modifier = Modifier.padding(end = 12.dp))
+                Row(Modifier.fillMaxWidth().padding(Space.card), verticalAlignment = Alignment.CenterVertically) {
+                    Box(Modifier.padding(end = Space.m).size(10.dp).clip(CircleShape).background(MaterialTheme.colorScheme.outline))
                     Column(Modifier.weight(1f)) {
                         Text(mode, fontWeight = FontWeight.SemiBold)
                         Text("Профиль маршрутизации будет подключён после графа дорог.", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
@@ -524,20 +531,38 @@ private fun SettingsScreen(modifier: Modifier, settings: LocalSettings) {
     PageColumn(modifier) {
         PageTitle("Настройки", "Все параметры сохраняются локально")
         Card {
-            Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                Text("Языки названий на карте", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
+            Column(Modifier.padding(Space.card), verticalArrangement = Arrangement.spacedBy(Space.s)) {
+                Text("Языки названий на карте", style = MaterialTheme.typography.titleMedium)
                 LanguageSwitch("English", "en", settings)
                 LanguageSwitch("Русский", "ru", settings)
                 LanguageSwitch("ქართული", "ka", settings)
                 Text("Когда включено несколько языков, текущая версия карты выбирает один предпочтительный: English → Русский → ქართული. Отдельный режим одновременных многострочных подписей будет добавлен следующим картографическим этапом.", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
             }
         }
+        val darkNow = when (settings.appTheme) {
+            "dark" -> true
+            "light" -> false
+            else -> isSystemInDarkTheme()
+        }
         Card {
-            Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                Text("Тема приложения", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
+            Column(Modifier.padding(Space.card), verticalArrangement = Arrangement.spacedBy(Space.xs)) {
+                Text("Цветовая тема", style = MaterialTheme.typography.titleMedium)
+                Text(
+                    "Приглушённые цвета без резких контрастов, чтобы глаза меньше уставали при долгом чтении карты.",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+                AppPalettes.forEach { option ->
+                    PaletteOption(option, option.id == settings.palette, darkNow) { settings.updatePalette(option.id) }
+                }
+            }
+        }
+        Card {
+            Column(Modifier.padding(Space.card), verticalArrangement = Arrangement.spacedBy(Space.s)) {
+                Text("Тема приложения", style = MaterialTheme.typography.titleMedium)
                 ChoiceRow(listOf("system" to "Системная", "light" to "Светлая", "dark" to "Тёмная"), settings.appTheme, settings::updateAppTheme)
                 HorizontalDivider()
-                Text("Стиль карты", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
+                Text("Стиль карты", style = MaterialTheme.typography.titleMedium)
                 ChoiceRow(
                     listOf("classic" to "Классика", "outdoor" to "Рельеф", "motorider" to "Автомобильная", "biker" to "Велосипедная"),
                     settings.mapTheme,
@@ -546,8 +571,8 @@ private fun SettingsScreen(modifier: Modifier, settings: LocalSettings) {
             }
         }
         Card {
-            Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                Text("Хранение карт", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
+            Column(Modifier.padding(Space.card), verticalArrangement = Arrangement.spacedBy(Space.xs)) {
+                Text("Хранение карт", style = MaterialTheme.typography.titleMedium)
                 Text(
                     if (settings.storageTreeUri == null) "Выбрано внутреннее хранилище (по умолчанию)." else "Папка для карт выбрана: SD-карта или другое внешнее хранилище.",
                     style = MaterialTheme.typography.bodySmall
@@ -567,6 +592,35 @@ private fun SettingsScreen(modifier: Modifier, settings: LocalSettings) {
 }
 
 @Composable
+private fun PaletteOption(palette: AppPalette, selected: Boolean, dark: Boolean, onSelect: () -> Unit) {
+    val preview = if (dark) palette.dark else palette.light
+    val shape = RoundedCornerShape(Space.m)
+    Row(
+        Modifier.fillMaxWidth().clip(shape)
+            .background(if (selected) MaterialTheme.colorScheme.secondaryContainer else androidx.compose.ui.graphics.Color.Transparent)
+            .clickable(onClick = onSelect)
+            .padding(Space.s),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(Space.m)
+    ) {
+        Box(
+            Modifier.size(48.dp).clip(RoundedCornerShape(Space.s)).background(preview.background),
+            contentAlignment = Alignment.Center
+        ) {
+            Row(horizontalArrangement = Arrangement.spacedBy(Space.xxs), verticalAlignment = Alignment.CenterVertically) {
+                Box(Modifier.size(14.dp).clip(CircleShape).background(preview.primary))
+                Box(Modifier.size(14.dp).clip(CircleShape).background(preview.tertiary))
+            }
+        }
+        Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(Space.xxs)) {
+            Text(palette.title, style = MaterialTheme.typography.titleSmall)
+            Text(palette.description, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+        }
+        RadioButton(selected = selected, onClick = null)
+    }
+}
+
+@Composable
 private fun LanguageSwitch(label: String, code: String, settings: LocalSettings) {
     Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.SpaceBetween) {
         Column {
@@ -579,9 +633,9 @@ private fun LanguageSwitch(label: String, code: String, settings: LocalSettings)
 
 @Composable
 private fun ChoiceRow(options: List<Pair<String, String>>, selected: String, onSelect: (String) -> Unit) {
-    Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+    Column(verticalArrangement = Arrangement.spacedBy(Space.xs)) {
         options.chunked(2).forEach { rowOptions ->
-            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            Row(horizontalArrangement = Arrangement.spacedBy(Space.xs)) {
                 rowOptions.forEach { (value, label) ->
                     FilterChip(
                         selected = selected == value,
@@ -595,17 +649,17 @@ private fun ChoiceRow(options: List<Pair<String, String>>, selected: String, onS
 }
 
 @Composable
-private fun PageTitle(title: String, subtitle: String) {
-    Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+internal fun PageTitle(title: String, subtitle: String) {
+    Column(Modifier.padding(bottom = Space.xs), verticalArrangement = Arrangement.spacedBy(Space.xxs)) {
         Text(title, style = MaterialTheme.typography.headlineMedium)
         Text(subtitle, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
     }
 }
 
 @Composable
-private fun InfoCard(title: String, body: String) {
+internal fun InfoCard(title: String, body: String) {
     Card {
-        Column(Modifier.fillMaxWidth().padding(20.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+        Column(Modifier.fillMaxWidth().padding(Space.card), verticalArrangement = Arrangement.spacedBy(Space.xs)) {
             Text(title, style = MaterialTheme.typography.titleMedium)
             Text(body, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
         }
