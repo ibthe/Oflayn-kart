@@ -6,7 +6,7 @@
 | 1 | Загрузка OSM PBF, генерация `.map`, контрольные суммы и кеш CI | Реализовано в коде 0.4.0; нужен первый успешный CI run |
 | 2 | Mapsforge renderer, country map asset, стили и локальное отображение | Renderer есть; карта встраивается через CI, отображение требует CI-проверки |
 | 3 | Независимые переключатели и одновременные многоязычные подписи | Частично: хранение вариантов и выбор одного языка; overlay ещё нужен |
-| 4 | Локальная POI SQLite/FTS, категории и поиск | Запланировано |
+| 4 | Локальная POI SQLite, категории и поиск по трём именам | Версия 0.5.1: имена, категории, адреса и контактные сведения; relation-only объекты и FTS требуют расширения |
 | 5 | DEM, горизонтали, hillshade и профили высот | Запланировано |
 | 6 | BRouter: car / bike / foot + осторожный профиль 4×4 | Запланировано |
 | 7 | Путеводитель, практические POI, избранное и планировщик | Запланировано |
@@ -46,11 +46,20 @@
 - [x] Проверка фактического наличия карты внутри APK.
 - [ ] Первый зелёный workflow run на GitHub — ожидается.
 
+### 0.5.1 — локальный POI справочник и практические сведения
+
+- [x] PyOsmium extracts named and categorized OSM nodes and closed ways from the same verified Georgia PBF.
+- [x] SQLite schema stores English, Russian and Georgian names when present, category, coordinates and tags.
+- [x] Local category/name/address/phone/website search and copy-coordinate action in the Discover screen.
+- [x] POI cards display address, phone, website, opening hours, cuisine and public access details when OSM tags exist.
+- [x] POI SHA-256 / row-count / SQLite-integrity checks in CI and APK validation.
+- [ ] CI run must still confirm full PBF processing, APK packaging and actual device search.
+
 ## Следующие этапы
 
 1. Получить успешный CI run и визуально проверить покрытие, подписи, скорость отрисовки и размер карты на Android.
 2. Реализовать stacked multi-language overlay, чтобы языки могли включаться/выключаться независимо и выводиться одновременно.
-3. Построить POI SQLite/FTS из тех же OSM данных.
+3. Расширить POI SQLite: relation-only POI, улучшенная геометрия площадных объектов, категории и дополнительная информация об организациях.
 4. Подключить BRouter segments/profiles с отдельной проверкой 4×4.
 5. Добавить DEM, контуры, hillshade и локальную высоту.
 6. Реализовать прямую запись больших данных в SD-card tree через SAF.

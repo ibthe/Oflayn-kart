@@ -1,6 +1,7 @@
-GEORGIA OFFLINE 0.4.7 — FULL REPOSITORY PACKAGE
-All paths are relative to the repository root. Hidden .github files are included.
-The generated binary georgia.map is not included; GitHub Actions generates it.
+GEORGIA OFFLINE — PACKAGE CONTENTS 0.5.1
+All paths below are relative to the repository root.
+The archive contains hidden paths such as .github/workflows/android-ci.yml.
+Generated large binary assets (.map, .sqlite, APK) are intentionally not shipped in this source ZIP.
 
 .github/workflows/android-ci.yml
 .gitignore
@@ -16,6 +17,7 @@ app/src/main/assets/offline/data-manifest.json
 app/src/main/java/app/georgia/offline/MainActivity.kt
 app/src/main/java/app/georgia/offline/data/LocalSettings.kt
 app/src/main/java/app/georgia/offline/data/MapFileRepository.kt
+app/src/main/java/app/georgia/offline/data/PoiRepository.kt
 app/src/main/java/app/georgia/offline/domain/FeatureCatalog.kt
 app/src/main/java/app/georgia/offline/domain/GeoFormatting.kt
 app/src/main/java/app/georgia/offline/domain/MapLanguageResolver.kt
@@ -27,6 +29,7 @@ app/src/main/res/values/strings.xml
 app/src/test/java/app/georgia/offline/FeatureCatalogTest.kt
 app/src/test/java/app/georgia/offline/GeoFormattingTest.kt
 app/src/test/java/app/georgia/offline/MapLanguageResolverTest.kt
+app/src/test/java/app/georgia/offline/PoiRepositoryTest.kt
 build.gradle.kts
 data/assets/README.md
 docs/ARCHITECTURE.md
@@ -40,10 +43,15 @@ gradle.properties
 gradle/wrapper/gradle-wrapper.properties
 scripts/bootstrap-wrapper.sh
 scripts/build_georgia_map.sh
+scripts/build_poi_database.py
 scripts/fixtures/mapsforge-writer-smoke.osm
+scripts/fixtures/poi-smoke.osm
 scripts/install_mapsforge_writer.sh
+scripts/test_build_poi_database.py
+scripts/test_poi_extractor_smoke.py
 scripts/verify_apk_bundle.py
 scripts/verify_bundled_map.py
 scripts/verify_map_build_config.py
 scripts/verify_offline_manifest.py
+scripts/verify_poi_database.py
 settings.gradle.kts

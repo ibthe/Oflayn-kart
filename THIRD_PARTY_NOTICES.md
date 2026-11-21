@@ -12,6 +12,10 @@ The Georgia country extract is obtained from Geofabrik: https://download.geofabr
 
 The Android application uses Mapsforge Android renderer and themes version 0.25.0 from Maven Central. The CI resolves the published `org.mapsforge:mapsforge-map-writer:0.25.0` Maven Central artifact and runtime dependencies into an Osmosis plugin JAR in an isolated Java-only Gradle project; it does not configure the full upstream Android/sample multi-project. The JAR is loaded by Ubuntu/Debian Osmosis through `/etc/osmosis/plexus.conf` and `/usr/share/osmosis/`. Preserve upstream license and notices. Mapsforge is licensed under GNU Lesser General Public License v3.0, subject to the terms and notices in the exact release: https://github.com/mapsforge/mapsforge
 
+## PyOsmium
+
+PyOsmium is used only in the GitHub Actions data-preparation workflow to extract local POI records from OSM PBF files. It is not bundled in the Android APK. PyOsmium is available under the BSD 2-Clause License; retain its upstream copyright and license notice: https://github.com/osmcode/pyosmium
+
 ## Osmosis
 
 Osmosis is used only in the GitHub Actions data preparation workflow and is not bundled as an Android runtime component. Preserve its upstream license and notices: https://github.com/openstreetmap/osmosis

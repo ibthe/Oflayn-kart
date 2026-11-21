@@ -16,12 +16,14 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.NavigationBar
 import androidx.compose.material3.NavigationBarItem
 import androidx.compose.material3.OutlinedButton
+import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Switch
@@ -37,14 +39,18 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalClipboardManager
+import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import java.io.File
 import app.georgia.offline.data.LocalSettings
 import app.georgia.offline.data.MapFileRepository
+import app.georgia.offline.data.PoiRepository
 import app.georgia.offline.domain.MapLanguageResolver
 import app.georgia.offline.domain.FeatureCatalog
 import app.georgia.offline.ui.theme.GeorgiaTheme
@@ -78,7 +84,7 @@ fun GeorgiaOfflineApp(settings: LocalSettings) {
         ) { padding ->
             when (AppTab.valueOf(selectedTab)) {
                 AppTab.MAP -> MapScreen(Modifier.padding(padding), settings)
-                AppTab.DISCOVER -> DiscoverScreen(Modifier.padding(padding))
+                AppTab.DISCOVER -> DiscoverScreen(Modifier.padding(padding), settings)
                 AppTab.ROUTE -> RouteScreen(Modifier.padding(padding))
                 AppTab.SAVED -> SavedScreen(Modifier.padding(padding))
                 AppTab.TOOLS -> ToolsScreen(Modifier.padding(padding), settings)
@@ -261,20 +267,149 @@ private fun StatusPill(text: String) {
 }
 
 @Composable
-private fun DiscoverScreen(modifier: Modifier) {
+private fun DiscoverScreen(modifier: Modifier, settings: LocalSettings) {
+    val context = LocalContext.current
+    val clipboard = LocalClipboardManager.current
+    var query by rememberSaveable { mutableStateOf("") }
+    var selectedCategory by rememberSaveable { mutableStateOf("all") }
+    var database by remember { mutableStateOf<File?>(null) }
+    var poiCount by remember { mutableStateOf(0) }
+    var results by remember { mutableStateOf<List<PoiRepository.PoiRecord>>(emptyList()) }
+    var loading by remember { mutableStateOf(false) }
+    var statusMessage by remember { mutableStateOf("Подготавливаю локальную базу объектов…") }
+    var statusIsError by remember { mutableStateOf(false) }
+
+    LaunchedEffect(Unit) {
+        loading = true
+        val installation = PoiRepository.ensureInstalled(context)
+        database = installation.database
+        poiCount = installation.poiCount
+        statusMessage = installation.message ?: "Локальная база готова: ${installation.poiCount} объектов. Поиск работает без интернета."
+        statusIsError = installation.message != null
+        loading = false
+    }
+
+    LaunchedEffect(database, query, selectedCategory) {
+        val localDatabase = database ?: return@LaunchedEffect
+        delay(180)
+        loading = true
+        try {
+            results = PoiRepository.search(localDatabase, query, selectedCategory)
+            statusIsError = false
+            statusMessage = "Найдено: ${results.size}. В базе: $poiCount объектов."
+        } catch (error: Exception) {
+            results = emptyList()
+            statusIsError = true
+            statusMessage = error.message ?: "Не удалось выполнить локальный поиск."
+        } finally {
+            loading = false
+        }
+    }
+
+    val categories = listOf(
+        "all" to "Все", "tourism" to "Достопримечательности", "historic" to "История",
+        "nature" to "Природа", "food" to "Еда", "lodging" to "Жильё",
+        "medical" to "Медицина", "transport" to "Транспорт", "services" to "Сервисы",
+        "shops" to "Магазины", "settlement" to "Населённые пункты"
+    )
+
     PageColumn(modifier) {
-        PageTitle("Путеводитель", "Семь модулей будущего автономного атласа")
-        FeatureCatalog.groups.forEach { group ->
-            Card {
-                Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                    Text(group.title, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
-                    Text(group.description, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                    group.features.forEach { Text("• $it", style = MaterialTheme.typography.bodyMedium) }
-                    StatusPill("Запланировано")
+        PageTitle("Места и POI", "Локальный справочник Грузии · поиск на трёх языках")
+        OutlinedTextField(
+            value = query,
+            onValueChange = { query = it },
+            modifier = Modifier.fillMaxWidth(),
+            label = { Text("Поиск места") },
+            placeholder = { Text("Название, адрес, телефон, сайт или ქართულად") },
+            singleLine = true
+        )
+        Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+            categories.chunked(2).forEach { rowCategories ->
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    rowCategories.forEach { (id, label) ->
+                        FilterChip(
+                            selected = selectedCategory == id,
+                            onClick = { selectedCategory = id },
+                            label = { Text(label) }
+                        )
+                    }
                 }
             }
         }
+        Card(colors = CardDefaults.cardColors(
+            containerColor = if (statusIsError) MaterialTheme.colorScheme.errorContainer else MaterialTheme.colorScheme.surfaceVariant
+        )) {
+            Row(
+                Modifier.fillMaxWidth().padding(12.dp),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(10.dp)
+            ) {
+                if (loading) CircularProgressIndicator(modifier = Modifier.height(22.dp), strokeWidth = 2.dp)
+                Text(statusMessage, style = MaterialTheme.typography.bodySmall)
+            }
+        }
+        if (database == null) {
+            InfoCard(
+                "Офлайн-справочник пока не встроен",
+                "После успешной генерации карты GitHub Actions добавит локальную SQLite-базу POI в APK. Она будет включать только объекты, присутствующие в OpenStreetMap; отсутствующие переводы автоматически не создаются."
+            )
+        } else if (results.isEmpty() && !loading) {
+            InfoCard("Ничего не найдено", "Попробуй другое написание или выбери категорию «Все».")
+        } else {
+            results.forEach { poi ->
+                Card {
+                    Column(Modifier.fillMaxWidth().padding(14.dp), verticalArrangement = Arrangement.spacedBy(5.dp)) {
+                        val labels = poi.namesFor(settings.enabledLanguages)
+                        labels.forEachIndexed { index, label ->
+                            Text(
+                                label,
+                                style = if (index == 0) MaterialTheme.typography.titleMedium else MaterialTheme.typography.bodyMedium,
+                                fontWeight = if (index == 0) FontWeight.SemiBold else FontWeight.Normal
+                            )
+                        }
+                        Text(
+                            "${poiCategoryLabel(poi.category)} · ${poi.subcategory.replace('_', ' ')}",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                        poi.detailLines().forEach { (label, value) ->
+                            Text(
+                                "$label: $value",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        }
+                        Text(
+                            "${"%.5f".format(java.util.Locale.US, poi.latitude)}, ${"%.5f".format(java.util.Locale.US, poi.longitude)}",
+                            style = MaterialTheme.typography.labelMedium
+                        )
+                        OutlinedButton(
+                            onClick = { clipboard.setText(AnnotatedString("${poi.latitude}, ${poi.longitude}")) }
+                        ) { Text("Копировать координаты") }
+                    }
+                }
+            }
+        }
+        Text(
+            "Источник: © OpenStreetMap contributors · ODbL 1.0. Названия показаны на тех языках, которые присутствуют в исходных данных.",
+            style = MaterialTheme.typography.labelSmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant
+        )
     }
+}
+
+private fun poiCategoryLabel(category: String): String = when (category) {
+    "food" -> "Еда и напитки"
+    "lodging" -> "Жильё"
+    "tourism" -> "Достопримечательности"
+    "medical" -> "Медицина"
+    "transport" -> "Транспорт и заправки"
+    "services" -> "Сервисы"
+    "shops" -> "Магазины"
+    "historic" -> "История и культура"
+    "nature" -> "Природа"
+    "settlement" -> "Населённые пункты"
+    else -> category
 }
 
 @Composable

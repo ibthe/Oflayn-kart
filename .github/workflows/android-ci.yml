@@ -55,6 +55,9 @@ jobs:
       - name: Validate map builder configuration
         run: python3 scripts/verify_map_build_config.py
 
+      - name: Test offline POI extractor
+        run: python3 scripts/test_build_poi_database.py
+
       - name: Run unit tests
         run: gradle --no-daemon --stacktrace --console=plain :app:testDebugUnitTest
 
@@ -67,21 +70,22 @@ jobs:
         with:
           path: |
             app/src/main/assets/offline/georgia.map
+            app/src/main/assets/offline/georgia-poi.sqlite
             app/src/main/assets/offline/georgia-map-build.json
-          key: mapsforge-georgia-v0.25.0-${{ runner.os }}-${{ github.run_id }}
+          key: mapsforge-georgia-v0.25.0-poi-v2-${{ runner.os }}-${{ github.run_id }}
           restore-keys: |
-            mapsforge-georgia-v0.25.0-${{ runner.os }}-
-            mapsforge-georgia-v0.25.0-
+            mapsforge-georgia-v0.25.0-poi-v2-${{ runner.os }}-
+            mapsforge-georgia-v0.25.0-poi-v2-
 
       - name: Validate restored map cache
         id: map-state
         run: |
-          if [[ -s app/src/main/assets/offline/georgia.map && -s app/src/main/assets/offline/georgia-map-build.json ]] && python3 scripts/verify_bundled_map.py; then
+          if [[ -s app/src/main/assets/offline/georgia.map && -s app/src/main/assets/offline/georgia-poi.sqlite && -s app/src/main/assets/offline/georgia-map-build.json ]] && python3 scripts/verify_bundled_map.py; then
             echo "exists=true" >> "$GITHUB_OUTPUT"
             echo "A verified cached Georgia map is available."
           else
             echo "exists=false" >> "$GITHUB_OUTPUT"
-            rm -f app/src/main/assets/offline/georgia.map app/src/main/assets/offline/georgia-map-build.json
+            rm -f app/src/main/assets/offline/georgia.map app/src/main/assets/offline/georgia-poi.sqlite app/src/main/assets/offline/georgia-map-build.json
             echo "No valid cached Georgia map is available; a fresh map will be generated."
           fi
 
@@ -90,7 +94,9 @@ jobs:
         shell: bash
         run: |
           sudo apt-get update
-          sudo apt-get install --yes osmosis
+          sudo apt-get install --yes osmosis python3-osmium
+          python3 -c "import osmium; print('PyOsmium import OK')"
+          python3 scripts/test_poi_extractor_smoke.py
           osmosis_package_version="$(dpkg-query -W -f='${Version}' osmosis)"
           if [[ -z "$osmosis_package_version" ]]; then
             echo "Could not determine the installed Osmosis package version." >&2
@@ -111,7 +117,7 @@ jobs:
             echo "map-refreshed=true" >> "$GITHUB_OUTPUT"
           else
             build_status=$?
-            if [[ -s app/src/main/assets/offline/georgia.map && -s app/src/main/assets/offline/georgia-map-build.json ]]; then
+            if [[ -s app/src/main/assets/offline/georgia.map && -s app/src/main/assets/offline/georgia-poi.sqlite && -s app/src/main/assets/offline/georgia-map-build.json ]]; then
               echo "::warning::Map refresh failed (exit ${build_status}); keeping the previously cached verified map."
               echo "map-refreshed=false" >> "$GITHUB_OUTPUT"
             else
@@ -126,8 +132,9 @@ jobs:
         with:
           path: |
             app/src/main/assets/offline/georgia.map
+            app/src/main/assets/offline/georgia-poi.sqlite
             app/src/main/assets/offline/georgia-map-build.json
-          key: mapsforge-georgia-v0.25.0-${{ runner.os }}-${{ steps.generate-map.outputs.provider }}-${{ steps.generate-map.outputs.source-md5 }}-${{ github.run_id }}
+          key: mapsforge-georgia-v0.25.0-poi-v2-${{ runner.os }}-${{ steps.generate-map.outputs.provider }}-${{ steps.generate-map.outputs.source-md5 }}-${{ github.run_id }}
 
       - name: Verify generated country map and multilingual metadata
         run: python3 scripts/verify_bundled_map.py

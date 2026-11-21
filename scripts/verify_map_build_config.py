@@ -14,6 +14,14 @@ WORKFLOW = ROOT / ".github/workflows/android-ci.yml"
 DATA_SOURCES = ROOT / "docs/DATA_SOURCES.md"
 SMOKE_FIXTURE = ROOT / "scripts/fixtures/mapsforge-writer-smoke.osm"
 BUNDLE_MANIFEST = ROOT / "app/src/main/assets/offline/data-manifest.json"
+APP_BUILD = ROOT / "app/build.gradle.kts"
+POI_REPOSITORY = ROOT / "app/src/main/java/app/georgia/offline/data/PoiRepository.kt"
+POI_UI = ROOT / "app/src/main/java/app/georgia/offline/ui/GeorgiaOfflineApp.kt"
+POI_BUILDER = ROOT / "scripts/build_poi_database.py"
+POI_VERIFIER = ROOT / "scripts/verify_poi_database.py"
+POI_TESTS = ROOT / "scripts/test_build_poi_database.py"
+POI_SMOKE_TEST = ROOT / "scripts/test_poi_extractor_smoke.py"
+POI_SMOKE_FIXTURE = ROOT / "scripts/fixtures/poi-smoke.osm"
 
 EXPECTED_MIRROR = "https://download.openstreetmap.fr/extracts/asia/georgia.osm.pbf"
 EXPECTED_MIRROR_MD5 = "https://download.openstreetmap.fr/extracts/asia/georgia.osm.pbf.md5"
@@ -29,14 +37,19 @@ def fail(message: str) -> int:
 
 
 def main() -> int:
-    required = (MAP_SCRIPT, WRITER_SCRIPT, WORKFLOW, DATA_SOURCES, SMOKE_FIXTURE, BUNDLE_MANIFEST)
+    required = (MAP_SCRIPT, WRITER_SCRIPT, WORKFLOW, DATA_SOURCES, SMOKE_FIXTURE, BUNDLE_MANIFEST, POI_BUILDER, POI_VERIFIER, POI_TESTS, POI_SMOKE_TEST, POI_SMOKE_FIXTURE, APP_BUILD, POI_REPOSITORY, POI_UI)
     for path in required:
         if not path.is_file():
             return fail(f"required build file is missing: {path.relative_to(ROOT)}")
 
     map_script = MAP_SCRIPT.read_text(encoding="utf-8")
+    poi_builder = POI_BUILDER.read_text(encoding="utf-8")
+    poi_verifier = POI_VERIFIER.read_text(encoding="utf-8")
     writer_script = WRITER_SCRIPT.read_text(encoding="utf-8")
     workflow = WORKFLOW.read_text(encoding="utf-8")
+    app_build = APP_BUILD.read_text(encoding="utf-8")
+    poi_repository = POI_REPOSITORY.read_text(encoding="utf-8")
+    poi_ui = POI_UI.read_text(encoding="utf-8")
     data_sources = DATA_SOURCES.read_text(encoding="utf-8")
     try:
         bundle_manifest = json.loads(BUNDLE_MANIFEST.read_text(encoding="utf-8"))
@@ -78,8 +91,57 @@ def main() -> int:
 
     if bundle_manifest.get("mapBoundingBox") != EXPECTED_GEORGIA_BBOX:
         return fail("the static bundle manifest bbox does not match the map build bbox.")
-    if bundle_manifest.get("appVersion") != "0.4.7":
-        return fail("the static bundle manifest appVersion must match this source package (0.4.7).")
+    if bundle_manifest.get("appVersion") != "0.5.1":
+        return fail("the static bundle manifest appVersion must match this source package (0.5.1).")
+    if 'versionName = "0.5.1"' not in app_build or "versionCode = 13" not in app_build:
+        return fail("the Android Gradle version must be 0.5.1 (versionCode 13).")
+    if "PoiRepository.ensureInstalled" not in poi_ui or "PoiRepository.search" not in poi_ui or "poi.detailLines()" not in poi_ui:
+        return fail("the Discover screen must install/search the local POI database and render available detail tags.")
+    for token in ("poiFileSha256", "SQLiteDatabase.OPEN_READONLY", "instr(search_text, ?)", "nameEn", "nameRu", "nameKa", "fun detailLines()", "tagsJson"):
+        if token not in poi_repository:
+            return fail(f"PoiRepository is missing local multilingual search behavior: {token}.")
+    if '"sqlite"' not in app_build:
+        return fail("SQLite POI assets must be stored uncompressed in the APK.")
+    if "georgia-poi.sqlite" not in bundle_manifest.get("requiredAssets", []):
+        return fail("the static bundle manifest must require the local POI database asset.")
+    if not {"addr:*", "phone", "website", "opening_hours", "cuisine"}.issubset(set(bundle_manifest.get("poiIndexedDetailTags", []))):
+        return fail("the static POI manifest must describe its searchable practical detail tags.")
+    if bundle_manifest.get("poiDatabase", {}).get("indexVersion") != 2:
+        return fail("the static POI manifest must require search index revision 2.")
+    if "poiIndexVersion\": 2" not in map_script:
+        return fail("the generated POI build manifest must identify search index revision 2.")
+    if "poi-v2-" not in workflow:
+        return fail("the CI cache namespace must be bumped so older POI indexes are not reused.")
+    if "python3 scripts/build_poi_database.py" not in map_script or "python3 scripts/verify_poi_database.py" not in map_script:
+        return fail("the full country map build must generate and verify the POI database from the same PBF.")
+    if "dense_mmap_array" not in poi_builder or "locations=True" not in poi_builder:
+        return fail("the PyOsmium extractor must use a disk-backed OSM node-location index for way POIs.")
+    if "poiFileSha256" not in map_script or "poiCount" not in map_script:
+        return fail("the generated map manifest must record POI checksum and row count.")
+    if "python3-osmium" not in workflow or "scripts/test_build_poi_database.py" not in workflow:
+        return fail("CI must install PyOsmium and run the standalone POI extractor tests.")
+    if "scripts/test_poi_extractor_smoke.py" not in workflow:
+        return fail("CI must run an actual PyOsmium OSM-XML extraction smoke test after installing the binding.")
+    try:
+        poi_smoke = ET.parse(POI_SMOKE_FIXTURE).getroot()
+    except ET.ParseError as exc:
+        return fail(f"POI smoke-test fixture is not valid OSM XML: {exc}")
+    if poi_smoke.tag != "osm" or not poi_smoke.findall("node") or not poi_smoke.findall("way"):
+        return fail("POI smoke fixture must include nodes and a closed way.")
+    poi_way = poi_smoke.find("way")
+    if poi_way is None or len(poi_way.findall("nd")) < 4:
+        return fail("POI smoke fixture must include a closed way with locations for centroid calculation.")
+    for index, entity in enumerate(poi_smoke.findall("node") + poi_smoke.findall("way"), start=1):
+        if not entity.get("timestamp"):
+            return fail(f"POI smoke fixture entity #{index} lacks a timestamp.")
+    poi_refs = [nd.get("ref") for nd in poi_way.findall("nd")]
+    if poi_refs[0] != poi_refs[-1]:
+        return fail("POI smoke fixture way must be closed so the centroid extraction path is tested.")
+    for expected_path in ("georgia-poi.sqlite",):
+        if expected_path not in workflow:
+            return fail(f"workflow cache and APK checks must include {expected_path}.")
+    if "POI SQLite database" not in poi_verifier and "POI" not in poi_verifier:
+        return fail("POI SQLite validation script is missing its required database checks.")
     if "map_bbox" not in map_script or '"mapBoundingBox": map_bbox' not in map_script:
         return fail("the generated map manifest must record the exact bbox used by Map Writer.")
 
@@ -138,7 +200,7 @@ def main() -> int:
     if "continue-on-error: true" in workflow:
         return fail("map preparation must fail fast; do not hide failed prerequisites.")
 
-    print("OK: OSM sources, explicit Georgia bbox, isolated Maven writer, Debian Plexus classpath registration, real writer smoke test, and fail-fast CI are configured.")
+    print("OK: OSM sources, explicit Georgia bbox, Mapsforge writer, PyOsmium extraction, local SQLite search, multilingual names, APK assets and fail-fast CI are configured.")
     return 0
 
 

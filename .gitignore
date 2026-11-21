@@ -20,3 +20,7 @@ app/src/main/assets/offline/*.rd5
 app/src/main/assets/offline/*.mbtiles
 app/src/main/assets/offline/*.sqlite
 app/src/main/assets/offline/*.db
+
+# Python build/test artifacts
+__pycache__/
+*.py[cod]

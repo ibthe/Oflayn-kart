@@ -12,8 +12,8 @@ android {
         applicationId = "app.georgia.offline"
         minSdk = 26
         targetSdk = 36
-        versionCode = 11
-        versionName = "0.4.7"
+        versionCode = 13
+        versionName = "0.5.1"
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
 
