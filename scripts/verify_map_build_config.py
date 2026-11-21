@@ -9,6 +9,7 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 MAP_SCRIPT = ROOT / "scripts/build_georgia_map.sh"
+PBF_PREP_SCRIPT = ROOT / "scripts/prepare_georgia_pbf.sh"
 WRITER_SCRIPT = ROOT / "scripts/install_mapsforge_writer.sh"
 WORKFLOW = ROOT / ".github/workflows/android-ci.yml"
 DATA_SOURCES = ROOT / "docs/DATA_SOURCES.md"
@@ -29,6 +30,7 @@ EXPECTED_GEOFABRIK = "https://download.geofabrik.de/europe/georgia-latest.osm.pb
 EXPECTED_GEORGIA_BBOX = "41.00,39.95,43.65,46.80"
 EXPECTED_SMOKE_BBOX = "41.70,44.81,41.73,44.84"
 EXPECTED_PLUGIN_LOADER = "org.mapsforge.map.writer.osmosis.MapFileWriterPluginLoader"
+PBF_CACHE_TEST = ROOT / "scripts/test_prepare_georgia_pbf.py"
 
 
 def fail(message: str) -> int:
@@ -37,12 +39,13 @@ def fail(message: str) -> int:
 
 
 def main() -> int:
-    required = (MAP_SCRIPT, WRITER_SCRIPT, WORKFLOW, DATA_SOURCES, SMOKE_FIXTURE, BUNDLE_MANIFEST, POI_BUILDER, POI_VERIFIER, POI_TESTS, POI_SMOKE_TEST, POI_SMOKE_FIXTURE, APP_BUILD, POI_REPOSITORY, POI_UI)
+    required = (MAP_SCRIPT, PBF_PREP_SCRIPT, WRITER_SCRIPT, WORKFLOW, DATA_SOURCES, SMOKE_FIXTURE, BUNDLE_MANIFEST, POI_BUILDER, POI_VERIFIER, POI_TESTS, POI_SMOKE_TEST, POI_SMOKE_FIXTURE, PBF_CACHE_TEST, APP_BUILD, POI_REPOSITORY, POI_UI)
     for path in required:
         if not path.is_file():
             return fail(f"required build file is missing: {path.relative_to(ROOT)}")
 
     map_script = MAP_SCRIPT.read_text(encoding="utf-8")
+    pbf_prep_script = PBF_PREP_SCRIPT.read_text(encoding="utf-8")
     poi_builder = POI_BUILDER.read_text(encoding="utf-8")
     poi_verifier = POI_VERIFIER.read_text(encoding="utf-8")
     writer_script = WRITER_SCRIPT.read_text(encoding="utf-8")
@@ -56,17 +59,50 @@ def main() -> int:
     except (OSError, json.JSONDecodeError) as exc:
         return fail(f"the static offline bundle manifest is invalid JSON: {exc}")
 
-    if EXPECTED_GEOFABRIK not in map_script:
+    if "cancel-in-progress: false" not in workflow:
+        return fail("CI must not cancel an in-progress full map build when another commit is pushed.")
+    if "timeout-minutes: 180" not in workflow:
+        return fail("CI must allow enough time for the full country map build.")
+    if "scripts/prepare_georgia_pbf.sh" not in workflow:
+        return fail("CI must prepare the OSM PBF in a separate resumable step.")
+    for token in ("data/cache/georgia-latest.osm.pbf", "data/cache/georgia-source.json", "georgia-osm-pbf-v1-"):
+        if token not in workflow:
+            return fail(f"CI must cache the verified OSM source PBF separately: missing {token}.")
+    if "actions/cache/save@v4" not in workflow or "steps.prepare-pbf.outputs.pbf-downloaded == 'true'" not in workflow:
+        return fail("CI must save a newly downloaded PBF cache before starting the map generator.")
+    if "cancel-in-progress: true" in workflow:
+        return fail("cancel-in-progress must remain disabled so a second push cannot kill map generation.")
+    if "python3 scripts/test_prepare_georgia_pbf.py" not in workflow:
+        return fail("CI must test PBF cache reuse and corrupt-cache rejection.")
+    required_steps = (
+        "name: Restore verified Georgia OSM PBF",
+        "name: Prepare and checksum-verify Georgia OSM PBF",
+        "name: Save verified Georgia OSM PBF cache",
+        "name: Install Osmosis",
+        "name: Build Mapsforge map-writer plugin",
+        "name: Generate multilingual offline map of Georgia",
+    )
+    positions = [workflow.find(step) for step in required_steps]
+    if any(position < 0 for position in positions) or positions != sorted(positions):
+        return fail("PBF cache restore, prepare, save, and map-generation steps must execute in order.")
+    if "sourcePbfMd5" not in pbf_prep_script or "md5sum" not in pbf_prep_script:
+        return fail("the PBF preparation script must verify and persist the source checksum.")
+    if "PBF_META" not in map_script or "ACTUAL_MD5" not in map_script:
+        return fail("the map builder must independently re-verify the cached PBF before processing.")
+    if "Trying OSM source" in map_script or "curl_resilient" in map_script:
+        return fail("network download must be separate from the CPU-heavy map generation step.")
+
+    if EXPECTED_GEOFABRIK not in pbf_prep_script:
         return fail("the primary Geofabrik Georgia-country source URL is missing.")
-    if EXPECTED_MIRROR not in map_script:
+    if EXPECTED_MIRROR not in pbf_prep_script:
         return fail("the OSM France fallback must use georgia.osm.pbf (not georgia-latest).")
     if EXPECTED_MIRROR_MD5 != EXPECTED_MIRROR + ".md5":
         return fail("internal expected mirror checksum URL does not match the PBF URL.")
-    if 'md5_url="${pbf_url}.md5"' not in map_script:
+    if 'md5_url="${pbf_url}.md5"' not in pbf_prep_script:
         return fail("the checksum URL must be formed from the exact selected PBF URL.")
     if EXPECTED_MIRROR_MD5 not in data_sources:
         return fail("the documentation must record the exact mirror checksum URL.")
-    if "openstreetmap.fr/extracts/asia/georgia-latest.osm.pbf" in map_script:
+    if "openstreetmap.fr/extracts/asia/georgia-latest.osm.pbf" in pbf_prep_script:
         return fail("the obsolete mirror filename georgia-latest.osm.pbf is still configured.")
 
     # Some PBF country extracts (including the mirror used in the failing CI
@@ -91,10 +127,10 @@ def main() -> int:
 
     if bundle_manifest.get("mapBoundingBox") != EXPECTED_GEORGIA_BBOX:
         return fail("the static bundle manifest bbox does not match the map build bbox.")
-    if bundle_manifest.get("appVersion") != "0.5.2":
-        return fail("the static bundle manifest appVersion must match this source package (0.5.2).")
-    if 'versionName = "0.5.2"' not in app_build or "versionCode = 14" not in app_build:
-        return fail("the Android Gradle version must be 0.5.2 (versionCode 14).")
+    if bundle_manifest.get("appVersion") != "0.5.3":
+        return fail("the static bundle manifest appVersion must match this source package (0.5.3).")
+    if 'versionName = "0.5.3"' not in app_build or "versionCode = 15" not in app_build:
+        return fail("the Android Gradle version must be 0.5.3 (versionCode 15).")
     if "PoiRepository.ensureInstalled" not in poi_ui or "PoiRepository.search" not in poi_ui or "poi.detailLines()" not in poi_ui:
         return fail("the Discover screen must install/search the local POI database and render available detail tags.")
     for token in ("poiFileSha256", "SQLiteDatabase.OPEN_READONLY", "instr(search_text, ?)", "nameEn", "nameRu", "nameKa", "fun detailLines()", "tagsJson"):
@@ -206,7 +242,7 @@ def main() -> int:
     if "continue-on-error: true" in workflow:
         return fail("map preparation must fail fast; do not hide failed prerequisites.")
 
-    print("OK: OSM sources, explicit Georgia bbox, Mapsforge writer, PyOsmium extraction, local SQLite search, multilingual names, APK assets and fail-fast CI are configured.")
+    print("OK: OSM sources, resumable PBF cache, non-canceling CI concurrency, explicit Georgia bbox, Mapsforge writer, PyOsmium extraction, local SQLite search, multilingual names and APK assets are configured.")
     return 0
 
 

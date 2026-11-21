@@ -341,3 +341,27 @@ IllegalStateException: tile based data store not initialized, missing bounding b
 ## Версия 0.5.0 — первый локальный POI справочник
 
 Добавлен pipeline `build_poi_database.py`: PyOsmium читает тот же проверенный PBF, используя `locations=True` и disk-backed `dense_mmap_array`, извлекает категorizованные узлы и замкнутые ways и сохраняет SQLite базу. `test_poi_extractor_smoke.py` на небольшом OSM XML fixture проверяет обе геометрии, имена на трёх письменностях, координаты и SQLite integrity. В CI добавлены проверка POI SHA-256, размер/row count и проверка наличия SQLite asset внутри APK. В приложении `PoiRepository` копирует и проверяет базу по SHA-256; экран «Места» выполняет локальный поиск и показывает все включённые name variants, имеющиеся в данных. Ограничение: relation-only POI пока не извлекаются; это первая практическая версия поискового справочника, а не полный реестр организаций.
+
+
+## 0.5.3 — GitHub Actions job was canceled during country-map generation
+
+The uploaded Actions log shows that Android unit tests passed, PyOsmium was
+installed, the Mapsforge Map Writer plugin built successfully, and Osmosis
+completed a real writer smoke test. The 98.09 MB Geofabrik PBF was downloaded
+and checksum-verified. The last recorded message was `Using verified OSM
+source: geofabrik ...`; the runner then reported `received a shutdown signal`
+and `The operation was canceled`. There was no Python, Osmosis, or Mapsforge
+exception recorded after the download. This is a canceled workflow run, not a
+confirmed map-writer failure.
+
+The previous workflow used `concurrency.cancel-in-progress: true`, which can
+cancel an active run when another run for the same branch starts. Version
+0.5.3 changes this to `false`, adds a 180-minute job timeout, separates PBF
+download/verification from map generation, and saves the verified PBF in a
+dedicated cache immediately. The map builder now consumes only that
+checksum-verified cached PBF. A new preflight test checks valid cache reuse and
+rejects a corrupted cache before network fallback.
+
+This prevents the workflow's own concurrency policy from terminating an
+active map build and makes an interrupted build cheaper to resume. It does not
+prevent manual cancellation or an external GitHub-hosted runner shutdown.

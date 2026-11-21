@@ -1,7 +1,7 @@
-GEORGIA OFFLINE — PACKAGE CONTENTS 0.5.2
+GEORGIA OFFLINE — PACKAGE CONTENTS 0.5.3
 All paths below are relative to the repository root.
-The archive contains hidden paths such as .github/workflows/android-ci.yml.
-Generated large binary assets (.map, .sqlite, APK) are intentionally not shipped in this source ZIP.
+The archive includes hidden folders such as .github/workflows/android-ci.yml.
+The .git directory is intentionally excluded; generated map/SQLite/APK files are built by CI.
 
 .github/workflows/android-ci.yml
 .gitignore
@@ -47,8 +47,10 @@ scripts/build_poi_database.py
 scripts/fixtures/mapsforge-writer-smoke.osm
 scripts/fixtures/poi-smoke.osm
 scripts/install_mapsforge_writer.sh
+scripts/prepare_georgia_pbf.sh
 scripts/test_build_poi_database.py
 scripts/test_poi_extractor_smoke.py
+scripts/test_prepare_georgia_pbf.py
 scripts/verify_apk_bundle.py
 scripts/verify_bundled_map.py
 scripts/verify_map_build_config.py

@@ -24,3 +24,6 @@ app/src/main/assets/offline/*.db
 # Python build/test artifacts
 __pycache__/
 *.py[cod]
+
+# Large verified OSM build inputs are stored in GitHub Actions cache, not Git.
+/data/cache/

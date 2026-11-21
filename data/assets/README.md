@@ -18,3 +18,13 @@ The full country vector map and searchable POI database are intended to be gener
 The selected distribution is one APK. Assets needing random access are copied from APK assets to app-private storage on first use and checked using the SHA-256 values in `georgia-map-build.json`. SD-card destination selection exists in the UI; direct writing to the selected Storage Access Framework directory is a later milestone.
 
 Generated `.map` and `.sqlite` binaries are not checked into Git to avoid adding large binary assets to every source update. `.gitignore` excludes them; the CI job inserts the generated assets before `assembleDebug`.
+
+
+## Resumable source-data preparation (v0.5.3)
+
+The country PBF is kept separately from the generated map assets in `data/cache/`.
+The workflow restores this folder from Actions cache, validates the file against
+its stored provider MD5 and source URL, then saves a newly downloaded file before
+starting PyOsmium or Mapsforge. `data/cache/` is excluded from Git and is never
+packaged into the Android APK. A run canceled during map generation can therefore
+reuse the already verified input on the next run.

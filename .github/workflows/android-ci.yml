@@ -20,12 +20,12 @@ permissions:
 
 concurrency:
   group: android-ci-${{ github.ref }}
-  cancel-in-progress: true
+  cancel-in-progress: false
 
 jobs:
   build:
     runs-on: ubuntu-latest
-    timeout-minutes: 120
+    timeout-minutes: 180
     steps:
       - name: Checkout
         uses: actions/checkout@v6
@@ -58,12 +58,14 @@ jobs:
       - name: Test offline POI extractor
         run: python3 scripts/test_build_poi_database.py
 
+      - name: Test verified OSM PBF cache and retry behavior
+        run: python3 scripts/test_prepare_georgia_pbf.py
+
       - name: Run unit tests
         run: gradle --no-daemon --stacktrace --console=plain :app:testDebugUnitTest
 
-      # Restore a previously generated and verified map before contacting any
-      # OSM provider. A temporary upstream outage must not block ordinary app
-      # code builds. Weekly scheduled runs and manual refreshes update the map.
+      # Restore a previously generated map before map building. The source PBF has its own
+      # cache and is saved before map generation, so retries do not re-download it.
       - name: Restore most recent generated Georgia map
         id: georgia-map-cache
         uses: actions/cache/restore@v4
@@ -88,6 +90,37 @@ jobs:
             rm -f app/src/main/assets/offline/georgia.map app/src/main/assets/offline/georgia-poi.sqlite app/src/main/assets/offline/georgia-map-build.json
             echo "No valid cached Georgia map is available; a fresh map will be generated."
           fi
+
+      # Cache the 98 MB source extract independently of the final map.
+      # This cache is saved immediately after checksum verification, before POI
+      # extraction / map writing, so a canceled run does not repeat the download.
+      - name: Restore verified Georgia OSM PBF
+        id: pbf-cache
+        if: ${{ (steps.map-state.outputs.exists != 'true' || github.event_name == 'schedule' || inputs.refresh_map == true) && github.event_name != 'schedule' && inputs.refresh_map != true }}
+        uses: actions/cache/restore@v4
+        with:
+          path: |
+            data/cache/georgia-latest.osm.pbf
+            data/cache/georgia-source.json
+          key: georgia-osm-pbf-v1-${{ runner.os }}-${{ github.run_id }}
+          restore-keys: |
+            georgia-osm-pbf-v1-${{ runner.os }}-
+
+      - name: Prepare and checksum-verify Georgia OSM PBF
+        id: prepare-pbf
+        if: ${{ steps.map-state.outputs.exists != 'true' || github.event_name == 'schedule' || inputs.refresh_map == true }}
+        env:
+          FORCE_OSM_REFRESH: ${{ github.event_name == 'schedule' || inputs.refresh_map == true }}
+        run: bash scripts/prepare_georgia_pbf.sh
+
+      - name: Save verified Georgia OSM PBF cache
+        if: ${{ success() && steps.prepare-pbf.outputs.pbf-downloaded == 'true' }}
+        uses: actions/cache/save@v4
+        with:
+          path: |
+            data/cache/georgia-latest.osm.pbf
+            data/cache/georgia-source.json
+          key: georgia-osm-pbf-v1-${{ runner.os }}-${{ steps.prepare-pbf.outputs.source-md5 }}
 
       - name: Install Osmosis
         if: ${{ success() && (steps.map-state.outputs.exists != 'true' || github.event_name == 'schedule' || inputs.refresh_map == true) }}

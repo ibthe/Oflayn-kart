@@ -11,6 +11,14 @@
 
 Geofabrik Georgia extract здесь означает страну Грузию на Кавказе, а не американский штат Georgia. Geofabrik использует URL из каталога `europe/georgia`; резервное зеркало OpenStreetMap France публикует ту же страну в каталоге `asia/georgia`.
 
+## Проверенная копия исходного PBF в CI
+
+- Подготовка исходника вынесена в `scripts/prepare_georgia_pbf.sh`, а генерация `.map` больше не выполняет сетевую загрузку.
+- После проверки MD5 исходный файл и `georgia-source.json` сохраняются в GitHub Actions cache по контрольной сумме.
+- Обычные повторные сборки переиспользуют PBF из cache; еженедельный workflow и ручной `refresh_map` принудительно получают свежую выгрузку.
+- `cancel-in-progress: false` предотвращает автоматическое завершение работающего job при новом push в ту же ветку. Ручная отмена запуска всё ещё возможна, но сохранённый PBF останется доступен следующему запуску.
+- В `/data/cache/` нет исходников приложения или бинарных карт, каталог исключён из Git и хранится в Actions cache.
+
 ## Mapsforge writer
 
 - Writer documentation: https://github.com/mapsforge/mapsforge/blob/master/docs/Getting-Started-Map-Writer.md
@@ -20,7 +28,7 @@ Geofabrik Georgia extract здесь означает страну Грузию 
 - Параметр `type=hd` использует дисковый режим временных данных и снижает требование к RAM; параллельность выставлена консервативно.
 - Документация Map Writer рекомендует RAM-режим только для небольших PBF из-за ориентировочного расхода RAM около десятикратного размера входного файла.
 
-## Локальный справочник POI (версия 0.5.2)
+## Локальный справочник POI (версия 0.5.3)
 
 - POI извлекаются из того же проверенного OSM country PBF, который используется для Mapsforge карты.
 - PyOsmium: https://github.com/osmcode/pyosmium — BSD 2-Clause, build-time only. В CI устанавливается Ubuntu package `python3-pyosmium`; модуль не входит в Android APK.

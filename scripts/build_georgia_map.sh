@@ -7,9 +7,11 @@ MAPSFORGE_VERSION="${MAPSFORGE_VERSION:-0.25.0}"
 # The OpenStreetMap France PBF mirror may omit the PBF header bounding box;
 # pass this explicitly so Mapsforge does not depend on source header metadata.
 GEORGIA_BBOX="${GEORGIA_BBOX:-41.00,39.95,43.65,46.80}"
+ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 WORK_DIR="${RUNNER_TEMP:-/tmp}/georgia-map-build"
-PBF_FILE="${OSM_PBF_FILE:-${WORK_DIR}/georgia-latest.osm.pbf}"
-OUTPUT_FILE="${MAP_OUTPUT_FILE:-$(pwd)/app/src/main/assets/offline/georgia.map}"
+PBF_FILE="${OSM_PBF_FILE:-${ROOT}/data/cache/georgia-latest.osm.pbf}"
+PBF_META="${OSM_PBF_META_FILE:-${ROOT}/data/cache/georgia-source.json}"
+OUTPUT_FILE="${MAP_OUTPUT_FILE:-${ROOT}/app/src/main/assets/offline/georgia.map}"
 OUTPUT_DIR="$(dirname "$OUTPUT_FILE")"
 MAP_TEMP="${OUTPUT_FILE}.new"
 MANIFEST_FILE="${OUTPUT_DIR}/georgia-map-build.json"
@@ -36,99 +38,56 @@ if ! command -v osmosis >/dev/null 2>&1; then
   exit 2
 fi
 
-# Geofabrik is the preferred current source. If GitHub-hosted runners cannot
-# connect to it, use the documented OSM France country extract mirror. The
-# mirror currently classifies Georgia under Asia; both sources contain the
-# same country (not the US state of Georgia).
-SOURCE_CANDIDATES=(
-  "geofabrik|Geofabrik OpenStreetMap extract: Georgia (country)|https://download.geofabrik.de/europe/georgia-latest.osm.pbf"
-  "openstreetmap-fr|OpenStreetMap France mirror: Georgia (country)|https://download.openstreetmap.fr/extracts/asia/georgia.osm.pbf"
-)
-
-curl_resilient() {
-  curl --fail --location --show-error \
-    --connect-timeout 25 \
-    --max-time 1800 \
-    --retry 6 \
-    --retry-all-errors \
-    --retry-delay 8 \
-    --retry-max-time 420 \
-    --user-agent "GeorgiaOffline-map-builder/0.5.2 (OpenStreetMap data build)" \
-    "$@"
-}
-
-SOURCE_PROVIDER=""
-SOURCE_LABEL=""
-SOURCE_URL=""
-EXPECTED_MD5=""
-MD5_FILE="${WORK_DIR}/georgia-source.md5"
-PBF_PART="${PBF_FILE}.part"
-
-for candidate in "${SOURCE_CANDIDATES[@]}"; do
-  IFS='|' read -r provider label pbf_url <<< "$candidate"
-  md5_url="${pbf_url}.md5"
-  rm -f "$MD5_FILE" "$PBF_PART"
-
-  echo "Trying OSM source: ${label}"
-  if ! curl_resilient "$md5_url" --output "$MD5_FILE"; then
-    echo "WARNING: Could not retrieve checksum from ${provider}; trying next source." >&2
-    continue
-  fi
-
-  candidate_md5="$(awk 'NR == 1 { print $1 }' "$MD5_FILE" | tr '[:upper:]' '[:lower:]')"
-  if [[ ! "$candidate_md5" =~ ^[0-9a-f]{32}$ ]]; then
-    echo "WARNING: Invalid MD5 response from ${provider}:" >&2
-    cat "$MD5_FILE" >&2 || true
-    continue
-  fi
-
-  if ! curl_resilient "$pbf_url" --output "$PBF_PART"; then
-    echo "WARNING: Could not download PBF from ${provider}; trying next source." >&2
-    rm -f "$PBF_PART"
-    continue
-  fi
-
-  if [[ ! -s "$PBF_PART" || "$(stat -c '%s' "$PBF_PART")" -lt 10485760 ]]; then
-    echo "WARNING: Download from ${provider} is unexpectedly small; trying next source." >&2
-    rm -f "$PBF_PART"
-    continue
-  fi
-
-  actual_md5="$(md5sum "$PBF_PART" | awk '{ print $1 }' | tr '[:upper:]' '[:lower:]')"
-  if [[ "$actual_md5" != "$candidate_md5" ]]; then
-    echo "WARNING: MD5 mismatch from ${provider}; trying next source." >&2
-    echo "Expected: ${candidate_md5}; actual: ${actual_md5}" >&2
-    rm -f "$PBF_PART"
-    continue
-  fi
-
-  SOURCE_PROVIDER="$provider"
-  SOURCE_LABEL="$label"
-  SOURCE_URL="$pbf_url"
-  EXPECTED_MD5="$candidate_md5"
-  mv "$PBF_PART" "$PBF_FILE"
-  echo "Using verified OSM source: ${SOURCE_PROVIDER} (${SOURCE_URL})"
-  break
-done
-
-if [[ -z "$SOURCE_PROVIDER" || ! -s "$PBF_FILE" ]]; then
-  echo "ERROR: Could not download and verify Georgia OSM PBF from any configured source." >&2
-  echo "Tried Geofabrik and the OpenStreetMap France mirror (stable georgia.osm.pbf filename). Check provider availability and retry the workflow." >&2
+# The country extract is downloaded and checksum-verified in a separate
+# workflow step. That step saves the PBF to Actions cache before the expensive
+# POI extraction and Mapsforge writer run, so cancellation never forces a
+# second 98 MB download.
+if [[ ! -s "$PBF_FILE" || ! -s "$PBF_META" ]]; then
+  echo "ERROR: A verified Georgia OSM PBF is required. Run scripts/prepare_georgia_pbf.sh first." >&2
   exit 3
 fi
 
+IFS=$'\t' read -r SOURCE_PROVIDER SOURCE_LABEL SOURCE_URL EXPECTED_MD5 < <(
+  python3 - "$PBF_META" <<'PY'
+import json, sys
+from pathlib import Path
+p = json.loads(Path(sys.argv[1]).read_text(encoding="utf-8"))
+for key in ("sourceProvider", "sourceLabel", "sourceUrl", "sourcePbfMd5"):
+    if not isinstance(p.get(key), str) or not p[key]:
+        raise SystemExit(f"Missing {key} in verified PBF metadata")
+print("\t".join(p[k] for k in ("sourceProvider", "sourceLabel", "sourceUrl", "sourcePbfMd5")))
+PY
+)
+case "$SOURCE_PROVIDER|$SOURCE_URL" in
+  "geofabrik|https://download.geofabrik.de/europe/georgia-latest.osm.pbf" | \
+  "openstreetmap-fr|https://download.openstreetmap.fr/extracts/asia/georgia.osm.pbf") ;;
+  *) echo "ERROR: PBF metadata references an unsupported source." >&2; exit 3 ;;
+esac
+if [[ ! "$EXPECTED_MD5" =~ ^[0-9a-fA-F]{32}$ ]]; then
+  echo "ERROR: PBF metadata contains an invalid MD5 checksum." >&2
+  exit 3
+fi
+ACTUAL_MD5="$(md5sum "$PBF_FILE" | awk '{ print $1 }' | tr '[:upper:]' '[:lower:]')"
+EXPECTED_MD5="$(printf '%s' "$EXPECTED_MD5" | tr '[:upper:]' '[:lower:]')"
+if [[ "$ACTUAL_MD5" != "$EXPECTED_MD5" ]]; then
+  echo "ERROR: Cached Georgia PBF checksum mismatch; run scripts/prepare_georgia_pbf.sh again." >&2
+  exit 3
+fi
+echo "[map] Using verified ${SOURCE_PROVIDER} PBF (${ACTUAL_MD5})."
 # HD mode uses disk-backed working storage to reduce RAM requirements.
 export JAVACMD_OPTIONS="${JAVACMD_OPTIONS:--Xms512m -Xmx4g}"
 rm -f "$MAP_TEMP" "$MANIFEST_TEMP" "$POI_TEMP" "$POI_SUMMARY"
 
 # Build the searchable local POI index from the exact same verified OSM PBF.
 # PyOsmium uses a disk-backed location index to keep runner memory bounded.
+echo "[poi] Starting local POI extraction from the verified country PBF."
 python3 scripts/build_poi_database.py \
   "$PBF_FILE" "$POI_TEMP" \
   --bbox "$GEORGIA_BBOX" \
   --summary "$POI_SUMMARY"
 python3 scripts/verify_poi_database.py "$POI_TEMP" "$POI_SUMMARY"
 
+echo "[map] Starting Mapsforge writer for the full Georgia bounding box."
 osmosis \
   --rb file="$PBF_FILE" \
   --mw file="$MAP_TEMP" \
