@@ -63,7 +63,7 @@ APK assets
 
 ## POI database and local search (0.5.3)
 
-- The same verified country PBF is parsed by PyOsmium using `locations=True` and `dense_mmap_array` (disk-backed node-location index).
+- The same verified country PBF is parsed by PyOsmium using `locations=True` and `sparse_file_array` (disk-backed node-location index).
 - POI records include OSM nodes and closed ways, categories, coordinates, OSM tags and `name` / `name:en` / `name:ru` / `name:ka` values where present. Relation-only POIs are not yet included.
 - `PoiRepository` validates the generated SQLite asset with SHA-256, copies it to app-private storage, and runs local parameterized SQL search. Selected name variants can be shown together in the results list.
 - The POI search index also includes public OSM address, phone, website, opening-hours, cuisine, wheelchair-access and operator/brand tags. The detail card displays only fields actually present in the source.

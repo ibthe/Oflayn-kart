@@ -150,8 +150,10 @@ def main() -> int:
         return fail("the CI cache namespace must be bumped so older POI indexes are not reused.")
     if "python3 scripts/build_poi_database.py" not in map_script or "python3 scripts/verify_poi_database.py" not in map_script:
         return fail("the full country map build must generate and verify the POI database from the same PBF.")
-    if "dense_mmap_array" not in poi_builder or "locations=True" not in poi_builder:
-        return fail("the PyOsmium extractor must use a disk-backed OSM node-location index for way POIs.")
+    if "sparse_file_array" not in poi_builder or "locations=True" not in poi_builder:
+        return fail("the PyOsmium extractor must use a disk-backed sparse_file_array OSM node-location index for way POIs.")
+    if "dense_mmap_array" in poi_builder.replace("dense_mmap_array reserves", ""):
+        return fail("dense_mmap_array exhausts runner memory/disk on a country PBF with sparse node IDs; do not use it.")
     if "poiFileSha256" not in map_script or "poiCount" not in map_script:
         return fail("the generated map manifest must record POI checksum and row count.")
     if "python3-pyosmium" not in workflow or "scripts/test_build_poi_database.py" not in workflow:

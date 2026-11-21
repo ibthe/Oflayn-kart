@@ -96,7 +96,7 @@ jobs:
       # extraction / map writing, so a canceled run does not repeat the download.
       - name: Restore verified Georgia OSM PBF
         id: pbf-cache
-        if: ${{ (steps.map-state.outputs.exists != 'true' || github.event_name == 'schedule' || inputs.refresh_map == true) && github.event_name != 'schedule' && inputs.refresh_map != true }}
+        if: ${{ steps.map-state.outputs.exists != 'true' && github.event_name != 'schedule' && inputs.refresh_map != true }}
         uses: actions/cache/restore@v4
         with:
           path: |

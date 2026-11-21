@@ -370,3 +370,43 @@ prevent manual cancellation or an external GitHub-hosted runner shutdown.
 ## 0.5.4 — runner stopped during POI extraction
 
 The 0.5.3 log shows that the verified PBF was available and the PyOsmium extraction started. About 55 seconds later the runner reported `The runner has received a shutdown signal` and `The operation was canceled`; there was no Python traceback or explicit extraction exception. The log does not identify whether a user cancellation or hosted-runner shutdown caused it. Version 0.5.4 adds entity-count/time heartbeats and a final summary to make POI processing visible in CI logs.
+
+
+---
+
+## Четвёртая проблема из журнала `logs_121411641907.zip` (21 ноября 2026)
+
+### Симптом
+
+Все проверки, юнит-тесты, восстановление PBF из кэша и сборка плагина Mapsforge прошли успешно.
+Шаг `Generate multilingual offline map of Georgia` оборвался через ~50 секунд во время POI-извлечения:
+
+```text
+[poi] OSM scan progress: entities=2,500,000, nodes=2,500,000, ways=0, POIs=13,670, elapsed=39.8s
+##[error]The runner has received a shutdown signal...
+##[error]The operation was canceled.
+```
+
+Скорость сканирования перед обрывом упала (250 тыс. узлов за 2,5 с, затем за ~11 с), после чего runner был остановлен.
+
+### Вероятная причина
+
+PyOsmium использовал индекс `dense_mmap_array`. Он резервирует ~8 байт на каждый возможный ID узла
+(ID OSM доходят до ~1,3·10^10), а при разреженных ID каждый узел затрагивает отдельную 4 КБ страницу.
+Расход памяти/диска быстро растёт, и runner останавливается. Это вывод по симптомам (замедление и
+внезапная остановка без Python-traceback), а не прямое подтверждение: если запуск отменили вручную,
+причина могла быть иной.
+
+### Исправления
+
+1. `scripts/build_poi_database.py`: индекс заменён на `sparse_file_array` (файл в `RUNNER_TEMP`, ~16 байт
+   на реальный узел, удаляется после скана).
+2. Узлы и ways без тегов пропускаются до построения словаря тегов — это ускоряет скан, так как большинство
+   узлов OSM не имеет тегов.
+3. `scripts/verify_map_build_config.py` обновлён под новый индекс (иначе CI падал бы на проверке конфигурации).
+4. `android-ci.yml`: упрощено условие шага `Restore verified Georgia OSM PBF`.
+
+### Не подтверждено
+
+Реальный PBF Грузии в песочнице недоступен, поэтому скан страны не запускался: проверены только
+скриптовые тесты. Подтверждением будет зелёный запуск в GitHub Actions.

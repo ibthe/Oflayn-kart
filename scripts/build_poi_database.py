@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Build a local multilingual POI SQLite database from a Georgia OSM PBF.
 
-The extractor intentionally uses PyOsmium's disk-backed dense_mmap_array index
+The extractor intentionally uses PyOsmium's disk-backed sparse_file_array index
 so the GitHub runner does not need to keep every node location in RAM. Nodes and
 closed ways are included; relation-only POIs are reported as not yet supported.
 """
@@ -12,6 +12,7 @@ import json
 import os
 import sqlite3
 import sys
+import tempfile
 import time
 from dataclasses import dataclass
 from datetime import datetime, timezone
@@ -302,6 +303,8 @@ def build_from_pbf(input_file: Path, output_file: Path, bbox: tuple[float, float
         def node(self, node) -> None:
             stats["nodesSeen"] += 1
             progress.report(stats)
+            if len(node.tags) == 0:
+                return  # most OSM nodes are untagged way vertices; skip them cheaply
             if not node.location.valid():
                 return
             self._insert(node, "node", float(node.location.lat), float(node.location.lon))
@@ -309,6 +312,8 @@ def build_from_pbf(input_file: Path, output_file: Path, bbox: tuple[float, float
         def way(self, way) -> None:
             stats["waysSeen"] += 1
             progress.report(stats)
+            if len(way.tags) == 0:
+                return
             tags = {tag.k: tag.v for tag in way.tags}
             if classify_tags(tags) is None:
                 return
@@ -330,8 +335,17 @@ def build_from_pbf(input_file: Path, output_file: Path, bbox: tuple[float, float
         "250,000 entities or 15 seconds.",
         flush=True,
     )
-    # dense_mmap_array keeps the node-location index disk-backed on Linux CI.
-    handler.apply_file(str(input_file), locations=True, idx="dense_mmap_array")
+    # dense_mmap_array reserves ~8 bytes per possible node ID (OSM IDs reach ~1.3e10)
+    # and touches a separate 4 KB page for sparsely spaced IDs, which exhausts runner
+    # RAM/disk and gets the job killed. sparse_file_array stores only existing nodes
+    # (16 bytes each) in a regular file, so memory stays bounded.
+    index_dir = Path(os.environ.get("RUNNER_TEMP") or tempfile.gettempdir())
+    index_file = index_dir / "georgia-node-locations.idx"
+    index_file.unlink(missing_ok=True)
+    try:
+        handler.apply_file(str(input_file), locations=True, idx=f"sparse_file_array,{index_file}")
+    finally:
+        index_file.unlink(missing_ok=True)
     scan_elapsed = time.monotonic() - scan_started
     progress.report(stats, final=True)
     conn.commit()
