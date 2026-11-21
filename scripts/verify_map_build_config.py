@@ -91,10 +91,10 @@ def main() -> int:
 
     if bundle_manifest.get("mapBoundingBox") != EXPECTED_GEORGIA_BBOX:
         return fail("the static bundle manifest bbox does not match the map build bbox.")
-    if bundle_manifest.get("appVersion") != "0.5.1":
-        return fail("the static bundle manifest appVersion must match this source package (0.5.1).")
-    if 'versionName = "0.5.1"' not in app_build or "versionCode = 13" not in app_build:
-        return fail("the Android Gradle version must be 0.5.1 (versionCode 13).")
+    if bundle_manifest.get("appVersion") != "0.5.2":
+        return fail("the static bundle manifest appVersion must match this source package (0.5.2).")
+    if 'versionName = "0.5.2"' not in app_build or "versionCode = 14" not in app_build:
+        return fail("the Android Gradle version must be 0.5.2 (versionCode 14).")
     if "PoiRepository.ensureInstalled" not in poi_ui or "PoiRepository.search" not in poi_ui or "poi.detailLines()" not in poi_ui:
         return fail("the Discover screen must install/search the local POI database and render available detail tags.")
     for token in ("poiFileSha256", "SQLiteDatabase.OPEN_READONLY", "instr(search_text, ?)", "nameEn", "nameRu", "nameKa", "fun detailLines()", "tagsJson"):
@@ -118,8 +118,14 @@ def main() -> int:
         return fail("the PyOsmium extractor must use a disk-backed OSM node-location index for way POIs.")
     if "poiFileSha256" not in map_script or "poiCount" not in map_script:
         return fail("the generated map manifest must record POI checksum and row count.")
-    if "python3-osmium" not in workflow or "scripts/test_build_poi_database.py" not in workflow:
+    if "python3-pyosmium" not in workflow or "scripts/test_build_poi_database.py" not in workflow:
         return fail("CI must install PyOsmium and run the standalone POI extractor tests.")
+    if "sudo apt-get install --yes osmosis python3-pyosmium" not in workflow:
+        return fail("CI must install the Ubuntu package python3-pyosmium alongside Osmosis.")
+    if "python3-osmium" in workflow:
+        return fail("CI must use the current Ubuntu package name python3-pyosmium, not python3-osmium.")
+    if "dpkg-query -W -f='${Version}' python3-pyosmium" not in workflow:
+        return fail("CI must log the installed PyOsmium package version for diagnostics.")
     if "scripts/test_poi_extractor_smoke.py" not in workflow:
         return fail("CI must run an actual PyOsmium OSM-XML extraction smoke test after installing the binding.")
     try:

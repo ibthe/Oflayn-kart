@@ -20,10 +20,10 @@ Geofabrik Georgia extract здесь означает страну Грузию 
 - Параметр `type=hd` использует дисковый режим временных данных и снижает требование к RAM; параллельность выставлена консервативно.
 - Документация Map Writer рекомендует RAM-режим только для небольших PBF из-за ориентировочного расхода RAM около десятикратного размера входного файла.
 
-## Локальный справочник POI (версия 0.5.1)
+## Локальный справочник POI (версия 0.5.2)
 
 - POI извлекаются из того же проверенного OSM country PBF, который используется для Mapsforge карты.
-- PyOsmium: https://github.com/osmcode/pyosmium — BSD 2-Clause, build-time only. В CI устанавливается Ubuntu package `python3-osmium`; модуль не входит в Android APK.
+- PyOsmium: https://github.com/osmcode/pyosmium — BSD 2-Clause, build-time only. В CI устанавливается Ubuntu package `python3-pyosmium`; модуль не входит в Android APK.
 - Первая версия извлекает OSM nodes и closed ways с выбранными значениями `amenity`, `tourism`, `historic`, `natural`, `place`, `shop`, `leisure`, `waterway` и `emergency`. Relation-only POI пока не включаются.
 - Сохраняются стандартные `name` и варианты `name:en`, `name:ru`, `name:ka`, если они присутствуют. Ни перевод, ни проверка качества исходных названий автоматически не выполняются.
 - База SQLite хранит координаты, категорию, подкатегорию и исходные OSM tags; CI записывает SHA-256, размер и число строк в `georgia-map-build.json`.

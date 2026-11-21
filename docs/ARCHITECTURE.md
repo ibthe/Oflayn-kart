@@ -61,7 +61,7 @@ APK assets
 - `verify_bundled_map.py` checks the map SHA-256, SQLite integrity/row count and POI SHA-256 before Android build; `verify_apk_bundle.py` reopens the produced APK and confirms that both data assets inside it match the manifest.
 - `verify_offline_manifest.py --include-merged` verifies the final merged manifest after Gradle assembly.
 
-## POI database and local search (0.5.1)
+## POI database and local search (0.5.2)
 
 - The same verified country PBF is parsed by PyOsmium using `locations=True` and `dense_mmap_array` (disk-backed node-location index).
 - POI records include OSM nodes and closed ways, categories, coordinates, OSM tags and `name` / `name:en` / `name:ru` / `name:ka` values where present. Relation-only POIs are not yet included.

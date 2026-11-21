@@ -4,7 +4,7 @@
 
 Workflow `.github/workflows/android-ci.yml` запускается при push в `main`/`master`, pull request или вручную (`workflow_dispatch`). Он использует Ubuntu, JDK 21, Android SDK Platform 36, Build Tools 36.0.0 и Gradle 9.6.0.
 
-### Что происходит в полной CI-сборке 0.5.1
+### Что происходит в полной CI-сборке 0.5.2
 
 1. Проверяется исходный `AndroidManifest.xml` на сетевые и фоновые location-разрешения; статический preflight проверяет адреса OSM/MD5, fixture и настройки регистрации Mapsforge Writer в Debian Plexus classpath.
 2. Запускаются unit tests.
@@ -34,7 +34,7 @@ GitHub Actions использует интернет только во врем�
 
 ## Локальная сборка
 
-Требуются Android Studio, Android SDK Platform 36, Build Tools 36.0.0 и JDK 17 или новее. Локальная сборка из чистого исходного ZIP не содержит бинарный `georgia.map`, потому что карта генерируется в CI. При обновлении приложения встроенный файл сравнивается с SHA-256 из `georgia-map-build.json`; он заменяется только если данные изменились. Пользовательская карта, импортированная вручную, не перезаписывается. Для полной локальной сборки сначала установи Osmosis и PyOsmium (`sudo apt-get install osmosis python3-osmium`), затем выполни `scripts/install_mapsforge_writer.sh` и `scripts/build_georgia_map.sh`, затем: `gradle :app:testDebugUnitTest :app:assembleDebug`.
+Требуются Android Studio, Android SDK Platform 36, Build Tools 36.0.0 и JDK 17 или новее. Локальная сборка из чистого исходного ZIP не содержит бинарный `georgia.map`, потому что карта генерируется в CI. При обновлении приложения встроенный файл сравнивается с SHA-256 из `georgia-map-build.json`; он заменяется только если данные изменились. Пользовательская карта, импортированная вручную, не перезаписывается. Для полной локальной сборки сначала установи Osmosis и PyOsmium (`sudo apt-get install osmosis python3-pyosmium`), затем выполни `scripts/install_mapsforge_writer.sh` и `scripts/build_georgia_map.sh`, затем: `gradle :app:testDebugUnitTest :app:assembleDebug`.
 
 ## Локальная база объектов POI
 

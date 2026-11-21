@@ -14,7 +14,7 @@ def main() -> int:
     try:
         import osmium  # noqa: F401
     except ImportError as exc:
-        raise SystemExit("PyOsmium is not installed; install python3-osmium before this smoke test.") from exc
+        raise SystemExit("PyOsmium is not installed; install python3-pyosmium before this smoke test.") from exc
     with tempfile.TemporaryDirectory() as directory:
         output = Path(directory) / "poi.sqlite"
         summary = build_from_pbf(FIXTURE, output, (41.0, 39.95, 43.65, 46.8))

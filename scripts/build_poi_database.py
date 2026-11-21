@@ -226,7 +226,7 @@ def build_from_pbf(input_file: Path, output_file: Path, bbox: tuple[float, float
     try:
         import osmium  # type: ignore
     except ImportError as exc:
-        raise RuntimeError("PyOsmium is missing. Install Ubuntu package python3-osmium before running the POI builder.") from exc
+        raise RuntimeError("PyOsmium is missing. Install Ubuntu package python3-pyosmium before running the POI builder.") from exc
 
     conn = create_database(output_file)
     stats = {"nodesSeen": 0, "waysSeen": 0, "poisWritten": 0, "relationsNotProcessed": True}

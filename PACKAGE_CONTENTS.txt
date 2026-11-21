@@ -1,4 +1,4 @@
-GEORGIA OFFLINE — PACKAGE CONTENTS 0.5.1
+GEORGIA OFFLINE — PACKAGE CONTENTS 0.5.2
 All paths below are relative to the repository root.
 The archive contains hidden paths such as .github/workflows/android-ci.yml.
 Generated large binary assets (.map, .sqlite, APK) are intentionally not shipped in this source ZIP.

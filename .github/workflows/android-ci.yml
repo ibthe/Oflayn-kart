@@ -94,15 +94,18 @@ jobs:
         shell: bash
         run: |
           sudo apt-get update
-          sudo apt-get install --yes osmosis python3-osmium
+          apt-cache policy python3-pyosmium
+          sudo apt-get install --yes osmosis python3-pyosmium
           python3 -c "import osmium; print('PyOsmium import OK')"
           python3 scripts/test_poi_extractor_smoke.py
           osmosis_package_version="$(dpkg-query -W -f='${Version}' osmosis)"
-          if [[ -z "$osmosis_package_version" ]]; then
-            echo "Could not determine the installed Osmosis package version." >&2
+          pyosmium_package_version="$(dpkg-query -W -f='${Version}' python3-pyosmium)"
+          if [[ -z "$osmosis_package_version" || -z "$pyosmium_package_version" ]]; then
+            echo "Could not determine the installed Osmosis or PyOsmium package version." >&2
             exit 1
           fi
           echo "Installed Osmosis Debian package: ${osmosis_package_version}"
+          echo "Installed PyOsmium Debian package: ${pyosmium_package_version}"
 
       - name: Build Mapsforge map-writer plugin
         if: ${{ success() && (steps.map-state.outputs.exists != 'true' || github.event_name == 'schedule' || inputs.refresh_map == true) }}
