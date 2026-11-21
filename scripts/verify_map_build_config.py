@@ -127,10 +127,10 @@ def main() -> int:
 
     if bundle_manifest.get("mapBoundingBox") != EXPECTED_GEORGIA_BBOX:
         return fail("the static bundle manifest bbox does not match the map build bbox.")
-    if bundle_manifest.get("appVersion") != "0.5.3":
-        return fail("the static bundle manifest appVersion must match this source package (0.5.3).")
-    if 'versionName = "0.5.3"' not in app_build or "versionCode = 15" not in app_build:
-        return fail("the Android Gradle version must be 0.5.3 (versionCode 15).")
+    if bundle_manifest.get("appVersion") != "0.5.4":
+        return fail("the static bundle manifest appVersion must match this source package (0.5.4).")
+    if 'versionName = "0.5.4"' not in app_build or "versionCode = 16" not in app_build:
+        return fail("the Android Gradle version must be 0.5.4 (versionCode 16).")
     if "PoiRepository.ensureInstalled" not in poi_ui or "PoiRepository.search" not in poi_ui or "poi.detailLines()" not in poi_ui:
         return fail("the Discover screen must install/search the local POI database and render available detail tags.")
     for token in ("poiFileSha256", "SQLiteDatabase.OPEN_READONLY", "instr(search_text, ?)", "nameEn", "nameRu", "nameKa", "fun detailLines()", "tagsJson"):
@@ -156,6 +156,13 @@ def main() -> int:
         return fail("the generated map manifest must record POI checksum and row count.")
     if "python3-pyosmium" not in workflow or "scripts/test_build_poi_database.py" not in workflow:
         return fail("CI must install PyOsmium and run the standalone POI extractor tests.")
+    if "ProgressReporter" not in poi_builder or "elapsed=" not in poi_builder:
+        return fail("the PyOsmium extractor must emit periodic progress and a final scan summary.")
+    poi_test_source = POI_TESTS.read_text(encoding="utf-8")
+    if "test_progress_reporter_emits_entity_heartbeat" not in poi_test_source:
+        return fail("POI tests must cover progress logging by entity count.")
+    if "test_progress_reporter_emits_time_heartbeat_and_final_summary" not in poi_test_source:
+        return fail("POI tests must cover time-based progress and the final summary.")
     if "sudo apt-get install --yes osmosis python3-pyosmium" not in workflow:
         return fail("CI must install the Ubuntu package python3-pyosmium alongside Osmosis.")
     if "python3-osmium" in workflow:

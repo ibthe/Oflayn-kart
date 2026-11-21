@@ -28,3 +28,6 @@ its stored provider MD5 and source URL, then saves a newly downloaded file befor
 starting PyOsmium or Mapsforge. `data/cache/` is excluded from Git and is never
 packaged into the Android APK. A run canceled during map generation can therefore
 reuse the already verified input on the next run.
+
+
+Version 0.5.4 adds periodic PyOsmium progress messages to long country-extract scans.

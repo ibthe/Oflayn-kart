@@ -1,4 +1,4 @@
-GEORGIA OFFLINE — PACKAGE CONTENTS 0.5.3
+GEORGIA OFFLINE — PACKAGE CONTENTS 0.5.4
 All paths below are relative to the repository root.
 The archive includes hidden folders such as .github/workflows/android-ci.yml.
 The .git directory is intentionally excluded; generated map/SQLite/APK files are built by CI.
@@ -57,3 +57,5 @@ scripts/verify_map_build_config.py
 scripts/verify_offline_manifest.py
 scripts/verify_poi_database.py
 settings.gradle.kts
+
+0.5.4 additions: scripts/build_poi_database.py progress heartbeats; progress reporter unit tests; updated preflight and map manifest.

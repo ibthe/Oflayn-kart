@@ -365,3 +365,8 @@ rejects a corrupted cache before network fallback.
 This prevents the workflow's own concurrency policy from terminating an
 active map build and makes an interrupted build cheaper to resume. It does not
 prevent manual cancellation or an external GitHub-hosted runner shutdown.
+
+
+## 0.5.4 — runner stopped during POI extraction
+
+The 0.5.3 log shows that the verified PBF was available and the PyOsmium extraction started. About 55 seconds later the runner reported `The runner has received a shutdown signal` and `The operation was canceled`; there was no Python traceback or explicit extraction exception. The log does not identify whether a user cancellation or hosted-runner shutdown caused it. Version 0.5.4 adds entity-count/time heartbeats and a final summary to make POI processing visible in CI logs.

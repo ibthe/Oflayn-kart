@@ -5,7 +5,7 @@ import sqlite3
 import tempfile
 import unittest
 from pathlib import Path
-from build_poi_database import PoiInput, classify_tags, create_database, insert_poi, normalise_search_text, point_in_bbox
+from build_poi_database import ProgressReporter, PoiInput, classify_tags, create_database, insert_poi, normalise_search_text, point_in_bbox
 from verify_poi_database import verify
 
 
@@ -67,6 +67,44 @@ class PoiDatabaseTests(unittest.TestCase):
             self.assertIn("georgian", search_text)
             self.assertIn("mo-su 10:00-22:00".casefold(), search_text)
             self.assertIn("+995 555 010203".casefold(), search_text)
+
+    def test_progress_reporter_emits_entity_heartbeat(self):
+        now = [0.0]
+        messages = []
+        reporter = ProgressReporter(
+            every_entities=10,
+            every_seconds=999,
+            emit=messages.append,
+            clock=lambda: now[0],
+        )
+        stats = {"nodesSeen": 9, "waysSeen": 0, "poisWritten": 1}
+        reporter.report(stats)
+        self.assertEqual(messages, [])
+        stats["nodesSeen"] = 10
+        reporter.report(stats)
+        self.assertEqual(len(messages), 1)
+        self.assertIn("entities=10", messages[0])
+        self.assertIn("POIs=1", messages[0])
+
+    def test_progress_reporter_emits_time_heartbeat_and_final_summary(self):
+        now = [0.0]
+        messages = []
+        reporter = ProgressReporter(
+            every_entities=1_000_000,
+            every_seconds=15,
+            emit=messages.append,
+            clock=lambda: now[0],
+        )
+        stats = {"nodesSeen": 25, "waysSeen": 5, "poisWritten": 2}
+        reporter.report(stats)
+        now[0] = 15.1
+        reporter.report(stats)
+        self.assertEqual(len(messages), 1)
+        self.assertIn("entities=30", messages[0])
+        reporter.report(stats, final=True)
+        self.assertEqual(len(messages), 2)
+        self.assertIn("OSM scan complete", messages[-1])
+        self.assertIn("elapsed=15.1s", messages[-1])
 
     def test_database_verifier_checks_metadata_and_rows(self):
         with tempfile.TemporaryDirectory() as directory:

@@ -81,3 +81,6 @@ Geofabrik Georgia extract здесь означает страну Грузию 
 Диапазон основан на опубликованных крайних географических точках Грузии из Statistical publication 2024 Национальной службы статистики Грузии (Geostat): юг 41°02′58″ N, запад 40°00′30″ E, север 43°35′25″ N, восток 46°44′32″ E. Использован небольшой запас примерно 0,05° по каждой стороне, чтобы не отсекать граничные объекты. Источник: https://www.geostat.ge/media/67768/Yearbook_2024.pdf (раздел 1.2, стр. 11).
 
 Параметр можно переопределить переменной окружения `GEORGIA_BBOX` при ручной сборке, но порядок координат должен сохраняться и значение должно быть четырьмя десятичными числами без пробелов.
+
+
+POI extraction progress is reported every 250,000 entities or 15 seconds in version 0.5.4. The log reports scan counts, POI count, and elapsed time; it does not alter the underlying OSM attribution or data selection.

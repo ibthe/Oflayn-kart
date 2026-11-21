@@ -79,3 +79,8 @@ APK assets
 - DEM, contours, elevation profiles and hillshade data.
 - GPX track recording, trip planner, guidebook, expanded safety functions.
 - Real SD-card map storage and low-space handling.
+
+
+## POI extraction progress (0.5.4)
+
+PyOsmium emits progress heartbeats every 250,000 OSM entities or 15 seconds. This is diagnostic output only and does not change POI selection or the database schema.

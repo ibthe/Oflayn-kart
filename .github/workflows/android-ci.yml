@@ -55,7 +55,7 @@ jobs:
       - name: Validate map builder configuration
         run: python3 scripts/verify_map_build_config.py
 
-      - name: Test offline POI extractor
+      - name: Test offline POI extractor and progress logging
         run: python3 scripts/test_build_poi_database.py
 
       - name: Test verified OSM PBF cache and retry behavior

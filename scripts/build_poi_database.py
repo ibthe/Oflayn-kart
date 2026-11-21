@@ -12,6 +12,7 @@ import json
 import os
 import sqlite3
 import sys
+import time
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from pathlib import Path
@@ -222,6 +223,48 @@ def parse_bbox(value: str) -> tuple[float, float, float, float]:
     return parts  # type: ignore[return-value]
 
 
+class ProgressReporter:
+    """Emit visible POI extraction heartbeats during large country PBF scans.
+
+    GitHub Actions logs are the user's only view into the long-running offline
+    data build. A periodic line makes real progress visible and distinguishes
+    a slow scan from a canceled runner.
+    """
+
+    def __init__(
+        self,
+        every_entities: int = 250_000,
+        every_seconds: float = 15.0,
+        emit=None,
+        clock=None,
+    ) -> None:
+        if every_entities < 1 or every_seconds <= 0:
+            raise ValueError("progress intervals must be positive")
+        self.every_entities = every_entities
+        self.every_seconds = every_seconds
+        self.emit = emit or (lambda message: print(message, flush=True))
+        self.clock = clock or time.monotonic
+        self.started = self.clock()
+        self.last_report = self.started
+        self.next_entity_report = every_entities
+
+    def report(self, stats: dict, *, final: bool = False) -> None:
+        now = self.clock()
+        total = int(stats["nodesSeen"]) + int(stats["waysSeen"])
+        if not final and total < self.next_entity_report and now - self.last_report < self.every_seconds:
+            return
+
+        elapsed = max(0.0, now - self.started)
+        prefix = "[poi] OSM scan complete" if final else "[poi] OSM scan progress"
+        self.emit(
+            f"{prefix}: entities={total:,}, nodes={stats['nodesSeen']:,}, "
+            f"ways={stats['waysSeen']:,}, POIs={stats['poisWritten']:,}, "
+            f"elapsed={elapsed:.1f}s"
+        )
+        self.last_report = now
+        self.next_entity_report = ((total // self.every_entities) + 1) * self.every_entities
+
+
 def build_from_pbf(input_file: Path, output_file: Path, bbox: tuple[float, float, float, float]) -> dict:
     try:
         import osmium  # type: ignore
@@ -230,6 +273,7 @@ def build_from_pbf(input_file: Path, output_file: Path, bbox: tuple[float, float
 
     conn = create_database(output_file)
     stats = {"nodesSeen": 0, "waysSeen": 0, "poisWritten": 0, "relationsNotProcessed": True}
+    progress = ProgressReporter()
 
     class Handler(osmium.SimpleHandler):
         def _insert(self, obj, osm_type: str, lat: float, lon: float) -> None:
@@ -257,12 +301,14 @@ def build_from_pbf(input_file: Path, output_file: Path, bbox: tuple[float, float
 
         def node(self, node) -> None:
             stats["nodesSeen"] += 1
+            progress.report(stats)
             if not node.location.valid():
                 return
             self._insert(node, "node", float(node.location.lat), float(node.location.lon))
 
         def way(self, way) -> None:
             stats["waysSeen"] += 1
+            progress.report(stats)
             tags = {tag.k: tag.v for tag in way.tags}
             if classify_tags(tags) is None:
                 return
@@ -277,8 +323,17 @@ def build_from_pbf(input_file: Path, output_file: Path, bbox: tuple[float, float
             self._insert(way, "way", lat, lon)
 
     handler = Handler()
+    scan_started = time.monotonic()
+    print(
+        f"[poi] Scanning {input_file.name} ({input_file.stat().st_size:,} bytes) "
+        "with a disk-backed node-location index; progress is reported every "
+        "250,000 entities or 15 seconds.",
+        flush=True,
+    )
     # dense_mmap_array keeps the node-location index disk-backed on Linux CI.
     handler.apply_file(str(input_file), locations=True, idx="dense_mmap_array")
+    scan_elapsed = time.monotonic() - scan_started
+    progress.report(stats, final=True)
     conn.commit()
 
     category_counts = {
@@ -314,6 +369,7 @@ def build_from_pbf(input_file: Path, output_file: Path, bbox: tuple[float, float
         "poiCount": count,
         "categoryCounts": category_counts,
         "stats": stats,
+        "scanElapsedSeconds": round(scan_elapsed, 1),
         "relationsIncluded": False,
         "bbox": ",".join(str(part) for part in bbox),
     }

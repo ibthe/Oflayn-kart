@@ -52,3 +52,8 @@ Debug APK подходит для тестирования. Для постоя�
 ## Исправление 0.4.7 — отсутствующий bbox в PBF
 
 CI подтверждает, что Android unit tests прошли, PBF Грузии был скачан и проверен по MD5, Mapsforge Writer 0.25.0 загрузился и прошёл настоящую тестовую запись. Полная генерация карты остановилась с `No valid bounding box found in input data`, поскольку использованный PBF не передал writer пригодную bbox из заголовка. В 0.4.7 основной writer command и smoke-test передают bbox явно. Диапазон основан на крайних точках Грузии по Geostat Yearbook 2024 с небольшим запасом.
+
+
+## Version 0.5.4 — POI scan observability
+
+The country PBF scan reports entity counts and elapsed time periodically. The runner shutdown observed in 0.5.3 was not an extractor exception; the available log does not identify who initiated shutdown.
