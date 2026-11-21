@@ -2,7 +2,17 @@ package app.georgia.offline.ui
 
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.navigationBarsPadding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material3.TextButton
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ColumnScope
@@ -60,7 +70,7 @@ private enum class AppTab(val label: String, val symbol: String) {
     DISCOVER("Места", "⌖"),
     ROUTE("Маршрут", "➤"),
     SAVED("Моё", "★"),
-    TOOLS("Инструменты", "⚒"),
+    TOOLS("Утилиты", "⚒"),
     SETTINGS("Настройки", "⚙")
 }
 
@@ -69,18 +79,7 @@ fun GeorgiaOfflineApp(settings: LocalSettings) {
     var selectedTab by rememberSaveable { mutableStateOf(AppTab.MAP.name) }
     GeorgiaTheme(themeMode = settings.appTheme) {
         Scaffold(
-            bottomBar = {
-                NavigationBar {
-                    AppTab.entries.forEach { tab ->
-                        NavigationBarItem(
-                            selected = selectedTab == tab.name,
-                            onClick = { selectedTab = tab.name },
-                            icon = { Text(tab.symbol) },
-                            label = { Text(tab.label) }
-                        )
-                    }
-                }
-            }
+            bottomBar = { MinimalNavBar(selected = selectedTab, onSelect = { selectedTab = it }) }
         ) { padding ->
             when (AppTab.valueOf(selectedTab)) {
                 AppTab.MAP -> MapScreen(Modifier.padding(padding), settings)
@@ -97,10 +96,113 @@ fun GeorgiaOfflineApp(settings: LocalSettings) {
 @Composable
 private fun PageColumn(modifier: Modifier = Modifier, content: @Composable ColumnScope.() -> Unit) {
     Column(
-        modifier = modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(16.dp),
-        verticalArrangement = Arrangement.spacedBy(12.dp),
+        modifier = modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(start = 20.dp, end = 20.dp, top = 8.dp, bottom = 24.dp),
+        verticalArrangement = Arrangement.spacedBy(14.dp),
         content = content
     )
+}
+
+@Composable
+private fun MinimalNavBar(selected: String, onSelect: (String) -> Unit) {
+    Surface(color = MaterialTheme.colorScheme.background) {
+        Column {
+            HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
+            Row(
+                Modifier.fillMaxWidth().navigationBarsPadding().padding(horizontal = 6.dp, vertical = 4.dp),
+                horizontalArrangement = Arrangement.SpaceBetween
+            ) {
+                AppTab.entries.forEach { tab ->
+                    val active = selected == tab.name
+                    Column(
+                        modifier = Modifier.weight(1f).clip(RoundedCornerShape(16.dp)).clickable { onSelect(tab.name) }.padding(vertical = 10.dp),
+                        horizontalAlignment = Alignment.CenterHorizontally,
+                        verticalArrangement = Arrangement.spacedBy(6.dp)
+                    ) {
+                        Box(
+                            Modifier.size(width = 16.dp, height = 3.dp).clip(CircleShape)
+                                .background(if (active) MaterialTheme.colorScheme.tertiary else androidx.compose.ui.graphics.Color.Transparent)
+                        )
+                        Text(
+                            tab.label,
+                            style = MaterialTheme.typography.labelMedium,
+                            color = if (active) MaterialTheme.colorScheme.onSurface else MaterialTheme.colorScheme.onSurfaceVariant,
+                            fontWeight = if (active) FontWeight.SemiBold else FontWeight.Normal,
+                            maxLines = 1,
+                            overflow = TextOverflow.Clip
+                        )
+                    }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun MapHeader() {
+    Row(
+        Modifier.fillMaxWidth().padding(top = 8.dp),
+        horizontalArrangement = Arrangement.SpaceBetween,
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Column {
+            Text("Грузия", style = MaterialTheme.typography.headlineMedium)
+            Text("Офлайн-атлас", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+        }
+        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+            Box(Modifier.size(8.dp).clip(CircleShape).background(MaterialTheme.colorScheme.tertiary))
+            Text("Без сети", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+        }
+    }
+}
+
+@Composable
+private fun MapDetails(
+    settings: LocalSettings,
+    hasMap: Boolean,
+    preferredLanguage: String?,
+    isImporting: Boolean,
+    importMessage: String?,
+    importError: Boolean,
+    onPickFile: () -> Unit
+) {
+    Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+        if (hasMap) {
+            Text("Язык подписей", style = MaterialTheme.typography.titleMedium)
+            Text(
+                "${preferredLanguage ?: "по умолчанию"} · включено: ${languageSummary(settings.enabledLanguages)}. Карта показывает один язык; одновременные подписи на нескольких языках появятся отдельным слоем.",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+            OutlinedButton(onClick = onPickFile, modifier = Modifier.fillMaxWidth(), enabled = !isImporting) { Text("Заменить файл карты") }
+            if (!settings.mapFileIsBundled) {
+                OutlinedButton(onClick = { settings.restoreBundledMap() }, modifier = Modifier.fillMaxWidth(), enabled = !isImporting) {
+                    Text("Вернуть встроенную карту из APK")
+                }
+            }
+            OutlinedButton(onClick = { settings.setMapFilePath(null) }, modifier = Modifier.fillMaxWidth()) { Text("Отключить карту") }
+        } else {
+            if (settings.mapDisabled) {
+                Button(onClick = { settings.enableBundledMap() }, modifier = Modifier.fillMaxWidth(), enabled = !isImporting) {
+                    Text("Включить встроенную карту")
+                }
+            }
+            Button(onClick = onPickFile, modifier = Modifier.fillMaxWidth(), enabled = !isImporting) {
+                Text(if (isImporting) "Проверка карты…" else "Выбрать локальный .map-файл")
+            }
+        }
+        if (importMessage != null) {
+            Text(
+                importMessage,
+                color = if (importError) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.onSurfaceVariant,
+                style = MaterialTheme.typography.bodySmall
+            )
+        }
+        Text(
+            "Карта отрисовывается из локальных файлов Mapsforge. Сетевые источники тайлов не используются. Данные © OpenStreetMap contributors, ODbL 1.0.",
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant
+        )
+    }
 }
 
 @Composable
@@ -165,104 +267,70 @@ private fun MapScreen(modifier: Modifier, settings: LocalSettings) {
     val mapFile = settings.mapFilePath?.let(::File)?.takeIf { it.isFile && it.length() > 0L }
     val preferredLanguage = MapLanguageResolver.preferredLanguage(settings.enabledLanguages)
 
-    PageColumn(modifier) {
-        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
-            Column {
-                Text("GEORGIA OFFLINE", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
-                Text("Автономный атлас Грузии", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
-            }
-            Surface(shape = MaterialTheme.shapes.large, color = MaterialTheme.colorScheme.secondaryContainer) {
-                Text("OFFLINE", modifier = Modifier.padding(horizontal = 12.dp, vertical = 7.dp), fontWeight = FontWeight.Bold)
-            }
-        }
+    val openPicker: () -> Unit = { mapPicker.launch(arrayOf("*/*")) }
+    var showDetails by rememberSaveable { mutableStateOf(false) }
 
-        if (mapFile != null) {
-            MapsforgeMapSurface(
-                mapFile = mapFile,
-                preferredLanguage = preferredLanguage,
-                mapTheme = settings.mapTheme,
-                modifier = Modifier.fillMaxWidth().height(430.dp)
-            )
-            Text("Подключён локальный файл: ${mapFile.name}", style = MaterialTheme.typography.bodySmall)
-            Text("© OpenStreetMap contributors · данные ODbL 1.0", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-            Text(
-                "Язык подписей Mapsforge: ${preferredLanguage ?: "по умолчанию"}. Сейчас движок выбирает один предпочтительный язык; показ нескольких языков одновременно добавим отдельным слоем.",
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant
-            )
-            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                OutlinedButton(
-                    onClick = { mapPicker.launch(arrayOf("*/*")) },
-                    modifier = Modifier.fillMaxWidth(),
-                    enabled = !isImporting
-                ) { Text("Заменить файл карты") }
-                if (!settings.mapFileIsBundled) {
-                    OutlinedButton(
-                        onClick = { settings.restoreBundledMap() },
-                        modifier = Modifier.fillMaxWidth(),
-                        enabled = !isImporting
-                    ) { Text("Вернуть встроенную карту из APK") }
-                }
-                OutlinedButton(
-                    onClick = { settings.setMapFilePath(null) },
-                    modifier = Modifier.fillMaxWidth()
-                ) { Text("Отключить карту") }
-            }
-        } else {
-            Card(colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant)) {
-                Column(Modifier.fillMaxWidth().padding(18.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                    Text("Векторная карта Mapsforge", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
-                    Box(Modifier.fillMaxWidth().height(170.dp), contentAlignment = Alignment.Center) {
-                        Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                            Text("🗺️", style = MaterialTheme.typography.displayMedium)
-                            Text("Движок карты подключён", fontWeight = FontWeight.SemiBold)
-                            Text("В этой сборке нет встроенного файла карты. Полная сборка GitHub Actions создаёт и добавляет его в APK.", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+    if (mapFile != null) {
+        Column(
+            modifier.fillMaxSize().padding(horizontal = 20.dp),
+            verticalArrangement = Arrangement.spacedBy(12.dp)
+        ) {
+            MapHeader()
+            Box(Modifier.fillMaxWidth().weight(1f).clip(RoundedCornerShape(28.dp))) {
+                MapsforgeMapSurface(
+                    mapFile = mapFile,
+                    preferredLanguage = preferredLanguage,
+                    mapTheme = settings.mapTheme,
+                    modifier = Modifier.fillMaxSize()
+                )
+                if (showDetails) {
+                    Surface(modifier = Modifier.fillMaxSize(), color = MaterialTheme.colorScheme.background.copy(alpha = 0.97f)) {
+                        Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(20.dp)) {
+                            MapDetails(settings, true, preferredLanguage, isImporting, importMessage, importError, openPicker)
                         }
                     }
-                    if (settings.mapDisabled) {
-                        Button(onClick = { settings.enableBundledMap() }, enabled = !isImporting) {
-                            Text("Включить встроенную карту")
-                        }
-                    }
-                    Button(onClick = { mapPicker.launch(arrayOf("*/*")) }, enabled = !isImporting) {
-                        Text(if (isImporting) "Проверка карты…" else "Выбрать локальный .map-файл")
-                    }
-                    Text("Если APK был собран вне GitHub Actions, можно выбрать Mapsforge .map-файл Грузии вручную. Приложение скопирует его во внутреннюю папку и проверит заголовок и пересечение области карты с Грузией.", style = MaterialTheme.typography.bodySmall)
                 }
             }
-        }
-
-        if (importMessage != null) {
-            Text(
-                importMessage!!,
-                color = if (importError) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.onSurfaceVariant,
-                style = MaterialTheme.typography.bodySmall
-            )
-        }
-
-        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            StatusPill("GPS: по запросу")
-            StatusPill("3 языка")
-            StatusPill("Без сети")
-        }
-        Card {
-            Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                Text("Языки названий", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
-                Text(languageSummary(settings.enabledLanguages), style = MaterialTheme.typography.bodyMedium)
-                Text("В сборках GitHub Actions файл карты содержит доступные варианты en / ru / ka. Сейчас отображается один выбранный предпочтительный язык; одновременные многострочные подписи будут добавлены отдельным слоем.", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            Row(
+                Modifier.fillMaxWidth().padding(bottom = 4.dp),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Text(
+                    "© OpenStreetMap contributors",
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+                TextButton(onClick = { showDetails = !showDetails }) { Text(if (showDetails) "К карте" else "О карте") }
             }
         }
-        InfoCard(
-            title = "Офлайн-карта",
-            body = "Отрисовка работает только с локальными файлами Mapsforge. В полной сборке GitHub Actions карта Грузии создаётся из Geofabrik OpenStreetMap и встраивается прямо в APK; при первом запуске она копируется во внутреннюю папку приложения. Сетевые источники тайлов и загрузка карт во время работы приложения не используются."
-        )
+    } else {
+        PageColumn(modifier) {
+            MapHeader()
+            Card {
+                Column(Modifier.fillMaxWidth().padding(20.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                    Text("Карта не подключена", style = MaterialTheme.typography.titleMedium)
+                    Text(
+                        "В этой сборке нет встроенного файла карты. Полная сборка GitHub Actions добавляет его в APK; можно также выбрать Mapsforge .map-файл Грузии вручную.",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+            }
+            MapDetails(settings, false, preferredLanguage, isImporting, importMessage, importError, openPicker)
+        }
     }
 }
 
 @Composable
 private fun StatusPill(text: String) {
-    Surface(shape = MaterialTheme.shapes.large, color = MaterialTheme.colorScheme.tertiaryContainer) {
-        Text(text, modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp), style = MaterialTheme.typography.labelSmall)
+    Surface(shape = CircleShape, color = MaterialTheme.colorScheme.surfaceVariant) {
+        Text(
+            text,
+            modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp),
+            style = MaterialTheme.typography.labelSmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant
+        )
     }
 }
 
@@ -318,34 +386,32 @@ private fun DiscoverScreen(modifier: Modifier, settings: LocalSettings) {
             value = query,
             onValueChange = { query = it },
             modifier = Modifier.fillMaxWidth(),
+            shape = RoundedCornerShape(28.dp),
             label = { Text("Поиск места") },
             placeholder = { Text("Название, адрес, телефон, сайт или ქართულად") },
             singleLine = true
         )
-        Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
-            categories.chunked(2).forEach { rowCategories ->
-                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    rowCategories.forEach { (id, label) ->
-                        FilterChip(
-                            selected = selectedCategory == id,
-                            onClick = { selectedCategory = id },
-                            label = { Text(label) }
-                        )
-                    }
-                }
+        Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            categories.forEach { (id, label) ->
+                FilterChip(
+                    selected = selectedCategory == id,
+                    onClick = { selectedCategory = id },
+                    label = { Text(label) },
+                    shape = RoundedCornerShape(50)
+                )
             }
         }
-        Card(colors = CardDefaults.cardColors(
-            containerColor = if (statusIsError) MaterialTheme.colorScheme.errorContainer else MaterialTheme.colorScheme.surfaceVariant
-        )) {
-            Row(
-                Modifier.fillMaxWidth().padding(12.dp),
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(10.dp)
-            ) {
-                if (loading) CircularProgressIndicator(modifier = Modifier.height(22.dp), strokeWidth = 2.dp)
-                Text(statusMessage, style = MaterialTheme.typography.bodySmall)
-            }
+        Row(
+            Modifier.fillMaxWidth(),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(10.dp)
+        ) {
+            if (loading) CircularProgressIndicator(modifier = Modifier.size(18.dp), strokeWidth = 2.dp)
+            Text(
+                statusMessage,
+                style = MaterialTheme.typography.bodySmall,
+                color = if (statusIsError) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.onSurfaceVariant
+            )
         }
         if (database == null) {
             InfoCard(
@@ -531,17 +597,17 @@ private fun ChoiceRow(options: List<Pair<String, String>>, selected: String, onS
 @Composable
 private fun PageTitle(title: String, subtitle: String) {
     Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
-        Text(title, style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Bold)
-        Text(subtitle, color = MaterialTheme.colorScheme.onSurfaceVariant)
+        Text(title, style = MaterialTheme.typography.headlineMedium)
+        Text(subtitle, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
     }
 }
 
 @Composable
 private fun InfoCard(title: String, body: String) {
     Card {
-        Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
-            Text(title, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
-            Text(body, style = MaterialTheme.typography.bodyMedium)
+        Column(Modifier.fillMaxWidth().padding(20.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+            Text(title, style = MaterialTheme.typography.titleMedium)
+            Text(body, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
         }
     }
 }

@@ -61,7 +61,7 @@ curl_resilient() {
     --retry-all-errors \
     --retry-delay 8 \
     --retry-max-time 600 \
-    --user-agent "GeorgiaOffline-map-builder/0.5.6 (OpenStreetMap data build)" \
+    --user-agent "GeorgiaOffline-map-builder/0.5.7 (OpenStreetMap data build)" \
     "$@"
 }
 
