@@ -146,7 +146,7 @@ manifest = {
     "poiFileSizeBytes": int(poi_size),
     "poiCount": int(poi_count),
     "poiSchemaVersion": 1,
-    "poiIndexVersion": 2,
+    "poiIndexVersion": 3,
     "poiCategoryCatalog": ["food", "lodging", "tourism", "medical", "transport", "services", "shops", "historic", "nature", "settlement"],
     "poiSearchLanguages": ["en", "ru", "ka"],
     "poiIndexedDetailTags": ["addr:*", "phone", "contact:phone", "telephone", "website", "contact:website", "opening_hours", "cuisine", "wheelchair", "internet_access", "operator", "brand"],

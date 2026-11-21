@@ -1,0 +1,61 @@
+package app.georgia.offline.domain
+
+/** Russian display names for stored OSM subcategory values; unknown values fall back to readable English. */
+object PoiLabels {
+    private val subcategories = mapOf(
+        "station" to "Железнодорожный вокзал / станция",
+        "halt" to "Ж/д остановочный пункт",
+        "subway_station" to "Станция метро",
+        "light_rail_station" to "Станция легкорельсового транспорта",
+        "tram_stop" to "Трамвайная остановка",
+        "bus_station" to "Автовокзал / автостанция",
+        "bus_stop" to "Автобусная остановка",
+        "aerodrome" to "Аэропорт / аэродром",
+        "heliport" to "Вертодром",
+        "ferry_terminal" to "Паромный терминал",
+        "cable_car_station" to "Станция канатной дороги",
+        "border_crossing" to "Пункт пропуска на границе",
+        "public_transport_station" to "Транспортный узел",
+        "fuel" to "Заправка",
+        "charging_station" to "Зарядная станция",
+        "parking" to "Парковка",
+        "taxi" to "Такси",
+        "restaurant" to "Ресторан",
+        "cafe" to "Кафе",
+        "hotel" to "Отель",
+        "guest_house" to "Гостевой дом",
+        "hostel" to "Хостел",
+        "camp_site" to "Кемпинг",
+        "alpine_hut" to "Горная хижина",
+        "wilderness_hut" to "Хижина",
+        "shelter" to "Укрытие",
+        "pharmacy" to "Аптека",
+        "hospital" to "Больница",
+        "clinic" to "Клиника",
+        "police" to "Полиция",
+        "atm" to "Банкомат",
+        "bank" to "Банк",
+        "museum" to "Музей",
+        "viewpoint" to "Смотровая площадка",
+        "attraction" to "Достопримечательность",
+        "castle" to "Замок",
+        "fortress" to "Крепость",
+        "fort" to "Крепость",
+        "monastery" to "Монастырь",
+        "church" to "Церковь",
+        "place_of_worship" to "Культовое сооружение",
+        "peak" to "Вершина",
+        "saddle" to "Перевал",
+        "mountain_pass" to "Перевал",
+        "waterfall" to "Водопад",
+        "spring" to "Родник",
+        "hot_spring" to "Горячий источник",
+        "city" to "Город",
+        "town" to "Город / посёлок",
+        "village" to "Село",
+        "hamlet" to "Хутор"
+    )
+
+    fun subcategoryLabel(subcategory: String): String =
+        subcategories[subcategory] ?: subcategory.replace('_', ' ')
+}

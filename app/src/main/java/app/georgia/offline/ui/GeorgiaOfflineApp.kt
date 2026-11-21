@@ -49,6 +49,7 @@ import java.io.File
 import app.georgia.offline.data.LocalSettings
 import app.georgia.offline.data.MapFileRepository
 import app.georgia.offline.data.PoiRepository
+import app.georgia.offline.domain.PoiLabels
 import app.georgia.offline.domain.GeoFormatting
 import app.georgia.offline.domain.MapLanguageResolver
 import app.georgia.offline.domain.FeatureCatalog
@@ -366,7 +367,7 @@ private fun DiscoverScreen(modifier: Modifier, settings: LocalSettings) {
                             )
                         }
                         Text(
-                            "${poiCategoryLabel(poi.category)} · ${poi.subcategory.replace('_', ' ')}",
+                            "${poiCategoryLabel(poi.category)} · ${PoiLabels.subcategoryLabel(poi.subcategory)}",
                             style = MaterialTheme.typography.bodySmall,
                             color = MaterialTheme.colorScheme.onSurfaceVariant
                         )

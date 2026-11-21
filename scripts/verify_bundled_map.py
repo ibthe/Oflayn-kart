@@ -74,7 +74,7 @@ def main() -> int:
     if int(manifest.get("poiCount", 0)) < 100 or manifest.get("poiSchemaVersion") != 1:
         print("ERROR: POI count or schema version is invalid.", file=sys.stderr)
         return 4
-    if manifest.get("poiIndexVersion") != 2:
+    if manifest.get("poiIndexVersion") != 3:
         print("ERROR: POI index revision is outdated; regenerate the database with the current extraction rules.", file=sys.stderr)
         return 4
     required_detail_tags = {"addr:*", "phone", "website", "opening_hours", "cuisine"}

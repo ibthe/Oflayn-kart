@@ -5,7 +5,7 @@ import sqlite3
 import tempfile
 import unittest
 from pathlib import Path
-from build_poi_database import ProgressReporter, PoiInput, classify_tags, create_database, insert_poi, normalise_search_text, point_in_bbox
+from build_poi_database import ProgressReporter, PoiInput, classify_tags, create_database, insert_poi, normalise_search_text, point_in_bbox, polygon_centroid
 from verify_poi_database import verify
 
 
@@ -18,6 +18,68 @@ class PoiDatabaseTests(unittest.TestCase):
         self.assertEqual(classify_tags({"tourism": "hotel"}), ("lodging", "hotel"))
         self.assertEqual(classify_tags({"railway": "station"}), ("transport", "station"))
         self.assertIsNone(classify_tags({"highway": "residential"}))
+
+    def test_transport_hubs_are_classified(self):
+        self.assertEqual(classify_tags({"railway": "station", "public_transport": "station", "train": "yes"}), ("transport", "station"))
+        self.assertEqual(classify_tags({"railway": "station", "station": "subway"}), ("transport", "subway_station"))
+        self.assertEqual(classify_tags({"railway": "halt"}), ("transport", "halt"))
+        self.assertEqual(classify_tags({"amenity": "bus_station"}), ("transport", "bus_station"))
+        self.assertEqual(classify_tags({"public_transport": "station", "bus": "yes"}), ("transport", "bus_station"))
+        self.assertEqual(classify_tags({"highway": "bus_stop"}), ("transport", "bus_stop"))
+        self.assertEqual(classify_tags({"aeroway": "aerodrome"}), ("transport", "aerodrome"))
+        self.assertEqual(classify_tags({"amenity": "ferry_terminal"}), ("transport", "ferry_terminal"))
+        self.assertEqual(classify_tags({"aerialway": "station"}), ("transport", "cable_car_station"))
+        self.assertEqual(classify_tags({"barrier": "border_control"}), ("transport", "border_crossing"))
+        # a station that also carries a tourism tag stays a station
+        self.assertEqual(classify_tags({"railway": "station", "tourism": "attraction"}), ("transport", "station"))
+
+    def test_duplicate_and_noise_transport_objects_are_skipped(self):
+        self.assertIsNone(classify_tags({"public_transport": "stop_position", "bus": "yes"}))
+        self.assertIsNone(classify_tags({"public_transport": "platform", "train": "yes"}))
+        self.assertIsNone(classify_tags({"railway": "station", "disused": "yes"}))
+        self.assertIsNone(classify_tags({"amenity": "shelter", "shelter_type": "public_transport"}))
+        self.assertEqual(classify_tags({"public_transport": "platform", "bus": "yes"}), ("transport", "bus_stop"))
+
+    def test_hiking_objects(self):
+        self.assertEqual(classify_tags({"natural": "saddle"}), ("nature", "saddle"))
+        self.assertEqual(classify_tags({"mountain_pass": "yes"}), ("nature", "mountain_pass"))
+        self.assertEqual(classify_tags({"amenity": "shelter", "shelter_type": "basic_hut"}), ("nature", "shelter"))
+
+    def test_russian_and_georgian_category_words_are_searchable(self):
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / "poi.sqlite"
+            connection = create_database(path)
+            for number, (category, sub, name) in enumerate((
+                ("transport", "station", "Tbilisi Central"),
+                ("transport", "bus_station", "Ortachala"),
+                ("transport", "aerodrome", "Shota Rustaveli Airport"),
+            ), start=1):
+                insert_poi(connection, PoiInput(
+                    poi_id=f"node/{number}", osm_type="node", osm_id=number, category=category,
+                    subcategory=sub, name=name, name_en=name, name_ru="", name_ka="",
+                    latitude=41.7, longitude=44.8, tags_json="{}",
+                ))
+            connection.commit()
+            def hits(term):
+                return {r[0] for r in connection.execute("SELECT poi_id FROM poi WHERE instr(search_text, ?) > 0", (term,))}
+            # substring search: "вокзал" also finds "автовокзал", which is desirable
+            self.assertEqual(hits("вокзал"), {"node/1", "node/2"})
+            self.assertEqual(hits("автовокзал"), {"node/2"})
+            self.assertEqual(hits("аэропорт"), {"node/3"})
+            self.assertEqual(hits("აეროპორტი"), {"node/3"})
+            connection.close()
+
+    def test_polygon_centroid_is_area_weighted(self):
+        square = [(0.0, 0.0), (0.0, 2.0), (2.0, 2.0), (2.0, 0.0)]
+        lat, lon = polygon_centroid(square)
+        self.assertAlmostEqual(lat, 1.0)
+        self.assertAlmostEqual(lon, 1.0)
+        # many extra vertices on one side must not drag the result
+        skewed = [(0.0, 0.0), (0.0, 0.5), (0.0, 1.0), (0.0, 1.5), (0.0, 2.0), (2.0, 2.0), (2.0, 0.0)]
+        lat, lon = polygon_centroid(skewed)
+        self.assertAlmostEqual(lat, 1.0)
+        self.assertAlmostEqual(lon, 1.0)
+        self.assertEqual(polygon_centroid([(1.0, 1.0), (1.0, 1.0), (1.0, 1.0)]), (1.0, 1.0))
 
     def test_bbox(self):
         bbox = (41.0, 39.95, 43.65, 46.8)

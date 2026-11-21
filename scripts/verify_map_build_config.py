@@ -127,10 +127,10 @@ def main() -> int:
 
     if bundle_manifest.get("mapBoundingBox") != EXPECTED_GEORGIA_BBOX:
         return fail("the static bundle manifest bbox does not match the map build bbox.")
-    if bundle_manifest.get("appVersion") != "0.5.5":
-        return fail("the static bundle manifest appVersion must match this source package (0.5.5).")
-    if 'versionName = "0.5.5"' not in app_build or "versionCode = 17" not in app_build:
-        return fail("the Android Gradle version must be 0.5.5 (versionCode 17).")
+    if bundle_manifest.get("appVersion") != "0.5.6":
+        return fail("the static bundle manifest appVersion must match this source package (0.5.6).")
+    if 'versionName = "0.5.6"' not in app_build or "versionCode = 18" not in app_build:
+        return fail("the Android Gradle version must be 0.5.6 (versionCode 18).")
     if "PoiRepository.ensureInstalled" not in poi_ui or "PoiRepository.search" not in poi_ui or "poi.detailLines()" not in poi_ui:
         return fail("the Discover screen must install/search the local POI database and render available detail tags.")
     for token in ("poiFileSha256", "SQLiteDatabase.OPEN_READONLY", "instr(search_text, ?)", "nameEn", "nameRu", "nameKa", "fun detailLines()", "tagsJson"):
@@ -142,11 +142,11 @@ def main() -> int:
         return fail("the static bundle manifest must require the local POI database asset.")
     if not {"addr:*", "phone", "website", "opening_hours", "cuisine"}.issubset(set(bundle_manifest.get("poiIndexedDetailTags", []))):
         return fail("the static POI manifest must describe its searchable practical detail tags.")
-    if bundle_manifest.get("poiDatabase", {}).get("indexVersion") != 2:
-        return fail("the static POI manifest must require search index revision 2.")
-    if "poiIndexVersion\": 2" not in map_script:
-        return fail("the generated POI build manifest must identify search index revision 2.")
-    if "poi-v2-" not in workflow:
+    if bundle_manifest.get("poiDatabase", {}).get("indexVersion") != 3:
+        return fail("the static POI manifest must require search index revision 3.")
+    if "poiIndexVersion\": 3" not in map_script:
+        return fail("the generated POI build manifest must identify search index revision 3.")
+    if "poi-v3-" not in workflow:
         return fail("the CI cache namespace must be bumped so older POI indexes are not reused.")
     if "python3 scripts/build_poi_database.py" not in map_script or "python3 scripts/verify_poi_database.py" not in map_script:
         return fail("the full country map build must generate and verify the POI database from the same PBF.")

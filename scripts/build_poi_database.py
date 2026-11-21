@@ -46,6 +46,11 @@ AMENITY = {
     "drinking_water": ("services", "drinking_water"), "embassy": ("services", "embassy"),
     "marketplace": ("shops", "marketplace"),
     "place_of_worship": ("historic", "place_of_worship"),
+    "ferry_terminal": ("transport", "ferry_terminal"),
+    "library": ("services", "library"), "townhall": ("services", "townhall"),
+    "courthouse": ("services", "courthouse"), "university": ("services", "university"),
+    "college": ("services", "college"),
+    "theatre": ("tourism", "theatre"), "cinema": ("tourism", "cinema"),
 }
 TOURISM = {
     "attraction": ("tourism", "attraction"), "museum": ("tourism", "museum"),
@@ -57,22 +62,89 @@ TOURISM = {
     "hotel": ("lodging", "hotel"), "guest_house": ("lodging", "guest_house"),
     "hostel": ("lodging", "hostel"), "apartment": ("lodging", "apartment"),
     "chalet": ("lodging", "chalet"), "motel": ("lodging", "motel"),
+    "wilderness_hut": ("lodging", "wilderness_hut"),
 }
 HISTORIC = {
     "castle", "fort", "fortress", "ruins", "archaeological_site", "monument",
     "memorial", "wayside_shrine", "manor", "city_gate", "tomb", "church",
-    "monastery", "cathedral", "bridge",
+    "monastery", "cathedral", "bridge", "tower", "city_walls", "citywalls",
+    "aqueduct", "battlefield",
 }
-NATURAL = {"peak", "cave_entrance", "spring", "hot_spring", "waterfall", "beach", "glacier", "cave"}
-PLACE = {"city", "town", "village", "hamlet", "isolated_dwelling", "suburb", "neighbourhood", "locality"}
+NATURAL = {"peak", "cave_entrance", "spring", "hot_spring", "waterfall", "beach", "glacier", "cave", "saddle"}
+PLACE = {"city", "town", "village", "hamlet", "isolated_dwelling", "suburb", "neighbourhood", "locality", "island", "islet"}
 SHOP = {"supermarket", "convenience", "bakery", "butcher", "greengrocer", "mall", "department_store", "hardware", "outdoor", "general"}
-LEISURE = {"park", "nature_reserve", "marina", "swimming_pool", "playground", "sports_centre", "stadium", "golf_course"}
+LEISURE = {"park", "nature_reserve", "marina", "swimming_pool", "playground", "sports_centre", "stadium", "golf_course", "resort"}
 
 CATEGORY_LABELS = {
     "food": "Еда и напитки", "lodging": "Жильё", "tourism": "Достопримечательности",
     "medical": "Медицина", "transport": "Транспорт и заправки", "services": "Сервисы",
     "shops": "Магазины", "historic": "История и культура", "nature": "Природа",
     "settlement": "Населённые пункты",
+}
+
+# Russian / Georgian / English search words per subcategory. Without them a
+# search for "вокзал", "аэропорт" or "აეროპორტი" cannot match an object whose
+# subcategory is stored as an English OSM value. These are search aliases only;
+# they are not presented as translations of the object's own name.
+SUBCATEGORY_SEARCH_WORDS: dict[str, tuple[str, ...]] = {
+    "station": ("вокзал", "железнодорожная станция", "ж/д станция", "жд станция", "поезд", "railway station", "train station", "რკინიგზის სადგური", "მატარებლის სადგური"),
+    "halt": ("ж/д остановка", "железнодорожная платформа", "остановочный пункт", "railway halt", "train stop", "რკინიგზის გაჩერება"),
+    "subway_station": ("метро", "станция метро", "subway", "metro", "მეტრო", "მეტროს სადგური"),
+    "light_rail_station": ("легкорельсовый транспорт", "станция", "light rail"),
+    "tram_stop": ("трамвай", "трамвайная остановка", "tram stop"),
+    "bus_station": ("автовокзал", "автостанция", "автобусная станция", "маршрутки", "bus station", "ავტოსადგური"),
+    "bus_stop": ("автобусная остановка", "остановка", "bus stop", "გაჩერება"),
+    "aerodrome": ("аэропорт", "аэродром", "airport", "aerodrome", "აეროპორტი"),
+    "heliport": ("вертодром", "вертолётная площадка", "heliport"),
+    "ferry_terminal": ("паром", "порт", "причал", "ferry", "ბორანი", "პორტი"),
+    "cable_car_station": ("канатная дорога", "фуникулёр", "подъёмник", "cable car", "gondola", "საბაგირო"),
+    "border_crossing": ("граница", "погранпереход", "пункт пропуска", "кпп", "border crossing", "საზღვარი"),
+    "public_transport_station": ("транспортный узел", "станция", "public transport station"),
+    "taxi": ("такси", "taxi"), "fuel": ("заправка", "азс", "бензин", "gas station", "petrol"),
+    "charging_station": ("зарядка", "зарядная станция", "электромобиль", "ev charging"),
+    "parking": ("парковка", "стоянка", "parking"), "car_rental": ("прокат авто", "аренда авто", "car rental"),
+    "car_repair": ("автосервис", "шиномонтаж", "car repair"), "car_wash": ("автомойка", "car wash"),
+    "bicycle_rental": ("прокат велосипедов", "bicycle rental"),
+    "restaurant": ("ресторан", "restaurant", "რესტორანი"), "cafe": ("кафе", "кофейня", "cafe", "coffee", "კაფე"),
+    "fast_food": ("фастфуд", "быстрое питание", "fast food"), "bar": ("бар", "bar"), "pub": ("паб", "pub"),
+    "hotel": ("отель", "гостиница", "hotel", "სასტუმრო"), "guest_house": ("гостевой дом", "гестхаус", "guest house", "სასტუმრო სახლი"),
+    "hostel": ("хостел", "hostel"), "motel": ("мотель", "motel"), "apartment": ("апартаменты", "apartment"),
+    "chalet": ("шале", "chalet"), "camp_site": ("кемпинг", "палатки", "camp site", "camping"),
+    "caravan_site": ("автокемпинг", "caravan site"), "alpine_hut": ("горная хижина", "приют", "alpine hut"),
+    "wilderness_hut": ("хижина", "приют", "wilderness hut"), "shelter": ("укрытие", "навес", "shelter"),
+    "pharmacy": ("аптека", "pharmacy", "აფთიაქი"), "hospital": ("больница", "госпиталь", "hospital", "საავადმყოფო"),
+    "clinic": ("клиника", "поликлиника", "clinic"), "doctors": ("врач", "доктор", "doctors"),
+    "dentist": ("стоматолог", "зубной", "dentist"), "veterinary": ("ветеринар", "veterinary"),
+    "police": ("полиция", "police", "პოლიცია"), "fire_station": ("пожарная часть", "пожарные", "fire station"),
+    "post_office": ("почта", "почтовое отделение", "post office"), "bank": ("банк", "bank", "ბანკი"),
+    "atm": ("банкомат", "atm"), "toilets": ("туалет", "toilets", "wc"), "drinking_water": ("питьевая вода", "родник", "drinking water"),
+    "embassy": ("посольство", "embassy"), "library": ("библиотека", "library"), "townhall": ("мэрия", "администрация", "town hall"),
+    "courthouse": ("суд", "courthouse"), "university": ("университет", "university"), "college": ("колледж", "college"),
+    "marketplace": ("рынок", "базар", "marketplace"),
+    "place_of_worship": ("церковь", "храм", "мечеть", "синагога", "place of worship", "church", "ეკლესია"),
+    "attraction": ("достопримечательность", "attraction"), "museum": ("музей", "museum", "მუზეუმი"),
+    "viewpoint": ("смотровая площадка", "панорама", "viewpoint"), "artwork": ("арт-объект", "artwork"),
+    "information": ("туристическая информация", "information"), "gallery": ("галерея", "gallery"),
+    "zoo": ("зоопарк", "zoo"), "theme_park": ("парк аттракционов", "theme park"),
+    "theatre": ("театр", "theatre"), "cinema": ("кинотеатр", "cinema"), "picnic_site": ("место для пикника", "picnic"),
+    "castle": ("замок", "castle"), "fort": ("форт", "крепость", "fort"), "fortress": ("крепость", "fortress"),
+    "ruins": ("руины", "ruins"), "archaeological_site": ("археологический памятник", "раскопки", "archaeological"),
+    "monument": ("памятник", "monument"), "memorial": ("мемориал", "memorial"), "tower": ("башня", "tower"),
+    "monastery": ("монастырь", "monastery"), "church": ("церковь", "church"), "cathedral": ("собор", "cathedral"),
+    "bridge": ("мост", "bridge"), "city_walls": ("крепостная стена", "city walls"), "citywalls": ("крепостная стена", "city walls"),
+    "peak": ("вершина", "гора", "peak", "mountain"), "saddle": ("перевал", "седловина", "pass", "saddle"),
+    "mountain_pass": ("перевал", "pass", "mountain pass"),
+    "cave_entrance": ("пещера", "cave"), "cave": ("пещера", "cave"), "spring": ("родник", "источник", "spring"),
+    "hot_spring": ("горячий источник", "термальный источник", "hot spring"), "waterfall": ("водопад", "waterfall"),
+    "beach": ("пляж", "beach"), "glacier": ("ледник", "glacier"), "park": ("парк", "park"),
+    "nature_reserve": ("заповедник", "нацпарк", "nature reserve"), "marina": ("марина", "причал", "marina"),
+    "swimming_pool": ("бассейн", "swimming pool"), "stadium": ("стадион", "stadium"), "golf_course": ("гольф", "golf"),
+    "resort": ("курорт", "resort"), "sports_centre": ("спортцентр", "sports centre"), "playground": ("детская площадка", "playground"),
+    "city": ("город", "city"), "town": ("город", "посёлок", "town"), "village": ("село", "деревня", "village", "სოფელი"),
+    "hamlet": ("хутор", "селение", "hamlet"), "suburb": ("район", "suburb"), "neighbourhood": ("квартал", "микрорайон", "neighbourhood"),
+    "island": ("остров", "island"), "islet": ("островок", "islet"),
+    "supermarket": ("супермаркет", "supermarket"), "convenience": ("магазин", "продукты", "convenience"),
+    "bakery": ("пекарня", "хлеб", "bakery"), "mall": ("торговый центр", "молл", "mall"),
 }
 
 @dataclass(frozen=True)
@@ -91,8 +163,69 @@ class PoiInput:
     tags_json: str
 
 
+def _classify_transport(tags: dict[str, str]) -> tuple[str, str] | None:
+    """Stations, terminals, airports and similar hubs.
+
+    Evaluated before the generic rules so that a station that also carries a
+    secondary tag (for example tourism=attraction) is still found as transport,
+    and so that railway=station is not downgraded to a generic public-transport
+    stop when public_transport=station is present as well.
+    """
+    if tags.get("disused") == "yes" or tags.get("abandoned") == "yes":
+        return None
+    railway = tags.get("railway")
+    if railway in {"station", "halt"}:
+        if tags.get("station") == "subway" or tags.get("subway") == "yes":
+            return ("transport", "subway_station")
+        if tags.get("station") == "light_rail" or tags.get("light_rail") == "yes":
+            return ("transport", "light_rail_station")
+        return ("transport", railway)
+    if railway == "tram_stop":
+        return ("transport", "tram_stop")
+    aeroway = tags.get("aeroway")
+    if aeroway == "aerodrome":
+        return ("transport", "aerodrome")
+    if aeroway == "heliport":
+        return ("transport", "heliport")
+    if tags.get("amenity") == "bus_station":
+        return ("transport", "bus_station")
+    if tags.get("amenity") == "ferry_terminal":
+        return ("transport", "ferry_terminal")
+    if tags.get("aerialway") == "station":
+        return ("transport", "cable_car_station")
+    if tags.get("barrier") == "border_control":
+        return ("transport", "border_crossing")
+    if tags.get("highway") == "bus_stop":
+        return ("transport", "bus_stop")
+    public_transport = tags.get("public_transport")
+    if public_transport == "station":
+        if tags.get("bus") == "yes":
+            return ("transport", "bus_station")
+        if tags.get("train") == "yes":
+            return ("transport", "station")
+        if tags.get("subway") == "yes":
+            return ("transport", "subway_station")
+        if tags.get("aerialway") == "yes":
+            return ("transport", "cable_car_station")
+        if tags.get("ferry") == "yes":
+            return ("transport", "ferry_terminal")
+        return ("transport", "public_transport_station")
+    if public_transport == "platform" and tags.get("bus") == "yes":
+        return ("transport", "bus_stop")
+    # stop_position and non-bus platforms only duplicate the stop/station object
+    # above (and are usually unnamed), so they are not indexed.
+    return None
+
+
 def classify_tags(tags: dict[str, str]) -> tuple[str, str] | None:
+    transport = _classify_transport(tags)
+    if transport is not None:
+        return transport
     amenity = tags.get("amenity")
+    if amenity == "shelter":
+        if tags.get("shelter_type") in {"basic_hut", "lean_to", "rock_shelter", "weather_shelter"}:
+            return ("nature", "shelter")
+        return None  # bus-stop shelters are noise
     if amenity in AMENITY:
         return AMENITY[amenity]
     tourism = tags.get("tourism")
@@ -101,6 +234,8 @@ def classify_tags(tags: dict[str, str]) -> tuple[str, str] | None:
     historic = tags.get("historic")
     if historic in HISTORIC:
         return ("historic", historic)
+    if tags.get("mountain_pass") == "yes" and tags.get("natural") != "saddle":
+        return ("nature", "mountain_pass")
     natural = tags.get("natural")
     if natural in NATURAL:
         return ("nature", natural)
@@ -115,15 +250,39 @@ def classify_tags(tags: dict[str, str]) -> tuple[str, str] | None:
         return ("nature", leisure)
     if tags.get("waterway") == "waterfall":
         return ("nature", "waterfall")
-    if tags.get("public_transport") in {"station", "platform", "stop_position"}:
-        return ("transport", f"public_transport_{tags['public_transport']}")
-    if tags.get("railway") in {"station", "halt", "tram_stop"}:
-        return ("transport", tags["railway"])
-    if tags.get("aeroway") == "aerodrome":
-        return ("transport", "aerodrome")
     if tags.get("emergency") in {"defibrillator", "phone", "assembly_point"}:
         return ("services", f"emergency_{tags['emergency']}")
     return None
+
+
+def polygon_centroid(points: list[tuple[float, float]]) -> tuple[float, float]:
+    """Area-weighted centroid of a closed ring given as (lat, lon) vertices.
+
+    The previous plain vertex average is pulled toward whichever side of a
+    building or station area has more vertices. Falls back to the vertex
+    average for degenerate rings.
+    """
+    count = len(points)
+    mean_lat = sum(p[0] for p in points) / count
+    mean_lon = sum(p[1] for p in points) / count
+    # Work relative to the mean for numerical stability.
+    area2 = cx = cy = 0.0
+    for index in range(count):
+        y0, x0 = points[index][0] - mean_lat, points[index][1] - mean_lon
+        y1, x1 = points[(index + 1) % count][0] - mean_lat, points[(index + 1) % count][1] - mean_lon
+        cross = x0 * y1 - x1 * y0
+        area2 += cross
+        cx += (x0 + x1) * cross
+        cy += (y0 + y1) * cross
+    if abs(area2) < 1e-14:
+        return mean_lat, mean_lon
+    lat = mean_lat + cy / (3.0 * area2)
+    lon = mean_lon + cx / (3.0 * area2)
+    min_lat, max_lat = min(p[0] for p in points), max(p[0] for p in points)
+    min_lon, max_lon = min(p[1] for p in points), max(p[1] for p in points)
+    if not (min_lat <= lat <= max_lat and min_lon <= lon <= max_lon):
+        return mean_lat, mean_lon
+    return lat, lon
 
 
 def normalise_search_text(values: Iterable[str]) -> str:
@@ -192,6 +351,7 @@ def insert_poi(conn: sqlite3.Connection, poi: PoiInput) -> None:
     search_text = normalise_search_text((
         poi.name, poi.name_en, poi.name_ru, poi.name_ka,
         poi.category, category_label, poi.subcategory, subcategory_label,
+        *SUBCATEGORY_SEARCH_WORDS.get(poi.subcategory, ()),
         *searchable_tag_values,
     ))
     conn.execute("""
@@ -323,8 +483,7 @@ def build_from_pbf(input_file: Path, output_file: Path, bbox: tuple[float, float
             locations = [node.location for node in refs[:-1] if node.location.valid()]
             if len(locations) != len(refs) - 1:
                 return  # avoid a misleading centroid when the way has missing node locations
-            lat = sum(float(location.lat) for location in locations) / len(locations)
-            lon = sum(float(location.lon) for location in locations) / len(locations)
+            lat, lon = polygon_centroid([(float(l.lat), float(l.lon)) for l in locations])
             self._insert(way, "way", lat, lon)
 
     handler = Handler()
