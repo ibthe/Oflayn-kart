@@ -7,9 +7,9 @@
 - MD5 endpoint: `https://download.geofabrik.de/europe/georgia-latest.osm.pbf.md5`
 - Формат исходника: OSM PBF.
 - Лицензия данных: Open Database License (ODbL) 1.0. Атрибуция: `© OpenStreetMap contributors` и ссылка https://www.openstreetmap.org/copyright.
-- Карта обновляется во время CI build, если Geofabrik checksum изменился; runtime-приложение источник не опрашивает.
+- Карта обновляется во время еженедельного CI build или по ручному запросу; основной источник — Geofabrik, резерв — OpenStreetMap France. Runtime-приложение источники не опрашивает.
 
-Geofabrik Georgia extract здесь означает страну Грузию на Кавказе, а не американский штат Georgia. CI использует URL из каталога `europe/georgia`.
+Geofabrik Georgia extract здесь означает страну Грузию на Кавказе, а не американский штат Georgia. Geofabrik использует URL из каталога `europe/georgia`; резервное зеркало OpenStreetMap France публикует ту же страну в каталоге `asia/georgia`.
 
 ## Mapsforge writer
 
@@ -41,3 +41,12 @@ Geofabrik Georgia extract здесь означает страну Грузию 
 ## Обязательные метаданные
 
 Для каждого будущего набора хранить source URL, дату получения, исходную контрольную сумму, лицензию, attribution, bbox, SHA-256, версию схемы и notes. CI map manifest уже содержит source URL, UTC timestamp, source PBF MD5, map SHA-256, размер, версию Map Writer, ODbL и attribution.
+
+
+## Резервный источник выгрузки страны Georgia (CI 0.4.3)
+
+Основной источник: `https://download.geofabrik.de/europe/georgia-latest.osm.pbf`.
+
+Резервное зеркало: `https://download.openstreetmap.fr/extracts/asia/georgia-latest.osm.pbf`. Каталог `asia` — способ классификации этого зеркала; сама выгрузка соответствует стране Georgia на Кавказе. В CI каждый `.osm.pbf` проверяется по `.md5` от того же провайдера. Источник и MD5 записываются в `georgia-map-build.json`.
+
+Резервный источник может обновляться реже основного. Обычные сборки используют последнюю проверенную карту из GitHub Actions cache; расписание обновляет её раз в неделю, а ручной запуск поддерживает флаг `refresh_map`.

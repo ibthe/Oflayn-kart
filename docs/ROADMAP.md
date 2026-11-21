@@ -38,7 +38,7 @@
 
 ### 0.4.0 — Map build pipeline
 
-- [x] Geofabrik Georgia country URL и MD5 verification.
+- [x] Geofabrik Georgia primary source, OpenStreetMap France fallback, retries and provider MD5 verification.
 - [x] Mapsforge Map Writer в CI, Osmosis `type=hd`.
 - [x] Запрос языковых вариантов `en,ru,ka`.
 - [x] Кеширование карты по checksum исходного PBF.

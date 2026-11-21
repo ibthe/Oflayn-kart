@@ -1,15 +1,10 @@
-GEORGIA OFFLINE — ПОЛНЫЙ ПАКЕТ РЕПОЗИТОРИЯ
-Версия приложения: 0.4.2 (versionCode 6).
+GEORGIA OFFLINE 0.4.3 — FULL REPOSITORY PACKAGE
+All paths are relative to the repository root. Hidden .github files are included.
+The generated binary georgia.map is not included; GitHub Actions generates it.
 
-Скопируйте всё содержимое ZIP прямо в корень вашего локального репозитория.
-Скрытая папка .github включена. Служебная папка .git не включается.
-Бинарная карта Грузии будет сформирована GitHub Actions и встроена в APK.
-
-ПУТИ ФАЙЛОВ:
 .github/workflows/android-ci.yml
 .gitignore
 CHANGELOG.md
-PACKAGE_CONTENTS.txt
 README.md
 START_HERE_RU.txt
 THIRD_PARTY_NOTICES.md
@@ -40,8 +35,8 @@ docs/DATA_SOURCES.md
 docs/GITHUB_SETUP.md
 docs/ROADMAP.md
 docs/TECHNICAL_SPEC.md
-gradle/wrapper/gradle-wrapper.properties
 gradle.properties
+gradle/wrapper/gradle-wrapper.properties
 scripts/bootstrap-wrapper.sh
 scripts/build_georgia_map.sh
 scripts/install_mapsforge_writer.sh

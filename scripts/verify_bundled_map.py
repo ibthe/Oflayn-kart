@@ -32,8 +32,20 @@ def main() -> int:
     if manifest.get("runtimeNetworkAccessRequired") is not False:
         print("ERROR: bundled map metadata must confirm no runtime network access.", file=sys.stderr)
         return 4
-    if "europe/georgia-latest.osm.pbf" not in manifest.get("sourceUrl", ""):
-        print("ERROR: source URL is not the Geofabrik Georgia country extract.", file=sys.stderr)
+    source_url = manifest.get("sourceUrl", "")
+    source_provider = manifest.get("sourceProvider")
+    valid_sources = {
+        "geofabrik": "https://download.geofabrik.de/europe/georgia-latest.osm.pbf",
+        "openstreetmap-fr": "https://download.openstreetmap.fr/extracts/asia/georgia-latest.osm.pbf",
+    }
+    # Backward compatibility for a map cache produced by the original 0.4.2 pipeline.
+    if source_provider is None and source_url == valid_sources["geofabrik"]:
+        source_provider = "geofabrik"
+    if source_provider not in valid_sources or source_url != valid_sources[source_provider]:
+        print("ERROR: map metadata does not identify one of the approved Georgia-country OSM sources.", file=sys.stderr)
+        return 4
+    if not isinstance(manifest.get("sourcePbfMd5"), str) or len(manifest["sourcePbfMd5"]) != 32:
+        print("ERROR: source PBF checksum is missing or malformed.", file=sys.stderr)
         return 4
     if manifest.get("mapFile") != MAP_FILE.name:
         print("ERROR: map manifest points to a different map file.", file=sys.stderr)

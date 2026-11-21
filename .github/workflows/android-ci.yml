@@ -4,10 +4,19 @@ on:
   push:
     branches: [ main, master ]
   pull_request:
+  schedule:
+    - cron: '17 4 * * 1'
   workflow_dispatch:
+    inputs:
+      refresh_map:
+        description: 'Force refresh the Georgia offline map from OSM sources'
+        required: false
+        type: boolean
+        default: false
 
 permissions:
   contents: read
+
 
 concurrency:
   group: android-ci-${{ github.ref }}
@@ -16,7 +25,7 @@ concurrency:
 jobs:
   build:
     runs-on: ubuntu-latest
-    timeout-minutes: 90
+    timeout-minutes: 120
     steps:
       - name: Checkout
         uses: actions/checkout@v6
@@ -30,7 +39,6 @@ jobs:
       - name: Set up Android SDK
         uses: android-actions/setup-android@v4.0.2
         with:
-          # The old `tools` package was removed from Google's SDK repository.
           packages: 'platform-tools'
 
       - name: Install Android SDK platform and build tools
@@ -47,42 +55,40 @@ jobs:
       - name: Run unit tests
         run: gradle --no-daemon --stacktrace --console=plain :app:testDebugUnitTest
 
-      # The map is generated in CI, not committed to Git. Runtime APK access is
-      # fully offline. Cache key changes when Geofabrik publishes a new PBF.
-      - name: Read current Geofabrik extract checksum
-        id: georgia-source
-        shell: bash
-        run: |
-          curl --fail --location --retry 3 \
-            https://download.geofabrik.de/europe/georgia-latest.osm.pbf.md5 \
-            --output "$RUNNER_TEMP/georgia-latest.osm.pbf.md5"
-          checksum="$(awk 'NR == 1 { print $1 }' "$RUNNER_TEMP/georgia-latest.osm.pbf.md5")"
-          if [[ ! "$checksum" =~ ^[0-9a-fA-F]{32}$ ]]; then
-            echo "Invalid Geofabrik checksum response" >&2
-            cat "$RUNNER_TEMP/georgia-latest.osm.pbf.md5" >&2
-            exit 1
-          fi
-          echo "md5=$checksum" >> "$GITHUB_OUTPUT"
-
-      - name: Restore generated Georgia map cache
+      # Restore a previously generated and verified map before contacting any
+      # OSM provider. A temporary upstream outage must not block ordinary app
+      # code builds. Weekly scheduled runs and manual refreshes update the map.
+      - name: Restore most recent generated Georgia map
         id: georgia-map-cache
         uses: actions/cache/restore@v4
         with:
           path: |
             app/src/main/assets/offline/georgia.map
             app/src/main/assets/offline/georgia-map-build.json
-          key: mapsforge-georgia-v0.25.0-${{ steps.georgia-source.outputs.md5 }}
+          key: mapsforge-georgia-v0.25.0-${{ runner.os }}-${{ github.run_id }}
+          restore-keys: |
+            mapsforge-georgia-v0.25.0-${{ runner.os }}-
+            mapsforge-georgia-v0.25.0-
+
+      - name: Validate restored map cache
+        id: map-state
+        run: |
+          if [[ -s app/src/main/assets/offline/georgia.map && -s app/src/main/assets/offline/georgia-map-build.json ]] && python3 scripts/verify_bundled_map.py; then
+            echo "exists=true" >> "$GITHUB_OUTPUT"
+            echo "A verified cached Georgia map is available."
+          else
+            echo "exists=false" >> "$GITHUB_OUTPUT"
+            rm -f app/src/main/assets/offline/georgia.map app/src/main/assets/offline/georgia-map-build.json
+            echo "No valid cached Georgia map is available; a fresh map will be generated."
+          fi
 
       - name: Install Osmosis
-        if: steps.georgia-map-cache.outputs.cache-hit != 'true'
+        if: ${{ success() && (steps.map-state.outputs.exists != 'true' || github.event_name == 'schedule' || inputs.refresh_map == true) }}
+        continue-on-error: true
         shell: bash
         run: |
           sudo apt-get update
           sudo apt-get install --yes osmosis
-
-          # Osmosis is a task-pipeline CLI, not a conventional --version CLI.
-          # Calling `osmosis --version` makes it interpret "version" as a task
-          # name and fail with: "Task type version doesn't exist."
           osmosis_package_version="$(dpkg-query -W -f='${Version}' osmosis)"
           if [[ -z "$osmosis_package_version" ]]; then
             echo "Could not determine the installed Osmosis package version." >&2
@@ -91,21 +97,36 @@ jobs:
           echo "Installed Osmosis Debian package: ${osmosis_package_version}"
 
       - name: Build Mapsforge map-writer plugin
-        if: steps.georgia-map-cache.outputs.cache-hit != 'true'
+        if: ${{ success() && (steps.map-state.outputs.exists != 'true' || github.event_name == 'schedule' || inputs.refresh_map == true) }}
+        continue-on-error: true
         run: bash scripts/install_mapsforge_writer.sh
 
       - name: Generate multilingual offline map of Georgia
-        if: steps.georgia-map-cache.outputs.cache-hit != 'true'
-        run: bash scripts/build_georgia_map.sh
+        id: generate-map
+        if: ${{ steps.map-state.outputs.exists != 'true' || github.event_name == 'schedule' || inputs.refresh_map == true }}
+        shell: bash
+        run: |
+          if bash scripts/build_georgia_map.sh; then
+            echo "map-refreshed=true" >> "$GITHUB_OUTPUT"
+          else
+            build_status=$?
+            if [[ -s app/src/main/assets/offline/georgia.map && -s app/src/main/assets/offline/georgia-map-build.json ]]; then
+              echo "::warning::Map refresh failed (exit ${build_status}); keeping the previously cached verified map."
+              echo "map-refreshed=false" >> "$GITHUB_OUTPUT"
+            else
+              echo "ERROR: Map generation failed and no previously verified map is available." >&2
+              exit "$build_status"
+            fi
+          fi
 
       - name: Cache generated Georgia map
-        if: success() && steps.georgia-map-cache.outputs.cache-hit != 'true'
+        if: ${{ success() && steps.generate-map.outputs.map-refreshed == 'true' }}
         uses: actions/cache/save@v4
         with:
           path: |
             app/src/main/assets/offline/georgia.map
             app/src/main/assets/offline/georgia-map-build.json
-          key: mapsforge-georgia-v0.25.0-${{ steps.georgia-source.outputs.md5 }}
+          key: mapsforge-georgia-v0.25.0-${{ runner.os }}-${{ steps.generate-map.outputs.provider }}-${{ steps.generate-map.outputs.source-md5 }}-${{ github.run_id }}
 
       - name: Verify generated country map and multilingual metadata
         run: python3 scripts/verify_bundled_map.py

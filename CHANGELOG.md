@@ -1,10 +1,21 @@
 # Changelog
 
-## 0.4.2 — fix Osmosis version check in map CI
+## 0.4.3 — resilient OSM source download and map cache
+
+- Fixed CI failure when GitHub-hosted runners cannot connect to `download.geofabrik.de` (`curl: (7)`).
+- Geofabrik remains the primary OSM data source; added the verified OpenStreetMap France Georgia-country extract as a fallback source.
+- Both sources are downloaded with retries and their PBF files are validated against the provider's MD5 checksum before map generation.
+- The generated map metadata now records the exact provider, source URL, checksum, retrieval time and map SHA-256.
+- CI restores the last verified generated map before accessing external OSM sources. Regular code changes can build with the cached map even during a provider outage.
+- Added weekly map refresh and a manual `refresh_map` option to GitHub Actions. A failed refresh keeps an existing verified map; a first build with no map cache still fails clearly rather than packaging an empty placeholder.
+- Map generation now writes temporary files and replaces the installed map only after a new map passes basic validation.
+- Updated application version to 0.4.3 (versionCode 7).
+
+## 0.4.2 — Osmosis version check
 
 - Fixed the map-generation workflow failing immediately after installing Osmosis.
-- Removed the unsupported `osmosis --version` invocation. Osmosis treats command-line arguments as pipeline tasks, so `version` was interpreted as an unknown task type.
-- The workflow now reads the installed Debian package version with `dpkg-query`, while the Mapsforge installer still validates plugin registration with the documented `osmosis --help` check.
+- Removed the unsupported `osmosis --version` invocation; Osmosis treats command-line arguments as pipeline tasks.
+- The workflow reads the installed Debian package version with `dpkg-query`; the Mapsforge installer validates plugin registration with `osmosis --help`.
 - Bumped Android `versionCode` to 6 and `versionName` to 0.4.2.
 
 ## 0.4.1 — map update safety
