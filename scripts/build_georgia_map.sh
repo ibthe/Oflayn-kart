@@ -23,7 +23,7 @@ fi
 # same country (not the US state of Georgia).
 SOURCE_CANDIDATES=(
   "geofabrik|Geofabrik OpenStreetMap extract: Georgia (country)|https://download.geofabrik.de/europe/georgia-latest.osm.pbf"
-  "openstreetmap-fr|OpenStreetMap France mirror: Georgia (country)|https://download.openstreetmap.fr/extracts/asia/georgia-latest.osm.pbf"
+  "openstreetmap-fr|OpenStreetMap France mirror: Georgia (country)|https://download.openstreetmap.fr/extracts/asia/georgia.osm.pbf"
 )
 
 curl_resilient() {
@@ -34,7 +34,7 @@ curl_resilient() {
     --retry-all-errors \
     --retry-delay 8 \
     --retry-max-time 420 \
-    --user-agent "GeorgiaOffline-map-builder/0.4.3 (OpenStreetMap data build)" \
+    --user-agent "GeorgiaOffline-map-builder/0.4.4 (OpenStreetMap data build)" \
     "$@"
 }
 
@@ -94,7 +94,7 @@ done
 
 if [[ -z "$SOURCE_PROVIDER" || ! -s "$PBF_FILE" ]]; then
   echo "ERROR: Could not download and verify Georgia OSM PBF from any configured source." >&2
-  echo "Tried Geofabrik and the OpenStreetMap France mirror. Check provider availability and retry the workflow." >&2
+  echo "Tried Geofabrik and the OpenStreetMap France mirror (stable georgia.osm.pbf filename). Check provider availability and retry the workflow." >&2
   exit 3
 fi
 

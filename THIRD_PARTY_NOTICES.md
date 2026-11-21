@@ -10,7 +10,7 @@ The Georgia country extract is obtained from Geofabrik: https://download.geofabr
 
 ## Mapsforge
 
-The Android application uses Mapsforge Android renderer and themes version 0.25.0 from Maven Central. The CI also builds the Mapsforge Map Writer 0.25.0 from the corresponding upstream source tag as an Osmosis plugin. Preserve upstream license and notices. Mapsforge is licensed under GNU Lesser General Public License v3.0, subject to the terms and notices in the exact release: https://github.com/mapsforge/mapsforge
+The Android application uses Mapsforge Android renderer and themes version 0.25.0 from Maven Central. The CI resolves the published `org.mapsforge:mapsforge-map-writer:0.25.0` Maven Central artifact and runtime dependencies into an Osmosis plugin JAR in an isolated Java-only Gradle project; it does not configure the full upstream Android/sample multi-project. Preserve upstream license and notices. Mapsforge is licensed under GNU Lesser General Public License v3.0, subject to the terms and notices in the exact release: https://github.com/mapsforge/mapsforge
 
 ## Osmosis
 

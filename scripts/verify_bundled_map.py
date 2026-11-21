@@ -36,7 +36,7 @@ def main() -> int:
     source_provider = manifest.get("sourceProvider")
     valid_sources = {
         "geofabrik": "https://download.geofabrik.de/europe/georgia-latest.osm.pbf",
-        "openstreetmap-fr": "https://download.openstreetmap.fr/extracts/asia/georgia-latest.osm.pbf",
+        "openstreetmap-fr": "https://download.openstreetmap.fr/extracts/asia/georgia.osm.pbf",
     }
     # Backward compatibility for a map cache produced by the original 0.4.2 pipeline.
     if source_provider is None and source_url == valid_sources["geofabrik"]:

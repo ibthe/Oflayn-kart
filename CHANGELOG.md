@@ -1,5 +1,15 @@
 # Changelog
 
+## 0.4.4 — corrected OSM fallback and isolated Mapsforge writer build
+
+- Corrected the OpenStreetMap France mirror URL to `georgia.osm.pbf`; the matching checksum endpoint is now `georgia.osm.pbf.md5`. The previous `georgia-latest.osm.pbf.md5` URL returned HTTP 404.
+- Updated map-manifest validation to accept the exact stable mirror URL while retaining the Geofabrik source URL for existing valid caches.
+- Replaced the full Mapsforge source-tree Gradle build with a small isolated Gradle project that resolves the published `org.mapsforge:mapsforge-map-writer:0.25.0` artifact and its runtime dependencies from Maven Central.
+- The writer package task merges runtime JARs and preserves the Osmosis plugin descriptor; CI checks that Osmosis registers `--mapfile-writer`.
+- Added a preflight script that verifies source/checksum URL pairing, the Maven-based writer builder, and fail-fast workflow configuration before network or map-generation work begins.
+- Removed ignored prerequisite failures; a failed Osmosis install or writer build now stops the job before attempting map generation.
+- Android `versionName` is `0.4.4` and `versionCode` is `8`. The real map generation and APK packaging still require confirmation in GitHub Actions.
+
 ## 0.4.3 — resilient OSM source download and map cache
 
 - Fixed CI failure when GitHub-hosted runners cannot connect to `download.geofabrik.de` (`curl: (7)`).

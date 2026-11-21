@@ -203,3 +203,38 @@ Osmosis — CLI для запуска задач-потоков (pipeline). Ар
 ### Что ещё не подтверждено
 
 Этот журнал не дошёл до сборки Mapsforge Map Writer и создания `georgia.map`. Следующий запуск должен пройти установку Osmosis и продолжить на plugin build; возможные ошибки последующих этапов можно определить только по новому CI log.
+
+
+---
+
+## CI 0.4.4 — ошибки резервного PBF URL и полной сборки Mapsforge (21 ноября 2026)
+
+### Что прошло успешно
+
+- Android SDK Platform 36 и Build Tools 36.0.0 установились.
+- Исходный Android manifest прошёл проверку.
+- `:app:testDebugUnitTest` завершился `BUILD SUCCESSFUL`.
+- Шаги подготовки карты дошли до Map Writer и загрузки OSM PBF.
+
+### Ошибка 1: неверное имя файла контрольной суммы зеркала
+
+В шаге генерации карты Geofabrik не принимал HTTPS-соединение (`curl: (7)`), после чего сценарий переходил на зеркало OpenStreetMap France. Там для PBF `georgia-latest.osm.pbf` запрашивался `georgia-latest.osm.pbf.md5`, но индекс зеркала публикует стабильную пару `georgia.osm.pbf` и `georgia.osm.pbf.md5`. Поэтому сервер возвращал HTTP 404.
+
+Исправление: резервный источник теперь задан как `https://download.openstreetmap.fr/extracts/asia/georgia.osm.pbf`. Скрипт формирует checksum URL добавлением `.md5`, то есть получает существующий `https://download.openstreetmap.fr/extracts/asia/georgia.osm.pbf.md5`. Проверка metadata карты также принимает именно этот источник.
+
+### Ошибка 2: сборка полного Mapsforge multi-project
+
+Предыдущий `install_mapsforge_writer.sh` клонировал полный репозиторий Mapsforge 0.25.0 и запускал `:mapsforge-map-writer:fatJar`. Gradle при конфигурации корневого multi-project дополнительно настраивал Android/sample-модули и пытался разрешить десятки несвязанных старых зависимостей. В логе видны ошибки разрешения `kotlin-stdlib`, `asm`, `jdom2`, `commons-codec`, Jetifier и Android Gradle Plugin.
+
+Исправление: сборка Writer перенесена в отдельный небольшой Gradle-проект с `java` plugin и единственной прямой зависимостью `org.mapsforge:mapsforge-map-writer:0.25.0` из Maven Central. Из `runtimeClasspath` собирается fat JAR для Osmosis; сохраняется `osmosis-plugins.conf`, а затем `osmosis --help` проверяет регистрацию `--mapfile-writer`. Этот путь использует опубликованный writer artifact и его фактические runtime-зависимости, не конфигурируя Android/sample-проекты полного upstream репозитория.
+
+### Дополнительная защита
+
+- В workflow добавлен `scripts/verify_map_build_config.py`: проверяет точный резервный PBF URL, соответствующий checksum URL, Maven-based isolated writer build и отсутствие скрытых `continue-on-error`.
+- Ошибки установки Osmosis или Writer больше не игнорируются; следующий шаг генерации карты не запускается после неуспешного prerequisite.
+- В `verify_bundled_map.py` обновлён список допустимых source URL.
+- `versionName` остаётся `0.4.4`, `versionCode` — `8`.
+
+### Что пока не подтверждено
+
+Новый workflow ещё не запускался с этими изменениями. Статические проверки проекта и скриптов можно выполнить локально в этом пакете, но реальное разрешение Maven-зависимостей, регистрацию Osmosis plugin, создание `georgia.map` и APK должен подтвердить GitHub Actions. Нельзя считать APK собранным до зелёного CI-run и появления artifact.

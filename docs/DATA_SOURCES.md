@@ -43,10 +43,14 @@ Geofabrik Georgia extract здесь означает страну Грузию 
 Для каждого будущего набора хранить source URL, дату получения, исходную контрольную сумму, лицензию, attribution, bbox, SHA-256, версию схемы и notes. CI map manifest уже содержит source URL, UTC timestamp, source PBF MD5, map SHA-256, размер, версию Map Writer, ODbL и attribution.
 
 
-## Резервный источник выгрузки страны Georgia (CI 0.4.3)
+## Резервный источник выгрузки страны Georgia (CI 0.4.4)
 
 Основной источник: `https://download.geofabrik.de/europe/georgia-latest.osm.pbf`.
 
-Резервное зеркало: `https://download.openstreetmap.fr/extracts/asia/georgia-latest.osm.pbf`. Каталог `asia` — способ классификации этого зеркала; сама выгрузка соответствует стране Georgia на Кавказе. В CI каждый `.osm.pbf` проверяется по `.md5` от того же провайдера. Источник и MD5 записываются в `georgia-map-build.json`.
+Резервное зеркало: `https://download.openstreetmap.fr/extracts/asia/georgia.osm.pbf`. Каталог `asia` — способ классификации этого зеркала; сама выгрузка соответствует стране Georgia на Кавказе. В CI PBF проверяется по MD5 от того же провайдера; для резервного источника проверенный URL checksum — `https://download.openstreetmap.fr/extracts/asia/georgia.osm.pbf.md5`. Источник и MD5 записываются в `georgia-map-build.json`.
 
 Резервный источник может обновляться реже основного. Обычные сборки используют последнюю проверенную карту из GitHub Actions cache; расписание обновляет её раз в неделю, а ручной запуск поддерживает флаг `refresh_map`.
+
+## Сборка Mapsforge Writer в CI
+
+Для Osmosis используется опубликованный на Maven Central артефакт `org.mapsforge:mapsforge-map-writer:0.25.0` с его runtime-зависимостями. CI собирает отдельный fat JAR в изолированном Gradle-проекте, не конфигурируя все Android/sample-проекты полного репозитория Mapsforge. В объединённый JAR должен попасть `osmosis-plugins.conf`, а `osmosis --help` проверяет регистрацию `--mapfile-writer`.
