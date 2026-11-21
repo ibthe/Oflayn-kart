@@ -184,6 +184,7 @@ osmosis \
   --read-xml file="$SMOKE_OSM" \
   --mapfile-writer file="$SMOKE_MAP" \
       type=hd \
+      bbox=41.70,44.81,41.73,44.84 \
       map-start-position=41.7151,44.8271 \
       map-start-zoom=12
 SMOKE_STATUS=$?

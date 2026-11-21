@@ -54,3 +54,12 @@ Geofabrik Georgia extract здесь означает страну Грузию 
 ## Сборка Mapsforge Writer в CI
 
 Для Osmosis используется опубликованный на Maven Central артефакт `org.mapsforge:mapsforge-map-writer:0.25.0`. На GitHub-hosted Ubuntu runner JAR устанавливается в `/usr/share/osmosis/`, а строка `load /usr/share/osmosis/<writer-jar>` добавляется в `/etc/osmosis/plexus.conf`, поскольку Debian launcher запускает Osmosis из системного Plexus classpath. Успешность проверяется реальным smoke-test `--read-xml` → `--mapfile-writer`, не командой `osmosis --help`. с его runtime-зависимостями. CI собирает отдельный fat JAR в изолированном Gradle-проекте, не конфигурируя все Android/sample-проекты полного репозитория Mapsforge. В объединённый JAR должен попасть `osmosis-plugins.conf`, а реальная smoke-конвертация проверяет регистрацию и выполнение `--mapfile-writer`.
+
+
+## Явная область карты Грузии (Mapsforge bbox)
+
+В CI Mapsforge Map Writer вызывается с явным параметром `bbox=41.00,39.95,43.65,46.80` в порядке `minLatitude,minLongitude,maxLatitude,maxLongitude`. Это необходимо, поскольку PBF-зеркало в CI не предоставило writer пригодную bounding box из заголовка, и Mapsforge завершил процесс с `No valid bounding box found in input data`.
+
+Диапазон основан на опубликованных крайних географических точках Грузии из Statistical publication 2024 Национальной службы статистики Грузии (Geostat): юг 41°02′58″ N, запад 40°00′30″ E, север 43°35′25″ N, восток 46°44′32″ E. Использован небольшой запас примерно 0,05° по каждой стороне, чтобы не отсекать граничные объекты. Источник: https://www.geostat.ge/media/67768/Yearbook_2024.pdf (раздел 1.2, стр. 11).
+
+Параметр можно переопределить переменной окружения `GEORGIA_BBOX` при ручной сборке, но порядок координат должен сохраняться и значение должно быть четырьмя десятичными числами без пробелов.

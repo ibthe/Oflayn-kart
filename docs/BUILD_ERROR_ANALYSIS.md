@@ -299,3 +299,40 @@ Mapsforge plugin уже был найден и загружен: констру�
 4. Повышен Android `versionCode` до 10, `versionName` — 0.4.6.
 
 Фактический smoke-test на Ubuntu/Osmosis должен быть повторно выполнен GitHub Actions. До его успеха нельзя утверждать, что карта или APK с картой готовы.
+
+
+## Ошибка 0.4.6 — отсутствующая граница (bbox) в заголовке PBF (2026-11-21)
+
+### Что в этом CI run прошло успешно
+
+- Android unit tests: `BUILD SUCCESSFUL` для `:app:testDebugUnitTest`.
+- OSM France PBF Грузии скачан полностью (109.4 MB) и проверен по MD5.
+- Mapsforge Map Writer 0.25.0 загружен Osmosis.
+- Реальный writer smoke-test завершился успешно и создал тестовый `.map` размером 325 байт.
+
+### Симптом
+
+При обработке полного PBF Mapsforge начал чтение и завершился:
+
+```text
+SEVERE: No valid bounding box found in input data.
+Please provide valid bounding box via command line parameter 'bbox=minLat,minLon,maxLat,maxLon'.
+IllegalStateException: tile based data store not initialized, missing bounding box information in input data
+```
+
+### Причина
+
+Выгрузка PBF, полученная из резервного зеркала, не предоставила Mapsforge пригодную bounding box из header. Writer требует bbox либо из данных, либо как явный параметр. Предыдущая команда передавала `type`, стартовую позицию и языки, но не передавала `bbox`.
+
+### Исправление в 0.4.7
+
+1. В `scripts/build_georgia_map.sh` добавлен `GEORGIA_BBOX`, по умолчанию `41.00,39.95,43.65,46.80`.
+2. В команду `--mapfile-writer` передаётся `bbox="$GEORGIA_BBOX"`.
+3. Smoke-test в `scripts/install_mapsforge_writer.sh` теперь тоже передаёт явный небольшой bbox вокруг тестовых объектов.
+4. `scripts/verify_map_build_config.py` проверяет наличие правильного bbox в полном map build и smoke-test.
+5. В `georgia-map-build.json` записывается bounding box и порядок координат.
+6. Диапазон основан на Geostat Yearbook 2024, стр. 11, крайние точки Грузии: юг 41°02′58″ N, запад 40°00′30″ E, север 43°35′25″ N, восток 46°44′32″ E; добавлен небольшой запас.
+
+### Что ещё не подтверждено
+
+Текущий лог подтверждает предыдущие этапы, но не новую версию. После обновления нужно снова выполнить GitHub Actions. Полная генерация карты Грузии и итоговый APK будут считаться подтверждёнными только после успешного завершения этого job.

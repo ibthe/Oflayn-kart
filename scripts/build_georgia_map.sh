@@ -2,6 +2,11 @@
 set -euo pipefail
 
 MAPSFORGE_VERSION="${MAPSFORGE_VERSION:-0.25.0}"
+# Georgia country extent with a small safety margin, in Mapsforge order:
+# minLatitude,minLongitude,maxLatitude,maxLongitude.
+# The OpenStreetMap France PBF mirror may omit the PBF header bounding box;
+# pass this explicitly so Mapsforge does not depend on source header metadata.
+GEORGIA_BBOX="${GEORGIA_BBOX:-41.00,39.95,43.65,46.80}"
 WORK_DIR="${RUNNER_TEMP:-/tmp}/georgia-map-build"
 PBF_FILE="${OSM_PBF_FILE:-${WORK_DIR}/georgia-latest.osm.pbf}"
 OUTPUT_FILE="${MAP_OUTPUT_FILE:-$(pwd)/app/src/main/assets/offline/georgia.map}"
@@ -11,6 +16,18 @@ MANIFEST_FILE="${OUTPUT_DIR}/georgia-map-build.json"
 MANIFEST_TEMP="${MANIFEST_FILE}.new"
 
 mkdir -p "$WORK_DIR" "$OUTPUT_DIR"
+
+if [[ ! "$GEORGIA_BBOX" =~ ^[0-9]+([.][0-9]+)?,[0-9]+([.][0-9]+)?,[0-9]+([.][0-9]+)?,[0-9]+([.][0-9]+)?$ ]]; then
+  echo "ERROR: GEORGIA_BBOX must be minLat,minLon,maxLat,maxLon with decimal degrees; got: ${GEORGIA_BBOX}" >&2
+  exit 2
+fi
+IFS=',' read -r BBOX_MIN_LAT BBOX_MIN_LON BBOX_MAX_LAT BBOX_MAX_LON <<< "$GEORGIA_BBOX"
+if ! awk -v min_lat="$BBOX_MIN_LAT" -v min_lon="$BBOX_MIN_LON" \
+       -v max_lat="$BBOX_MAX_LAT" -v max_lon="$BBOX_MAX_LON" \
+       'BEGIN { exit !(min_lat >= -90 && max_lat <= 90 && min_lon >= -180 && max_lon <= 180 && min_lat < max_lat && min_lon < max_lon) }'; then
+  echo "ERROR: GEORGIA_BBOX coordinates are out of range or not ordered correctly." >&2
+  exit 2
+fi
 
 if ! command -v osmosis >/dev/null 2>&1; then
   echo "ERROR: Osmosis is required. Run scripts/install_mapsforge_writer.sh after installing it." >&2
@@ -34,7 +51,7 @@ curl_resilient() {
     --retry-all-errors \
     --retry-delay 8 \
     --retry-max-time 420 \
-    --user-agent "GeorgiaOffline-map-builder/0.4.6 (OpenStreetMap data build)" \
+    --user-agent "GeorgiaOffline-map-builder/0.4.7 (OpenStreetMap data build)" \
     "$@"
 }
 
@@ -105,6 +122,7 @@ osmosis \
   --rb file="$PBF_FILE" \
   --mw file="$MAP_TEMP" \
       type=hd \
+      bbox="$GEORGIA_BBOX" \
       map-start-position=41.7151,44.8271 \
       map-start-zoom=9 \
       preferred-languages=en,ru,ka \
@@ -119,13 +137,13 @@ fi
 MAP_SHA256="$(sha256sum "$MAP_TEMP" | awk '{ print $1 }')"
 MAP_SIZE="$(stat -c '%s' "$MAP_TEMP")"
 RETRIEVED_AT="$(date -u +'%Y-%m-%dT%H:%M:%SZ')"
-python3 - "$MANIFEST_TEMP" "$MAP_SHA256" "$MAP_SIZE" "$EXPECTED_MD5" "$RETRIEVED_AT" "$MAPSFORGE_VERSION" "$SOURCE_PROVIDER" "$SOURCE_LABEL" "$SOURCE_URL" <<'PY'
+python3 - "$MANIFEST_TEMP" "$MAP_SHA256" "$MAP_SIZE" "$EXPECTED_MD5" "$RETRIEVED_AT" "$MAPSFORGE_VERSION" "$SOURCE_PROVIDER" "$SOURCE_LABEL" "$SOURCE_URL" "$GEORGIA_BBOX" <<'PY'
 import json
 import sys
 from pathlib import Path
 
 (path, map_sha256, map_size, pbf_md5, retrieved_at, writer_version,
- source_provider, source_label, source_url) = sys.argv[1:]
+ source_provider, source_label, source_url, map_bbox) = sys.argv[1:]
 manifest = {
     "datasetId": "georgia-openstreetmap-mapsforge",
     "datasetVersion": retrieved_at,
@@ -135,6 +153,8 @@ manifest = {
     "sourceUrl": source_url,
     "sourcePbfMd5": pbf_md5,
     "mapFile": "georgia.map",
+    "mapBoundingBox": map_bbox,
+    "mapBoundingBoxOrder": ["minLatitude", "minLongitude", "maxLatitude", "maxLongitude"],
     "mapFileSha256": map_sha256,
     "mapFileSizeBytes": int(map_size),
     "mapWriter": "Mapsforge Map Writer",

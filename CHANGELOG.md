@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.4.7 — explicit Georgia bounding box for Mapsforge generation
+
+- Fixed the real country-map generation failure from CI: Mapsforge Writer started reading the verified 109.4 MB Georgia PBF, then aborted because the PBF header did not provide a usable bounding box.
+- Pass an explicit Georgia-country bounding box to `--mapfile-writer`: `41.00,39.95,43.65,46.80` in the documented `minLat,minLon,maxLat,maxLon` order. The values enclose the extreme points published by Geostat with a small safety margin.
+- The Mapsforge writer smoke test now also passes an explicit test bbox, so the bbox argument is exercised before the full extract is processed.
+- Added preflight checks that require the full-map bbox and smoke-test bbox to remain present.
+- The previous CI run confirms: Android unit tests passed; the OSM mirror download and checksum verification passed; Mapsforge Writer 0.25.0 loaded and passed its real smoke test. The only failure was the missing bbox during full-country map generation.
+- Bumped Android `versionName` to `0.4.7` and `versionCode` to `11`.
+
 ## 0.4.6 — valid OSM timestamp metadata in writer smoke fixture
 
 - Fixed the real Mapsforge writer smoke test failure: the test OSM XML entities now include mandatory `timestamp` attributes in ISO-8601 UTC form.
