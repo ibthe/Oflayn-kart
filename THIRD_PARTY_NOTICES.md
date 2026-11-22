@@ -27,3 +27,7 @@ BRouter is a planned offline-routing candidate. It is not yet included in the AP
 ## Copernicus DEM / Sentinel (planned)
 
 Copernicus data products have their own product-specific attribution and redistribution conditions. No Copernicus raster data is included in v0.4.0. See `docs/DATA_SOURCES.md` before adding any derivative product.
+
+## Inter typeface
+
+The app bundles Inter and Inter Display (Regular, Medium, SemiBold, Light), subset to Latin and Cyrillic glyphs and installed as `app/src/main/res/font/*.otf`. Copyright 2016–2023 The Inter Project Authors (https://github.com/rsms/inter). Licensed under the SIL Open Font License 1.1 (https://openfontlicense.org). The upstream copyright and license statement is kept in `app/src/main/assets/licenses/Inter-LICENSE.txt`. The subset keeps the original family names; the fonts are not sold on their own.

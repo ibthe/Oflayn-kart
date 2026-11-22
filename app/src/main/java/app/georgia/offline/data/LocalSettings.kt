@@ -19,11 +19,10 @@ class LocalSettings(context: Context) {
     )
         private set
 
-    var appTheme by mutableStateOf(preferences.getString("app_theme", "system") ?: "system")
-        private set
 
-    var palette by mutableStateOf(
-        preferences.getString("color_palette", "mist")?.takeIf { it in PALETTES } ?: "mist"
+    /** Chosen colour theme id, or null until the person picks one (then the phone's light/dark mode decides). */
+    var palette by mutableStateOf<String?>(
+        preferences.getString("color_palette", null)?.takeIf { it in PALETTES }
     )
         private set
 
@@ -59,12 +58,6 @@ class LocalSettings(context: Context) {
         }
         enabledLanguages = updated
         preferences.edit().putBoolean("language_$code", enabled).apply()
-    }
-
-    fun updateAppTheme(value: String) {
-        if (value !in APP_THEMES) return
-        appTheme = value
-        preferences.edit().putString("app_theme", value).apply()
     }
 
     fun updatePalette(value: String) {
@@ -136,7 +129,6 @@ class LocalSettings(context: Context) {
 
     companion object {
         val SUPPORTED_LANGUAGES = setOf("en", "ru", "ka")
-        val APP_THEMES = setOf("system", "light", "dark")
         val PALETTES = setOf("mist", "sage", "sand", "dusk", "graphite")
         val MAP_THEMES = setOf("classic", "outdoor", "motorider", "biker")
     }

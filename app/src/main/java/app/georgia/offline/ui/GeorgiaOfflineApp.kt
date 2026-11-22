@@ -3,6 +3,8 @@ package app.georgia.offline.ui
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.horizontalScroll
@@ -13,7 +15,11 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.RadioButton
 import androidx.compose.material3.TextButton
+import androidx.compose.material3.OutlinedTextFieldDefaults
+import androidx.compose.material3.FilterChipDefaults
 import androidx.compose.ui.draw.clip
+import androidx.compose.foundation.layout.RowScope
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -70,28 +76,27 @@ import app.georgia.offline.ui.theme.AppPalettes
 import app.georgia.offline.ui.theme.GeorgiaTheme
 import app.georgia.offline.ui.theme.Radius
 import app.georgia.offline.ui.theme.Space
+import app.georgia.offline.ui.theme.defaultPaletteId
 
-private enum class AppTab(val label: String, val symbol: String) {
-    MAP("Карта", "▦"),
-    DISCOVER("Места", "⌖"),
-    ROUTE("Маршрут", "➤"),
-    SAVED("Моё", "★"),
-    TOOLS("Утилиты", "⚒"),
-    SETTINGS("Настройки", "⚙")
+private enum class AppTab(val label: String) {
+    MAP("Карта"),
+    DISCOVER("Места"),
+    TOOLS("Утилиты"),
+    SETTINGS("Ещё")
 }
 
 @Composable
 fun GeorgiaOfflineApp(settings: LocalSettings) {
     var selectedTab by rememberSaveable { mutableStateOf(AppTab.MAP.name) }
-    GeorgiaTheme(themeMode = settings.appTheme, palette = settings.palette) {
+    // A tab name saved by an older version (for example the removed ROUTE tab) falls back to the map.
+    val currentTab = AppTab.entries.firstOrNull { it.name == selectedTab } ?: AppTab.MAP
+    GeorgiaTheme(palette = settings.palette) {
         Scaffold(
-            bottomBar = { MinimalNavBar(selected = selectedTab, onSelect = { selectedTab = it }) }
+            bottomBar = { MinimalNavBar(selected = currentTab.name, onSelect = { selectedTab = it }) }
         ) { padding ->
-            when (AppTab.valueOf(selectedTab)) {
+            when (currentTab) {
                 AppTab.MAP -> MapScreen(Modifier.padding(padding), settings)
                 AppTab.DISCOVER -> DiscoverScreen(Modifier.padding(padding), settings)
-                AppTab.ROUTE -> RouteScreen(Modifier.padding(padding))
-                AppTab.SAVED -> SavedScreen(Modifier.padding(padding))
                 AppTab.TOOLS -> ToolsScreen(Modifier.padding(padding), settings)
                 AppTab.SETTINGS -> SettingsScreen(Modifier.padding(padding), settings)
             }
@@ -109,13 +114,40 @@ internal fun PageColumn(modifier: Modifier = Modifier, content: @Composable Colu
     )
 }
 
+/** The one surface used for every block of content: hairline border, no shadow, one radius. */
+@Composable
+internal fun Panel(modifier: Modifier = Modifier, padding: Dp = Space.card, content: @Composable ColumnScope.() -> Unit) {
+    Surface(
+        modifier = modifier.fillMaxWidth(),
+        shape = RoundedCornerShape(Radius.card),
+        color = MaterialTheme.colorScheme.surfaceContainerHighest,
+        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant)
+    ) {
+        Column(
+            Modifier.fillMaxWidth().padding(padding),
+            verticalArrangement = if (padding == 0.dp) Arrangement.Top else Arrangement.spacedBy(Space.s),
+            content = content
+        )
+    }
+}
+
+@Composable
+private fun SectionLabel(text: String) {
+    Text(
+        text,
+        modifier = Modifier.padding(start = Space.xs, top = Space.xs),
+        style = MaterialTheme.typography.titleSmall,
+        color = MaterialTheme.colorScheme.onSurfaceVariant
+    )
+}
+
 @Composable
 private fun MinimalNavBar(selected: String, onSelect: (String) -> Unit) {
     Surface(color = MaterialTheme.colorScheme.background) {
         Column {
             HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
             Row(
-                Modifier.fillMaxWidth().navigationBarsPadding().padding(horizontal = Space.xs, vertical = Space.xxs),
+                Modifier.fillMaxWidth().navigationBarsPadding().padding(horizontal = Space.s, vertical = Space.xs),
                 horizontalArrangement = Arrangement.SpaceBetween
             ) {
                 AppTab.entries.forEach { tab ->
@@ -131,11 +163,10 @@ private fun MinimalNavBar(selected: String, onSelect: (String) -> Unit) {
                         )
                         Text(
                             tab.label,
-                            style = MaterialTheme.typography.labelSmall,
+                            style = MaterialTheme.typography.labelMedium,
                             color = if (active) MaterialTheme.colorScheme.onSurface else MaterialTheme.colorScheme.onSurfaceVariant,
-                            fontWeight = if (active) FontWeight.SemiBold else FontWeight.Normal,
-                            maxLines = 1,
-                            overflow = TextOverflow.Clip
+                            fontWeight = if (active) FontWeight.SemiBold else FontWeight.Medium,
+                            maxLines = 1
                         )
                     }
                 }
@@ -144,21 +175,21 @@ private fun MinimalNavBar(selected: String, onSelect: (String) -> Unit) {
     }
 }
 
+/** Frosted pill that floats over the map. */
 @Composable
-private fun MapHeader() {
-    Row(
-        Modifier.fillMaxWidth().padding(bottom = Space.xs),
-        horizontalArrangement = Arrangement.SpaceBetween,
-        verticalAlignment = Alignment.CenterVertically
+private fun MapChip(modifier: Modifier = Modifier, onClick: (() -> Unit)? = null, content: @Composable RowScope.() -> Unit) {
+    Surface(
+        modifier = modifier.clip(CircleShape).let { if (onClick != null) it.clickable(onClick = onClick) else it },
+        shape = CircleShape,
+        color = MaterialTheme.colorScheme.background.copy(alpha = 0.92f),
+        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant)
     ) {
-        Column(verticalArrangement = Arrangement.spacedBy(Space.xxs)) {
-            Text("Грузия", style = MaterialTheme.typography.headlineMedium)
-            Text("Офлайн-атлас", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
-        }
-        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(Space.xs)) {
-            Box(Modifier.size(8.dp).clip(CircleShape).background(MaterialTheme.colorScheme.tertiary))
-            Text("Без сети", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
-        }
+        Row(
+            Modifier.padding(horizontal = Space.m, vertical = Space.xs + Space.xxs / 2),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(Space.xs),
+            content = content
+        )
     }
 }
 
@@ -278,66 +309,55 @@ private fun MapScreen(modifier: Modifier, settings: LocalSettings) {
     var showDetails by rememberSaveable { mutableStateOf(false) }
 
     if (mapFile != null) {
-        Column(
-            modifier.fillMaxSize().padding(start = Space.screen, end = Space.screen, top = Space.m),
-            verticalArrangement = Arrangement.spacedBy(Space.m)
+        // The map is the interface: it fills the screen and all chrome floats over it.
+        Box(
+            modifier.fillMaxSize().padding(horizontal = Space.s, vertical = Space.xs).clip(RoundedCornerShape(Radius.card))
         ) {
-            MapHeader()
-            Box(Modifier.fillMaxWidth().weight(1f).clip(RoundedCornerShape(Radius.card))) {
-                MapsforgeMapSurface(
-                    mapFile = mapFile,
-                    preferredLanguage = preferredLanguage,
-                    mapTheme = settings.mapTheme,
-                    modifier = Modifier.fillMaxSize()
-                )
-                if (showDetails) {
-                    Surface(modifier = Modifier.fillMaxSize(), color = MaterialTheme.colorScheme.background.copy(alpha = 0.97f)) {
-                        Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(Space.card)) {
-                            MapDetails(settings, true, preferredLanguage, isImporting, importMessage, importError, openPicker)
-                        }
+            MapsforgeMapSurface(
+                mapFile = mapFile,
+                preferredLanguage = preferredLanguage,
+                mapTheme = settings.mapTheme,
+                modifier = Modifier.fillMaxSize()
+            )
+            if (showDetails) {
+                Surface(modifier = Modifier.fillMaxSize(), color = MaterialTheme.colorScheme.background.copy(alpha = 0.97f)) {
+                    Column(
+                        Modifier.fillMaxSize().verticalScroll(rememberScrollState())
+                            .padding(start = Space.card, end = Space.card, top = Space.card, bottom = Space.xl + Space.l)
+                    ) {
+                        Text("О карте", style = MaterialTheme.typography.headlineSmall, modifier = Modifier.padding(bottom = Space.m))
+                        MapDetails(settings, true, preferredLanguage, isImporting, importMessage, importError, openPicker)
                     }
                 }
-            }
-            Row(
-                Modifier.fillMaxWidth().padding(bottom = Space.xxs),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically
-            ) {
+            } else {
+                MapChip(Modifier.align(Alignment.TopStart).padding(Space.s)) {
+                    Box(Modifier.size(8.dp).clip(CircleShape).background(MaterialTheme.colorScheme.tertiary))
+                    Text("Без сети", style = MaterialTheme.typography.labelMedium)
+                }
                 Text(
-                    "© OpenStreetMap contributors",
+                    "© OpenStreetMap",
+                    modifier = Modifier.align(Alignment.BottomStart).padding(start = Space.m, bottom = Space.m),
                     style = MaterialTheme.typography.labelSmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f)
                 )
-                TextButton(onClick = { showDetails = !showDetails }) { Text(if (showDetails) "К карте" else "О карте") }
+            }
+            MapChip(Modifier.align(Alignment.BottomEnd).padding(Space.s), onClick = { showDetails = !showDetails }) {
+                Text(if (showDetails) "Закрыть" else "О карте", style = MaterialTheme.typography.labelMedium)
             }
         }
     } else {
         PageColumn(modifier) {
-            MapHeader()
-            Card {
-                Column(Modifier.fillMaxWidth().padding(Space.card), verticalArrangement = Arrangement.spacedBy(Space.xs)) {
-                    Text("Карта не подключена", style = MaterialTheme.typography.titleMedium)
-                    Text(
-                        "В этой сборке нет встроенного файла карты. Полная сборка GitHub Actions добавляет его в APK; можно также выбрать Mapsforge .map-файл Грузии вручную.",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
-                }
+            PageTitle("Карта")
+            Panel {
+                Text("Карта не подключена", style = MaterialTheme.typography.titleMedium)
+                Text(
+                    "В этой сборке нет встроенного файла карты. Полная сборка GitHub Actions добавляет его в APK; можно также выбрать Mapsforge .map-файл Грузии вручную.",
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
             }
             MapDetails(settings, false, preferredLanguage, isImporting, importMessage, importError, openPicker)
         }
-    }
-}
-
-@Composable
-private fun StatusPill(text: String) {
-    Surface(shape = CircleShape, color = MaterialTheme.colorScheme.surfaceVariant) {
-        Text(
-            text,
-            modifier = Modifier.padding(horizontal = Space.s, vertical = Space.xs),
-            style = MaterialTheme.typography.labelSmall,
-            color = MaterialTheme.colorScheme.onSurfaceVariant
-        )
     }
 }
 
@@ -381,22 +401,27 @@ private fun DiscoverScreen(modifier: Modifier, settings: LocalSettings) {
     }
 
     val categories = listOf(
-        "all" to "Все", "tourism" to "Достопримечательности", "historic" to "История",
+        "all" to "Все", "tourism" to "Туризм", "historic" to "История",
         "nature" to "Природа", "food" to "Еда", "lodging" to "Жильё",
         "medical" to "Медицина", "transport" to "Транспорт", "services" to "Сервисы",
-        "shops" to "Магазины", "settlement" to "Населённые пункты"
+        "shops" to "Магазины", "settlement" to "Города и села"
     )
 
     PageColumn(modifier) {
-        PageTitle("Места и POI", "Локальный справочник Грузии · поиск на трёх языках")
+        PageTitle("Места")
         OutlinedTextField(
             value = query,
             onValueChange = { query = it },
             modifier = Modifier.fillMaxWidth(),
             shape = RoundedCornerShape(50),
-            label = { Text("Поиск места") },
-            placeholder = { Text("Название, адрес, телефон, сайт или ქართულად") },
-            singleLine = true
+            placeholder = { Text("Название, адрес, телефон, ქართულად") },
+            singleLine = true,
+            colors = OutlinedTextFieldDefaults.colors(
+                focusedContainerColor = MaterialTheme.colorScheme.surfaceContainerHighest,
+                unfocusedContainerColor = MaterialTheme.colorScheme.surfaceContainerHighest,
+                focusedBorderColor = MaterialTheme.colorScheme.primary,
+                unfocusedBorderColor = MaterialTheme.colorScheme.outlineVariant
+            )
         )
         Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(Space.xs)) {
             categories.forEach { (id, label) ->
@@ -404,16 +429,20 @@ private fun DiscoverScreen(modifier: Modifier, settings: LocalSettings) {
                     selected = selectedCategory == id,
                     onClick = { selectedCategory = id },
                     label = { Text(label) },
-                    shape = RoundedCornerShape(50)
+                    shape = RoundedCornerShape(50),
+                    colors = FilterChipDefaults.filterChipColors(
+                        selectedContainerColor = MaterialTheme.colorScheme.primaryContainer,
+                        selectedLabelColor = MaterialTheme.colorScheme.onPrimaryContainer
+                    )
                 )
             }
         }
         Row(
-            Modifier.fillMaxWidth(),
+            Modifier.fillMaxWidth().padding(horizontal = Space.xs),
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(Space.s)
         ) {
-            if (loading) CircularProgressIndicator(modifier = Modifier.size(18.dp), strokeWidth = 2.dp)
+            if (loading) CircularProgressIndicator(modifier = Modifier.size(14.dp), strokeWidth = 2.dp)
             Text(
                 statusMessage,
                 style = MaterialTheme.typography.bodySmall,
@@ -423,21 +452,24 @@ private fun DiscoverScreen(modifier: Modifier, settings: LocalSettings) {
         if (database == null) {
             InfoCard(
                 "Офлайн-справочник пока не встроен",
-                "После успешной генерации карты GitHub Actions добавит локальную SQLite-базу POI в APK. Она будет включать только объекты, присутствующие в OpenStreetMap; отсутствующие переводы автоматически не создаются."
+                "После успешной генерации карты GitHub Actions добавит локальную SQLite-базу POI в APK. Она включает только объекты из OpenStreetMap; отсутствующие переводы автоматически не создаются."
             )
         } else if (results.isEmpty() && !loading) {
             InfoCard("Ничего не найдено", "Попробуй другое написание или выбери категорию «Все».")
         } else {
-            results.forEach { poi ->
-                Card {
-                    Column(Modifier.fillMaxWidth().padding(Space.card), verticalArrangement = Arrangement.spacedBy(Space.xxs)) {
-                        val labels = poi.namesFor(settings.enabledLanguages)
-                        labels.forEachIndexed { index, label ->
-                            Text(
-                                label,
-                                style = if (index == 0) MaterialTheme.typography.titleMedium else MaterialTheme.typography.bodyMedium,
-                                fontWeight = if (index == 0) FontWeight.SemiBold else FontWeight.Normal
-                            )
+            Panel(padding = 0.dp) {
+                results.forEachIndexed { index, poi ->
+                    if (index > 0) HorizontalDivider(Modifier.padding(horizontal = Space.card), color = MaterialTheme.colorScheme.outlineVariant)
+                    Column(
+                        Modifier.fillMaxWidth().padding(horizontal = Space.card, vertical = Space.m),
+                        verticalArrangement = Arrangement.spacedBy(Space.xxs)
+                    ) {
+                        poi.namesFor(settings.enabledLanguages).forEachIndexed { nameIndex, label ->
+                            if (nameIndex == 0) {
+                                Text(label, style = MaterialTheme.typography.titleMedium)
+                            } else {
+                                Text(label, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                            }
                         }
                         Text(
                             "${poiCategoryLabel(poi.category)} · ${PoiLabels.subcategoryLabel(poi.subcategory)}",
@@ -451,19 +483,23 @@ private fun DiscoverScreen(modifier: Modifier, settings: LocalSettings) {
                                 color = MaterialTheme.colorScheme.onSurfaceVariant
                             )
                         }
-                        Text(
-                            "${"%.5f".format(java.util.Locale.US, poi.latitude)}, ${"%.5f".format(java.util.Locale.US, poi.longitude)}",
-                            style = MaterialTheme.typography.labelMedium
-                        )
-                        OutlinedButton(
-                            onClick = { copyToClipboard(context, GeoFormatting.decimalCoordinates(poi.latitude, poi.longitude)) }
-                        ) { Text("Копировать координаты") }
+                        Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.SpaceBetween) {
+                            Text(
+                                "${"%.5f".format(java.util.Locale.US, poi.latitude)}, ${"%.5f".format(java.util.Locale.US, poi.longitude)}",
+                                style = MaterialTheme.typography.labelMedium.copy(fontFeatureSettings = "tnum"),
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                            TextButton(onClick = { copyToClipboard(context, GeoFormatting.decimalCoordinates(poi.latitude, poi.longitude)) }) {
+                                Text("Копировать")
+                            }
+                        }
                     }
                 }
             }
         }
         Text(
-            "Источник: © OpenStreetMap contributors · ODbL 1.0. Названия показаны на тех языках, которые присутствуют в исходных данных.",
+            "© OpenStreetMap contributors · ODbL 1.0. Названия показаны на тех языках, которые есть в исходных данных.",
+            modifier = Modifier.padding(horizontal = Space.xs),
             style = MaterialTheme.typography.labelSmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant
         )
@@ -485,35 +521,6 @@ private fun poiCategoryLabel(category: String): String = when (category) {
 }
 
 @Composable
-private fun RouteScreen(modifier: Modifier) {
-    PageColumn(modifier) {
-        PageTitle("Планирование маршрута", "Автономные режимы")
-        listOf("Автомобиль", "Внедорожник 4×4", "Велосипед", "Пешком / треккинг").forEach { mode ->
-            Card {
-                Row(Modifier.fillMaxWidth().padding(Space.card), verticalAlignment = Alignment.CenterVertically) {
-                    Box(Modifier.padding(end = Space.m).size(10.dp).clip(CircleShape).background(MaterialTheme.colorScheme.outline))
-                    Column(Modifier.weight(1f)) {
-                        Text(mode, fontWeight = FontWeight.SemiBold)
-                        Text("Профиль маршрутизации будет подключён после графа дорог.", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                    }
-                    StatusPill("В плане")
-                }
-            }
-        }
-        InfoCard("Важно для 4×4", "Класс дороги в OSM не гарантирует проходимость. Профиль внедорожника должен учитывать покрытие, уклон, ширину, ограничения и сезонность; неизвестные участки будут помечаться как требующие проверки.")
-    }
-}
-
-@Composable
-private fun SavedScreen(modifier: Modifier) {
-    PageColumn(modifier) {
-        PageTitle("Мои места и поездки", "Личные данные будут храниться только на устройстве")
-        InfoCard("Избранное", "Папки «Хочу посетить», «Посещено» и пользовательские метки появятся вместе с локальной базой POI.")
-        InfoCard("Путевой журнал", "Заметки, фотографии, даты поездок и GPX-треки будут сохраняться локально.")
-    }
-}
-
-@Composable
 private fun SettingsScreen(modifier: Modifier, settings: LocalSettings) {
     val context = LocalContext.current
     val folderPicker = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocumentTree()) { uri ->
@@ -529,140 +536,149 @@ private fun SettingsScreen(modifier: Modifier, settings: LocalSettings) {
     }
 
     PageColumn(modifier) {
-        PageTitle("Настройки", "Все параметры сохраняются локально")
-        Card {
-            Column(Modifier.padding(Space.card), verticalArrangement = Arrangement.spacedBy(Space.s)) {
-                Text("Языки названий на карте", style = MaterialTheme.typography.titleMedium)
-                LanguageSwitch("English", "en", settings)
-                LanguageSwitch("Русский", "ru", settings)
-                LanguageSwitch("ქართული", "ka", settings)
-                Text("Когда включено несколько языков, текущая версия карты выбирает один предпочтительный: English → Русский → ქართული. Отдельный режим одновременных многострочных подписей будет добавлен следующим картографическим этапом.", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-            }
-        }
-        val darkNow = when (settings.appTheme) {
-            "dark" -> true
-            "light" -> false
-            else -> isSystemInDarkTheme()
-        }
-        Card {
-            Column(Modifier.padding(Space.card), verticalArrangement = Arrangement.spacedBy(Space.xs)) {
-                Text("Цветовая тема", style = MaterialTheme.typography.titleMedium)
-                Text(
-                    "Приглушённые цвета без резких контрастов, чтобы глаза меньше уставали при долгом чтении карты.",
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
-                AppPalettes.forEach { option ->
-                    PaletteOption(option, option.id == settings.palette, darkNow) { settings.updatePalette(option.id) }
-                }
-            }
-        }
-        Card {
-            Column(Modifier.padding(Space.card), verticalArrangement = Arrangement.spacedBy(Space.s)) {
-                Text("Тема приложения", style = MaterialTheme.typography.titleMedium)
-                ChoiceRow(listOf("system" to "Системная", "light" to "Светлая", "dark" to "Тёмная"), settings.appTheme, settings::updateAppTheme)
-                HorizontalDivider()
-                Text("Стиль карты", style = MaterialTheme.typography.titleMedium)
-                ChoiceRow(
-                    listOf("classic" to "Классика", "outdoor" to "Рельеф", "motorider" to "Автомобильная", "biker" to "Велосипедная"),
-                    settings.mapTheme,
-                    settings::updateMapTheme
-                )
-            }
-        }
-        Card {
-            Column(Modifier.padding(Space.card), verticalArrangement = Arrangement.spacedBy(Space.xs)) {
-                Text("Хранение карт", style = MaterialTheme.typography.titleMedium)
-                Text(
-                    if (settings.storageTreeUri == null) "Выбрано внутреннее хранилище (по умолчанию)." else "Папка для карт выбрана: SD-карта или другое внешнее хранилище.",
-                    style = MaterialTheme.typography.bodySmall
-                )
-                OutlinedButton(onClick = { folderPicker.launch(settings.storageUri()) }) {
-                    Text("Выбрать папку на SD-карте")
-                }
-                if (settings.storageTreeUri != null) {
-                    Text("Папка выбрана и сохранена. В этой версии карта копируется в защищённую папку приложения; прямое хранение крупных файлов на SD-карте подключим вместе с менеджером данных.", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                    OutlinedButton(onClick = { settings.setStorageTree(null) }) { Text("Сбросить выбор") }
-                }
-            }
-        }
-        InfoCard("Конфиденциальность", "В манифесте нет разрешения INTERNET. Нет регистрации, аккаунта, рекламы, аналитики и фоновой отправки координат. GPS будет запрашиваться только при запуске соответствующей функции.")
-        InfoCard("Источники карты", "OpenStreetMap contributors · данные ODbL. Условия использования и атрибуция будут показаны в разделе «О приложении».")
-    }
-}
+        PageTitle("Ещё")
 
-@Composable
-private fun PaletteOption(palette: AppPalette, selected: Boolean, dark: Boolean, onSelect: () -> Unit) {
-    val preview = if (dark) palette.dark else palette.light
-    val shape = RoundedCornerShape(Space.m)
-    Row(
-        Modifier.fillMaxWidth().clip(shape)
-            .background(if (selected) MaterialTheme.colorScheme.secondaryContainer else androidx.compose.ui.graphics.Color.Transparent)
-            .clickable(onClick = onSelect)
-            .padding(Space.s),
-        verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(Space.m)
-    ) {
-        Box(
-            Modifier.size(48.dp).clip(RoundedCornerShape(Space.s)).background(preview.background),
-            contentAlignment = Alignment.Center
-        ) {
-            Row(horizontalArrangement = Arrangement.spacedBy(Space.xxs), verticalAlignment = Alignment.CenterVertically) {
-                Box(Modifier.size(14.dp).clip(CircleShape).background(preview.primary))
-                Box(Modifier.size(14.dp).clip(CircleShape).background(preview.tertiary))
-            }
+        SectionLabel("Оформление")
+        Panel {
+            ThemePicker(settings.palette ?: defaultPaletteId(isSystemInDarkTheme())) { settings.updatePalette(it) }
         }
-        Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(Space.xxs)) {
-            Text(palette.title, style = MaterialTheme.typography.titleSmall)
-            Text(palette.description, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-        }
-        RadioButton(selected = selected, onClick = null)
-    }
-}
 
-@Composable
-private fun LanguageSwitch(label: String, code: String, settings: LocalSettings) {
-    Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.SpaceBetween) {
-        Column {
-            Text(label, fontWeight = FontWeight.Medium)
-            Text(code.uppercase(), style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-        }
-        Switch(checked = code in settings.enabledLanguages, onCheckedChange = { settings.setLanguage(code, it) })
-    }
-}
-
-@Composable
-private fun ChoiceRow(options: List<Pair<String, String>>, selected: String, onSelect: (String) -> Unit) {
-    Column(verticalArrangement = Arrangement.spacedBy(Space.xs)) {
-        options.chunked(2).forEach { rowOptions ->
-            Row(horizontalArrangement = Arrangement.spacedBy(Space.xs)) {
-                rowOptions.forEach { (value, label) ->
+        SectionLabel("Карта")
+        Panel {
+            Text("Язык названий", style = MaterialTheme.typography.titleSmall)
+            Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(Space.xs)) {
+                listOf("en" to "English", "ru" to "Русский", "ka" to "ქართული").forEach { (code, label) ->
                     FilterChip(
-                        selected = selected == value,
-                        onClick = { onSelect(value) },
-                        label = { Text(label) }
+                        selected = code in settings.enabledLanguages,
+                        onClick = { settings.setLanguage(code, code !in settings.enabledLanguages) },
+                        label = { Text(label) },
+                        shape = RoundedCornerShape(50),
+                        colors = FilterChipDefaults.filterChipColors(
+                            selectedContainerColor = MaterialTheme.colorScheme.primaryContainer,
+                            selectedLabelColor = MaterialTheme.colorScheme.onPrimaryContainer
+                        )
+                    )
+                }
+            }
+            Text(
+                "На карте показывается один язык: English → Русский → ქართული.",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+            HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
+            Text("Стиль", style = MaterialTheme.typography.titleSmall)
+            Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(Space.xs)) {
+                listOf("classic" to "Классика", "outdoor" to "Рельеф", "motorider" to "Авто", "biker" to "Велосипед").forEach { (value, label) ->
+                    FilterChip(
+                        selected = settings.mapTheme == value,
+                        onClick = { settings.updateMapTheme(value) },
+                        label = { Text(label) },
+                        shape = RoundedCornerShape(50),
+                        colors = FilterChipDefaults.filterChipColors(
+                            selectedContainerColor = MaterialTheme.colorScheme.primaryContainer,
+                            selectedLabelColor = MaterialTheme.colorScheme.onPrimaryContainer
+                        )
                     )
                 }
             }
         }
+
+        SectionLabel("Хранение")
+        Panel {
+            Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.SpaceBetween) {
+                Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(Space.xxs)) {
+                    Text("Папка для карт", style = MaterialTheme.typography.titleSmall)
+                    Text(
+                        if (settings.storageTreeUri == null) "Внутреннее хранилище" else "Папка выбрана",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+                TextButton(onClick = { folderPicker.launch(settings.storageUri()) }) { Text("Выбрать") }
+                if (settings.storageTreeUri != null) {
+                    TextButton(onClick = { settings.setStorageTree(null) }) { Text("Сбросить") }
+                }
+            }
+            if (settings.storageTreeUri != null) {
+                Text(
+                    "Пока карта копируется в защищённую папку приложения; прямое хранение на SD-карте появится вместе с менеджером данных.",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
+        }
+
+        SectionLabel("Скоро")
+        Panel(padding = 0.dp) {
+            listOf(
+                "Маршруты" to "Автомобиль, внедорожник 4×4, велосипед, пешком — после подключения графа дорог.",
+                "Мои места" to "Избранное, заметки и GPX-треки; все данные только на устройстве."
+            ).forEachIndexed { index, (title, body) ->
+                if (index > 0) HorizontalDivider(Modifier.padding(horizontal = Space.card), color = MaterialTheme.colorScheme.outlineVariant)
+                Column(Modifier.fillMaxWidth().padding(horizontal = Space.card, vertical = Space.m), verticalArrangement = Arrangement.spacedBy(Space.xxs)) {
+                    Text(title, style = MaterialTheme.typography.titleSmall)
+                    Text(body, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                }
+            }
+        }
+
+        Text(
+            "Без интернета, аккаунтов, рекламы и аналитики. Координаты никуда не отправляются. Данные карты © OpenStreetMap contributors, ODbL 1.0.",
+            modifier = Modifier.padding(horizontal = Space.xs, vertical = Space.xs),
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant
+        )
     }
 }
 
 @Composable
-internal fun PageTitle(title: String, subtitle: String) {
+private fun ThemePicker(selectedId: String, onSelect: (String) -> Unit) {
+    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+        AppPalettes.forEach { option ->
+            val selected = option.id == selectedId
+            Column(
+                modifier = Modifier.weight(1f).clip(RoundedCornerShape(Space.m)).clickable { onSelect(option.id) }.padding(vertical = Space.xs),
+                horizontalAlignment = Alignment.CenterHorizontally,
+                verticalArrangement = Arrangement.spacedBy(Space.xs)
+            ) {
+                Box(
+                    Modifier.size(52.dp).clip(CircleShape).background(option.scheme.background)
+                        .border(
+                            width = if (selected) 2.dp else 1.dp,
+                            color = if (selected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.outline,
+                            shape = CircleShape
+                        ),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Box(Modifier.size(22.dp).clip(CircleShape).background(option.scheme.primary))
+                }
+                Text(
+                    option.title,
+                    style = MaterialTheme.typography.labelMedium,
+                    color = if (selected) MaterialTheme.colorScheme.onSurface else MaterialTheme.colorScheme.onSurfaceVariant,
+                    fontWeight = if (selected) FontWeight.SemiBold else FontWeight.Medium,
+                    maxLines = 1
+                )
+            }
+        }
+    }
+}
+
+@Composable
+internal fun PageTitle(title: String, subtitle: String? = null) {
     Column(Modifier.padding(bottom = Space.xs), verticalArrangement = Arrangement.spacedBy(Space.xxs)) {
         Text(title, style = MaterialTheme.typography.headlineMedium)
-        Text(subtitle, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+        if (subtitle != null) {
+            Text(subtitle, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+        }
     }
 }
 
 @Composable
 internal fun InfoCard(title: String, body: String) {
-    Card {
-        Column(Modifier.fillMaxWidth().padding(Space.card), verticalArrangement = Arrangement.spacedBy(Space.xs)) {
-            Text(title, style = MaterialTheme.typography.titleMedium)
-            Text(body, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
-        }
+    Panel {
+        Text(title, style = MaterialTheme.typography.titleMedium)
+        Text(body, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
     }
 }
 

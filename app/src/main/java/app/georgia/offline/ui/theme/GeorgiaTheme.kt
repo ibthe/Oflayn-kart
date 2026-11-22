@@ -1,16 +1,22 @@
 package app.georgia.offline.ui.theme
 
+import android.app.Activity
 import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Shapes
 import androidx.compose.material3.Typography
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.SideEffect
+import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.text.TextStyle
+import androidx.compose.ui.text.font.Font
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.core.view.WindowCompat
+import app.georgia.offline.R
 
 private val GeorgiaShapes = Shapes(
     extraSmall = RoundedCornerShape(8.dp),
@@ -20,12 +26,23 @@ private val GeorgiaShapes = Shapes(
     extraLarge = RoundedCornerShape(40.dp)
 )
 
-// Modular type scale: 12 / 14 / 16 / 18 / 23 / 28 / 33 sp (ratio about 1.2 above 16 sp),
-// line heights on a 2 dp half-grid, tracking tightened as size grows and opened for
-// the smallest sizes. Only system fonts are used because the app has no network
-// and bundles no font files.
-private fun style(weight: FontWeight, size: Int, line: Int, tracking: Double) = TextStyle(
-    fontFamily = FontFamily.SansSerif,
+// Inter (SIL OFL 1.1), bundled and subset to Latin + Cyrillic. Inter Display is the
+// optically tighter cut for large sizes; Inter is tuned for body text. Georgian glyphs
+// are not in Inter, so Android falls back to its system Georgian font for those.
+private val InterText = FontFamily(
+    Font(R.font.inter_regular, FontWeight.Normal),
+    Font(R.font.inter_medium, FontWeight.Medium),
+    Font(R.font.inter_semibold, FontWeight.SemiBold)
+)
+private val InterDisplay = FontFamily(
+    Font(R.font.interdisplay_light, FontWeight.Light),
+    Font(R.font.interdisplay_regular, FontWeight.Normal)
+)
+
+// Scale 11 / 12 / 14 / 16 / 17 / 22 / 28 / 34 sp. Large sizes: Display cut, Light, tight tracking.
+// Body: Inter with slightly negative tracking, 1.45-1.5 line height. Small labels: open tracking.
+private fun text(weight: FontWeight, size: Int, line: Int, tracking: Double, family: FontFamily = InterText) = TextStyle(
+    fontFamily = family,
     fontWeight = weight,
     fontSize = size.sp,
     lineHeight = line.sp,
@@ -33,29 +50,40 @@ private fun style(weight: FontWeight, size: Int, line: Int, tracking: Double) = 
 )
 
 private val GeorgiaTypography = Typography().copy(
-    headlineMedium = style(FontWeight.Light, 33, 40, -0.7),
-    headlineSmall = style(FontWeight.Light, 28, 34, -0.5),
-    titleLarge = style(FontWeight.Normal, 23, 30, -0.2),
-    titleMedium = style(FontWeight.Medium, 18, 24, -0.1),
-    titleSmall = style(FontWeight.Medium, 14, 20, 0.1),
-    bodyLarge = style(FontWeight.Normal, 16, 24, 0.0),
-    bodyMedium = style(FontWeight.Normal, 14, 22, 0.0),
-    bodySmall = style(FontWeight.Normal, 12, 18, 0.1),
-    labelLarge = style(FontWeight.Medium, 14, 20, 0.1),
-    labelMedium = style(FontWeight.Medium, 12, 16, 0.2),
-    labelSmall = style(FontWeight.Medium, 11, 16, 0.3)
+    headlineMedium = text(FontWeight.Light, 34, 40, -0.9, InterDisplay),
+    headlineSmall = text(FontWeight.Light, 28, 34, -0.6, InterDisplay),
+    titleLarge = text(FontWeight.Normal, 22, 28, -0.4, InterDisplay),
+    titleMedium = text(FontWeight.SemiBold, 17, 24, -0.25),
+    titleSmall = text(FontWeight.Medium, 14, 20, -0.05),
+    bodyLarge = text(FontWeight.Normal, 16, 24, -0.15),
+    bodyMedium = text(FontWeight.Normal, 14, 21, -0.05),
+    bodySmall = text(FontWeight.Normal, 12, 18, 0.05),
+    labelLarge = text(FontWeight.Medium, 14, 20, -0.05),
+    labelMedium = text(FontWeight.Medium, 12, 16, 0.1),
+    labelSmall = text(FontWeight.Medium, 11, 16, 0.2)
 )
 
+/**
+ * One theme = one complete appearance (light or dark). [palette] is null until the person
+ * chooses one; then the phone's light/dark mode picks Mist or Dusk.
+ */
 @Composable
-fun GeorgiaTheme(themeMode: String, palette: String = DEFAULT_PALETTE, content: @Composable () -> Unit) {
-    val useDark = when (themeMode) {
-        "dark" -> true
-        "light" -> false
-        else -> isSystemInDarkTheme()
+fun GeorgiaTheme(palette: String?, content: @Composable () -> Unit) {
+    val selected = paletteById(palette ?: defaultPaletteId(isSystemInDarkTheme()))
+    val view = LocalView.current
+    if (!view.isInEditMode) {
+        SideEffect {
+            val window = (view.context as? Activity)?.window
+            if (window != null) {
+                val controller = WindowCompat.getInsetsController(window, view)
+                // Status/navigation icons must follow the chosen theme, not the phone's mode.
+                controller.isAppearanceLightStatusBars = !selected.isDark
+                controller.isAppearanceLightNavigationBars = !selected.isDark
+            }
+        }
     }
-    val selected = paletteById(palette)
     MaterialTheme(
-        colorScheme = if (useDark) selected.dark else selected.light,
+        colorScheme = selected.scheme,
         typography = GeorgiaTypography,
         shapes = GeorgiaShapes,
         content = content

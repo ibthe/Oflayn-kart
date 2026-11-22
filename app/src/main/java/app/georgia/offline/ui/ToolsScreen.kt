@@ -109,7 +109,7 @@ fun ToolsScreen(modifier: Modifier = Modifier, settings: LocalSettings) {
     PageColumn(modifier) {
         PageTitle("Утилиты", "Локальные датчики телефона. Сетевое подключение не используется.")
 
-        Card {
+        Panel(padding = 0.dp) {
             Column(Modifier.fillMaxWidth().padding(Space.card), verticalArrangement = Arrangement.spacedBy(Space.s)) {
                 Text("GPS и координаты", style = MaterialTheme.typography.titleMedium)
                 Text(
@@ -167,7 +167,7 @@ fun ToolsScreen(modifier: Modifier = Modifier, settings: LocalSettings) {
             }
         }
 
-        Card {
+        Panel(padding = 0.dp) {
             Column(Modifier.fillMaxWidth().padding(Space.card), verticalArrangement = Arrangement.spacedBy(Space.xs)) {
                 Text("Компас", style = MaterialTheme.typography.titleMedium)
                 if (compassHeading == null) {
@@ -179,7 +179,7 @@ fun ToolsScreen(modifier: Modifier = Modifier, settings: LocalSettings) {
             }
         }
 
-        Card {
+        Panel(padding = 0.dp) {
             Column(Modifier.fillMaxWidth().padding(Space.card), verticalArrangement = Arrangement.spacedBy(Space.xs)) {
                 Text("Метка автомобиля", style = MaterialTheme.typography.titleMedium)
                 if (settings.carLatitude != null && settings.carLongitude != null) {
@@ -197,7 +197,7 @@ fun ToolsScreen(modifier: Modifier = Modifier, settings: LocalSettings) {
             }
         }
 
-        Card {
+        Panel(padding = 0.dp) {
             Column(Modifier.fillMaxWidth().padding(Space.card), verticalArrangement = Arrangement.spacedBy(Space.xs)) {
                 Text("Важное ограничение", style = MaterialTheme.typography.titleMedium)
                 Text("Высота берётся из GPS устройства и может заметно ошибаться. Для безопасности сравнивай её с картой высот и не используй телефон как единственный навигационный прибор.", style = MaterialTheme.typography.bodySmall)

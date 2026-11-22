@@ -6,7 +6,7 @@ import androidx.compose.material3.lightColorScheme
 import androidx.compose.ui.graphics.Color
 
 /**
- * Five comfort-oriented palettes, each in a light and a dark variant.
+ * Five complete themes: Mist, Sand and Sage are light, Dusk and Graphite are dark.
  *
  * Generated from one lightness ladder so every palette has the same visual
  * rhythm: backgrounds are tinted off-white / off-black (never pure #FFF / #000,
@@ -17,17 +17,16 @@ import androidx.compose.ui.graphics.Color
 data class AppPalette(
     val id: String,
     val title: String,
-    val description: String,
-    val light: ColorScheme,
-    val dark: ColorScheme
+    val isDark: Boolean,
+    val scheme: ColorScheme
 )
 
 private fun c(argb: Long) = Color(argb)
 
-private val MistLight = lightColorScheme(
+private val MistScheme = lightColorScheme(
     primary = c(0xFF314C68),
     onPrimary = c(0xFFFBFBFC),
-    primaryContainer = c(0xFFDDE3E9),
+    primaryContainer = c(0xFFD7E0EA),
     onPrimaryContainer = c(0xFF213245),
     secondary = c(0xFF525F6F),
     onSecondary = c(0xFFFBFBFC),
@@ -56,43 +55,10 @@ private val MistLight = lightColorScheme(
     onErrorContainer = c(0xFF410002)
 )
 
-private val MistDark = darkColorScheme(
-    primary = c(0xFFA9C1DA),
-    onPrimary = c(0xFF16191D),
-    primaryContainer = c(0xFF323D48),
-    onPrimaryContainer = c(0xFFDFE5EC),
-    secondary = c(0xFF9BA7B5),
-    onSecondary = c(0xFF16191D),
-    secondaryContainer = c(0xFF282D34),
-    onSecondaryContainer = c(0xFFE1E5EA),
-    tertiary = c(0xFF7BA2CC),
-    onTertiary = c(0xFF121417),
-    tertiaryContainer = c(0xFF2C3844),
-    onTertiaryContainer = c(0xFFDBE5F0),
-    background = c(0xFF14171A),
-    onBackground = c(0xFFE1E5EA),
-    surface = c(0xFF14171A),
-    onSurface = c(0xFFE1E5EA),
-    surfaceVariant = c(0xFF282D34),
-    onSurfaceVariant = c(0xFF9BA7B5),
-    surfaceContainerLowest = c(0xFF101214),
-    surfaceContainerLow = c(0xFF181C20),
-    surfaceContainer = c(0xFF1F2328),
-    surfaceContainerHigh = c(0xFF252930),
-    surfaceContainerHighest = c(0xFF1D2125),
-    outline = c(0xFF5B6776),
-    outlineVariant = c(0xFF31373F),
-    error = c(0xFFFFB4AB),
-    onError = c(0xFF690005),
-    errorContainer = c(0xFF5C1A18),
-    onErrorContainer = c(0xFFFFDAD6)
-)
-
-
-private val SageLight = lightColorScheme(
+private val SageScheme = lightColorScheme(
     primary = c(0xFF365E47),
     onPrimary = c(0xFFFBFCFB),
-    primaryContainer = c(0xFFDFE7E2),
+    primaryContainer = c(0xFFD9E7DF),
     onPrimaryContainer = c(0xFF254131),
     secondary = c(0xFF54695B),
     onSecondary = c(0xFFFBFCFB),
@@ -121,43 +87,10 @@ private val SageLight = lightColorScheme(
     onErrorContainer = c(0xFF410002)
 )
 
-private val SageDark = darkColorScheme(
-    primary = c(0xFFAFD5BF),
-    onPrimary = c(0xFF171C19),
-    primaryContainer = c(0xFF35453C),
-    onPrimaryContainer = c(0xFFDFECE5),
-    secondary = c(0xFF9FB2A5),
-    onSecondary = c(0xFF171C19),
-    secondaryContainer = c(0xFF2A322D),
-    onSecondaryContainer = c(0xFFE2E9E4),
-    tertiary = c(0xFF83C39F),
-    onTertiary = c(0xFF131614),
-    tertiaryContainer = c(0xFF2F4137),
-    onTertiaryContainer = c(0xFFDBF0E4),
-    background = c(0xFF151916),
-    onBackground = c(0xFFE2E9E4),
-    surface = c(0xFF151916),
-    onSurface = c(0xFFE2E9E4),
-    surfaceVariant = c(0xFF2A322D),
-    onSurfaceVariant = c(0xFF9FB2A5),
-    surfaceContainerLowest = c(0xFF101311),
-    surfaceContainerLow = c(0xFF1A1F1B),
-    surfaceContainer = c(0xFF202723),
-    surfaceContainerHigh = c(0xFF262E29),
-    surfaceContainerHighest = c(0xFF1E2420),
-    outline = c(0xFF586A5E),
-    outlineVariant = c(0xFF333D36),
-    error = c(0xFFFFB4AB),
-    onError = c(0xFF690005),
-    errorContainer = c(0xFF5C1A18),
-    onErrorContainer = c(0xFFFFDAD6)
-)
-
-
-private val SandLight = lightColorScheme(
+private val SandScheme = lightColorScheme(
     primary = c(0xFF684731),
     onPrimary = c(0xFFFCFBFB),
-    primaryContainer = c(0xFFE9E2DD),
+    primaryContainer = c(0xFFEADFD7),
     onPrimaryContainer = c(0xFF452F21),
     secondary = c(0xFF6D6150),
     onSecondary = c(0xFFFCFBFB),
@@ -186,75 +119,10 @@ private val SandLight = lightColorScheme(
     onErrorContainer = c(0xFF410002)
 )
 
-private val SandDark = darkColorScheme(
-    primary = c(0xFFDABDA9),
-    onPrimary = c(0xFF1D1A16),
-    primaryContainer = c(0xFF483B32),
-    onPrimaryContainer = c(0xFFECE4DF),
-    secondary = c(0xFFB5AB9B),
-    onSecondary = c(0xFF1D1A16),
-    secondaryContainer = c(0xFF342F28),
-    onSecondaryContainer = c(0xFFEAE6E1),
-    tertiary = c(0xFFCC9B7B),
-    onTertiary = c(0xFF171512),
-    tertiaryContainer = c(0xFF44362C),
-    onTertiaryContainer = c(0xFFF0E3DB),
-    background = c(0xFF1A1814),
-    onBackground = c(0xFFEAE6E1),
-    surface = c(0xFF1A1814),
-    onSurface = c(0xFFEAE6E1),
-    surfaceVariant = c(0xFF342F28),
-    onSurfaceVariant = c(0xFFB5AB9B),
-    surfaceContainerLowest = c(0xFF141210),
-    surfaceContainerLow = c(0xFF201D18),
-    surfaceContainer = c(0xFF28251F),
-    surfaceContainerHigh = c(0xFF302B25),
-    surfaceContainerHighest = c(0xFF25221D),
-    outline = c(0xFF6D6354),
-    outlineVariant = c(0xFF3F3A31),
-    error = c(0xFFFFB4AB),
-    onError = c(0xFF690005),
-    errorContainer = c(0xFF5C1A18),
-    onErrorContainer = c(0xFFFFDAD6)
-)
-
-
-private val DuskLight = lightColorScheme(
-    primary = c(0xFF443762),
-    onPrimary = c(0xFFFBFBFC),
-    primaryContainer = c(0xFFE1DFE7),
-    onPrimaryContainer = c(0xFF2D2541),
-    secondary = c(0xFF5B546D),
-    onSecondary = c(0xFFFBFBFC),
-    secondaryContainer = c(0xFFE7E5EB),
-    onSecondaryContainer = c(0xFF211E29),
-    tertiary = c(0xFF664AA5),
-    onTertiary = c(0xFFFFFFFF),
-    tertiaryContainer = c(0xFFE7E4EC),
-    onTertiaryContainer = c(0xFF322848),
-    background = c(0xFFF3F2F5),
-    onBackground = c(0xFF211E29),
-    surface = c(0xFFF3F2F5),
-    onSurface = c(0xFF211E29),
-    surfaceVariant = c(0xFFE7E5EB),
-    onSurfaceVariant = c(0xFF5B546D),
-    surfaceContainerLowest = c(0xFFFDFDFD),
-    surfaceContainerLow = c(0xFFF8F8F9),
-    surfaceContainer = c(0xFFEEEDF0),
-    surfaceContainerHigh = c(0xFFE8E7EC),
-    surfaceContainerHighest = c(0xFFFBFBFC),
-    outline = c(0xFF8E88A0),
-    outlineVariant = c(0xFFDBD9E0),
-    error = c(0xFFBA1A1A),
-    onError = c(0xFFFFFFFF),
-    errorContainer = c(0xFFFBE9E7),
-    onErrorContainer = c(0xFF410002)
-)
-
-private val DuskDark = darkColorScheme(
+private val DuskScheme = darkColorScheme(
     primary = c(0xFFBAAED5),
     onPrimary = c(0xFF18171C),
-    primaryContainer = c(0xFF3A3546),
+    primaryContainer = c(0xFF3B334C),
     onPrimaryContainer = c(0xFFE3DFEC),
     secondary = c(0xFFA39DB4),
     onSecondary = c(0xFF18171C),
@@ -283,43 +151,10 @@ private val DuskDark = darkColorScheme(
     onErrorContainer = c(0xFFFFDAD6)
 )
 
-
-private val GraphiteLight = lightColorScheme(
-    primary = c(0xFF26282C),
-    onPrimary = c(0xFFFBFBFB),
-    primaryContainer = c(0xFFE1E2E5),
-    onPrimaryContainer = c(0xFF2F3237),
-    secondary = c(0xFF5B5F67),
-    onSecondary = c(0xFFFBFBFB),
-    secondaryContainer = c(0xFFE7E8E9),
-    onSecondaryContainer = c(0xFF212327),
-    tertiary = c(0xFFCC242F),
-    onTertiary = c(0xFFFFFFFF),
-    tertiaryContainer = c(0xFFF0E0E1),
-    onTertiaryContainer = c(0xFF5A161B),
-    background = c(0xFFF3F3F4),
-    onBackground = c(0xFF212327),
-    surface = c(0xFFF3F3F4),
-    onSurface = c(0xFF212327),
-    surfaceVariant = c(0xFFE7E8E9),
-    onSurfaceVariant = c(0xFF5B5F67),
-    surfaceContainerLowest = c(0xFFFDFDFD),
-    surfaceContainerLow = c(0xFFF8F8F9),
-    surfaceContainer = c(0xFFEEEEEF),
-    surfaceContainerHigh = c(0xFFE9E9EA),
-    surfaceContainerHighest = c(0xFFFBFBFB),
-    outline = c(0xFF8A8D93),
-    outlineVariant = c(0xFFDBDCDE),
-    error = c(0xFFBA1A1A),
-    onError = c(0xFFFFFFFF),
-    errorContainer = c(0xFFFBE9E7),
-    onErrorContainer = c(0xFF410002)
-)
-
-private val GraphiteDark = darkColorScheme(
+private val GraphiteScheme = darkColorScheme(
     primary = c(0xFFDEE0E3),
     onPrimary = c(0xFF18191B),
-    primaryContainer = c(0xFF3A3C40),
+    primaryContainer = c(0xFF3D3F43),
     onPrimaryContainer = c(0xFFDFE3EC),
     secondary = c(0xFFA3A7AE),
     onSecondary = c(0xFF18191B),
@@ -348,16 +183,16 @@ private val GraphiteDark = darkColorScheme(
     onErrorContainer = c(0xFFFFDAD6)
 )
 
-
 val AppPalettes: List<AppPalette> = listOf(
-    AppPalette("mist", "Туман", "Спокойный сине-серый. Нейтральный и собранный — не отвлекает от карты.", MistLight, MistDark),
-    AppPalette("sage", "Шалфей", "Приглушённый зелёный. Мягкий для глаз, напоминает природу и успокаивает.", SageLight, SageDark),
-    AppPalette("sand", "Песок", "Тёплый светло-серый с глиняным акцентом. Уютный мягкий свет без резкости.", SandLight, SandDark),
-    AppPalette("dusk", "Сумерки", "Сизо-сиреневый. Расслабляет и хорошо подходит для вечернего чтения.", DuskLight, DuskDark),
-    AppPalette("graphite", "Графит", "Строгий нейтральный серый с красным акцентом флага. Минимум красок.", GraphiteLight, GraphiteDark)
+    AppPalette("mist", "Туман", false, MistScheme),
+    AppPalette("sage", "Шалфей", false, SageScheme),
+    AppPalette("sand", "Песок", false, SandScheme),
+    AppPalette("dusk", "Сумерки", true, DuskScheme),
+    AppPalette("graphite", "Графит", true, GraphiteScheme)
 )
 
-const val DEFAULT_PALETTE = "mist"
+/** Used until the person picks a theme: Mist in light mode, Dusk when the phone is in dark mode. */
+fun defaultPaletteId(systemDark: Boolean): String = if (systemDark) "dusk" else "mist"
 
-fun paletteById(id: String): AppPalette =
+fun paletteById(id: String?): AppPalette =
     AppPalettes.firstOrNull { it.id == id } ?: AppPalettes.first()
