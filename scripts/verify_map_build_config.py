@@ -127,10 +127,10 @@ def main() -> int:
 
     if bundle_manifest.get("mapBoundingBox") != EXPECTED_GEORGIA_BBOX:
         return fail("the static bundle manifest bbox does not match the map build bbox.")
-    if bundle_manifest.get("appVersion") != "0.7.0":
-        return fail("the static bundle manifest appVersion must match this source package (0.7.0).")
-    if 'versionName = "0.7.0"' not in app_build or "versionCode = 23" not in app_build:
-        return fail("the Android Gradle version must be 0.7.0 (versionCode 23).")
+    if bundle_manifest.get("appVersion") != "0.7.1":
+        return fail("the static bundle manifest appVersion must match this source package (0.7.1).")
+    if 'versionName = "0.7.1"' not in app_build or "versionCode = 24" not in app_build:
+        return fail("the Android Gradle version must be 0.7.1 (versionCode 24).")
     if "PoiRepository.ensureInstalled" not in poi_ui or "PoiRepository.search" not in poi_ui or "poi.detailLines()" not in poi_ui:
         return fail("the Discover screen must install/search the local POI database and render available detail tags.")
     for token in ("poiFileSha256", "SQLiteDatabase.OPEN_READONLY", "instr(search_text, ?)", "nameEn", "nameRu", "nameKa", "fun detailLines()", "tagsJson"):
