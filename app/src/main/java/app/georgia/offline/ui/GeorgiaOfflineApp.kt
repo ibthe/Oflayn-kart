@@ -18,6 +18,13 @@ import androidx.compose.material3.TextButton
 import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.FilterChipDefaults
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.platform.LocalView
+import androidx.compose.runtime.DisposableEffect
+import app.georgia.offline.domain.GeoMath
+import org.mapsforge.core.model.LatLong
+import androidx.compose.ui.draw.rotate
+import androidx.compose.ui.graphics.toArgb
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.foundation.layout.RowScope
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.text.style.TextOverflow
@@ -88,6 +95,7 @@ private enum class AppTab(val label: String) {
 @Composable
 fun GeorgiaOfflineApp(settings: LocalSettings) {
     var selectedTab by rememberSaveable { mutableStateOf(AppTab.MAP.name) }
+    val navigation = remember { NavigationState() }
     // A tab name saved by an older version (for example the removed ROUTE tab) falls back to the map.
     val currentTab = AppTab.entries.firstOrNull { it.name == selectedTab } ?: AppTab.MAP
     GeorgiaTheme(palette = settings.palette) {
@@ -95,8 +103,11 @@ fun GeorgiaOfflineApp(settings: LocalSettings) {
             bottomBar = { MinimalNavBar(selected = currentTab.name, onSelect = { selectedTab = it }) }
         ) { padding ->
             when (currentTab) {
-                AppTab.MAP -> MapScreen(Modifier.padding(padding), settings)
-                AppTab.DISCOVER -> DiscoverScreen(Modifier.padding(padding), settings)
+                AppTab.MAP -> MapScreen(Modifier.padding(padding), settings, navigation)
+                AppTab.DISCOVER -> DiscoverScreen(Modifier.padding(padding), settings) { name, latitude, longitude ->
+                    navigation.target = NavigationTarget(name, latitude, longitude)
+                    selectedTab = AppTab.MAP.name
+                }
                 AppTab.TOOLS -> ToolsScreen(Modifier.padding(padding), settings)
                 AppTab.SETTINGS -> SettingsScreen(Modifier.padding(padding), settings)
             }
@@ -236,6 +247,11 @@ private fun MapDetails(
             )
         }
         Text(
+            "Долгое нажатие на карту ставит цель, затем выбери способ передвижения и нажми «Маршрут». Маршруты считаются на телефоне по дорогам OpenStreetMap без интернета; запреты поворотов не учитываются. Положение определяется только GPS телефона и никуда не передаётся.",
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant
+        )
+        Text(
             "Карта отрисовывается из локальных файлов Mapsforge. Сетевые источники тайлов не используются. Данные © OpenStreetMap contributors, ODbL 1.0.",
             style = MaterialTheme.typography.bodySmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant
@@ -243,8 +259,18 @@ private fun MapDetails(
     }
 }
 
+private fun openExternalNavigator(context: android.content.Context, target: NavigationTarget) {
+    val label = android.net.Uri.encode(target.name)
+    val uri = android.net.Uri.parse("geo:${target.latitude},${target.longitude}?q=${target.latitude},${target.longitude}($label)")
+    try {
+        context.startActivity(android.content.Intent.createChooser(android.content.Intent(android.content.Intent.ACTION_VIEW, uri), "Открыть в навигаторе"))
+    } catch (_: android.content.ActivityNotFoundException) {
+        android.widget.Toast.makeText(context, "Не найдено приложение-навигатор", android.widget.Toast.LENGTH_LONG).show()
+    }
+}
+
 @Composable
-private fun MapScreen(modifier: Modifier, settings: LocalSettings) {
+private fun MapScreen(modifier: Modifier, settings: LocalSettings, navigation: NavigationState) {
     val context = LocalContext.current
     val coroutineScope = rememberCoroutineScope()
     var isImporting by remember { mutableStateOf(false) }
@@ -307,6 +333,48 @@ private fun MapScreen(modifier: Modifier, settings: LocalSettings) {
 
     val openPicker: () -> Unit = { mapPicker.launch(arrayOf("*/*")) }
     var showDetails by rememberSaveable { mutableStateOf(false) }
+    val tracker = rememberLocationTracker()
+    var recenterToken by remember { mutableIntStateOf(0) }
+    var zoomInToken by remember { mutableIntStateOf(0) }
+    var zoomOutToken by remember { mutableIntStateOf(0) }
+    val target = navigation.target
+    // Choosing a destination is the person's request for guidance, so start positioning for it.
+    LaunchedEffect(target) { if (target != null && !tracker.active) tracker.start() }
+
+    val session = remember { RouteSession() }
+    val speaker = remember { Speaker(context) }
+    DisposableEffect(Unit) { onDispose { speaker.shutdown() } }
+    val hostView = LocalView.current
+    DisposableEffect(session.navigating) {
+        hostView.keepScreenOn = session.navigating
+        onDispose { hostView.keepScreenOn = false }
+    }
+    // A new or cleared destination invalidates any route.
+    LaunchedEffect(target) { session.reset() }
+
+    fun planFrom(fix: android.location.Location?, rerouting: Boolean) {
+        val goal = navigation.target
+        if (fix == null || goal == null) return
+        coroutineScope.launch {
+            session.plan(context, fix.latitude, fix.longitude, goal.latitude, goal.longitude, rerouting)
+            if (rerouting && session.navigating && session.voice && session.message == null) speaker.speak("Маршрут перестроен")
+        }
+    }
+
+    // Follow GPS fixes while navigating: progress, off-route detection and spoken guidance.
+    val fix = tracker.location
+    LaunchedEffect(fix, session.navigating) {
+        if (!session.navigating || fix == null || navigation.target == null) return@LaunchedEffect
+        when (session.update(fix.latitude, fix.longitude, System.currentTimeMillis())) {
+            TrackingEvent.ARRIVED -> {
+                if (session.voice) speaker.speak("Вы прибыли в пункт назначения")
+                android.widget.Toast.makeText(context, "Вы прибыли в пункт назначения", android.widget.Toast.LENGTH_LONG).show()
+                navigation.target = null
+            }
+            TrackingEvent.REROUTE -> planFrom(fix, rerouting = true)
+            TrackingEvent.NONE -> session.pendingAnnouncement()?.let { if (session.voice) speaker.speak(it) }
+        }
+    }
 
     if (mapFile != null) {
         // The map is the interface: it fills the screen and all chrome floats over it.
@@ -317,7 +385,19 @@ private fun MapScreen(modifier: Modifier, settings: LocalSettings) {
                 mapFile = mapFile,
                 preferredLanguage = preferredLanguage,
                 mapTheme = settings.mapTheme,
-                modifier = Modifier.fillMaxSize()
+                modifier = Modifier.fillMaxSize(),
+                userLocation = tracker.location,
+                destination = target?.let { LatLong(it.latitude, it.longitude) },
+                accentColor = MaterialTheme.colorScheme.tertiary.toArgb(),
+                destinationColor = MaterialTheme.colorScheme.primary.toArgb(),
+                recenterToken = recenterToken,
+                zoomInToken = zoomInToken,
+                zoomOutToken = zoomOutToken,
+                routePoints = session.route?.points,
+                routeColor = MaterialTheme.colorScheme.tertiary.toArgb(),
+                followUser = session.navigating,
+                fitToken = session.fitToken,
+                onLongPress = { point -> navigation.target = NavigationTarget("Точка на карте", point.latitude, point.longitude) }
             )
             if (showDetails) {
                 Surface(modifier = Modifier.fillMaxSize(), color = MaterialTheme.colorScheme.background.copy(alpha = 0.97f)) {
@@ -329,20 +409,83 @@ private fun MapScreen(modifier: Modifier, settings: LocalSettings) {
                         MapDetails(settings, true, preferredLanguage, isImporting, importMessage, importError, openPicker)
                     }
                 }
+            } else if (session.navigating && session.route != null) {
+                NavigationBanner(session.route!!, session.along, Modifier.align(Alignment.TopCenter).padding(Space.s))
             } else {
-                MapChip(Modifier.align(Alignment.TopStart).padding(Space.s)) {
-                    Box(Modifier.size(8.dp).clip(CircleShape).background(MaterialTheme.colorScheme.tertiary))
-                    Text("Без сети", style = MaterialTheme.typography.labelMedium)
+                Column(Modifier.align(Alignment.TopStart).padding(Space.s), verticalArrangement = Arrangement.spacedBy(Space.xs)) {
+                    MapChip {
+                        Box(Modifier.size(8.dp).clip(CircleShape).background(MaterialTheme.colorScheme.tertiary))
+                        Text("Без сети", style = MaterialTheme.typography.labelMedium)
+                    }
+                    val trackerError = tracker.error
+                    if (trackerError != null) {
+                        MapChip { Text(trackerError, style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.error) }
+                    } else if (tracker.active && tracker.location == null) {
+                        MapChip { Text("Ищу сигнал GPS…", style = MaterialTheme.typography.labelMedium) }
+                    }
                 }
                 Text(
                     "© OpenStreetMap",
-                    modifier = Modifier.align(Alignment.BottomStart).padding(start = Space.m, bottom = Space.m),
+                    modifier = Modifier.align(Alignment.TopEnd).padding(top = Space.m, end = Space.m),
                     style = MaterialTheme.typography.labelSmall,
                     color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f)
                 )
             }
-            MapChip(Modifier.align(Alignment.BottomEnd).padding(Space.s), onClick = { showDetails = !showDetails }) {
-                Text(if (showDetails) "Закрыть" else "О карте", style = MaterialTheme.typography.labelMedium)
+            Column(
+                Modifier.align(Alignment.BottomCenter).fillMaxWidth().padding(Space.s),
+                verticalArrangement = Arrangement.spacedBy(Space.xs)
+            ) {
+                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.Bottom) {
+                    if (!showDetails) {
+                        Column(verticalArrangement = Arrangement.spacedBy(Space.xs)) {
+                            MapChip(onClick = { zoomInToken++ }) { Text("+", style = MaterialTheme.typography.titleMedium) }
+                            MapChip(onClick = { zoomOutToken++ }) { Text("−", style = MaterialTheme.typography.titleMedium) }
+                        }
+                    } else {
+                        Box {}
+                    }
+                    Column(horizontalAlignment = Alignment.End, verticalArrangement = Arrangement.spacedBy(Space.xs)) {
+                        if (!showDetails) {
+                            MapChip(onClick = {
+                                tracker.start()
+                                recenterToken++
+                            }) {
+                                Text(if (tracker.location != null) "Где я" else "Найти меня", style = MaterialTheme.typography.labelMedium)
+                            }
+                        }
+                        if (!session.navigating || showDetails) {
+                            MapChip(onClick = { showDetails = !showDetails }) {
+                                Text(if (showDetails) "Закрыть" else "О карте", style = MaterialTheme.typography.labelMedium)
+                            }
+                        }
+                    }
+                }
+                if (target != null && !showDetails) {
+                    val activeRoute = session.route
+                    if (session.navigating && activeRoute != null) {
+                        NavigationFooter(activeRoute, session) {
+                            session.reset()
+                            navigation.target = null
+                        }
+                    } else {
+                        RoutePlannerCard(
+                            target = target,
+                            location = tracker.location,
+                            session = session,
+                            onProfile = { option ->
+                                session.profile = option
+                                if (session.route != null) planFrom(tracker.location, rerouting = true)
+                            },
+                            onPlan = { planFrom(tracker.location, rerouting = false) },
+                            onStart = {
+                                session.beginNavigation()
+                                if (session.voice) activeRoute?.steps?.firstOrNull()?.let { speaker.speak(it.text) }
+                            },
+                            onExternal = { openExternalNavigator(context, target) },
+                            onCancel = { navigation.target = null }
+                        )
+                    }
+                }
             }
         }
     } else {
@@ -362,7 +505,7 @@ private fun MapScreen(modifier: Modifier, settings: LocalSettings) {
 }
 
 @Composable
-private fun DiscoverScreen(modifier: Modifier, settings: LocalSettings) {
+private fun DiscoverScreen(modifier: Modifier, settings: LocalSettings, onNavigate: (String, Double, Double) -> Unit) {
     val context = LocalContext.current
     var query by rememberSaveable { mutableStateOf("") }
     var selectedCategory by rememberSaveable { mutableStateOf("all") }
@@ -483,12 +626,17 @@ private fun DiscoverScreen(modifier: Modifier, settings: LocalSettings) {
                                 color = MaterialTheme.colorScheme.onSurfaceVariant
                             )
                         }
-                        Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.SpaceBetween) {
+                        Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
                             Text(
                                 "${"%.5f".format(java.util.Locale.US, poi.latitude)}, ${"%.5f".format(java.util.Locale.US, poi.longitude)}",
                                 style = MaterialTheme.typography.labelMedium.copy(fontFeatureSettings = "tnum"),
                                 color = MaterialTheme.colorScheme.onSurfaceVariant
                             )
+                        }
+                        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(Space.xs)) {
+                            TextButton(onClick = {
+                                onNavigate(poi.namesFor(settings.enabledLanguages).firstOrNull() ?: "Цель", poi.latitude, poi.longitude)
+                            }) { Text("Навигация") }
                             TextButton(onClick = { copyToClipboard(context, GeoFormatting.decimalCoordinates(poi.latitude, poi.longitude)) }) {
                                 Text("Копировать")
                             }
@@ -611,7 +759,6 @@ private fun SettingsScreen(modifier: Modifier, settings: LocalSettings) {
         SectionLabel("Скоро")
         Panel(padding = 0.dp) {
             listOf(
-                "Маршруты" to "Автомобиль, внедорожник 4×4, велосипед, пешком — после подключения графа дорог.",
                 "Мои места" to "Избранное, заметки и GPX-треки; все данные только на устройстве."
             ).forEachIndexed { index, (title, body) ->
                 if (index > 0) HorizontalDivider(Modifier.padding(horizontal = Space.card), color = MaterialTheme.colorScheme.outlineVariant)

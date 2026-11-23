@@ -58,6 +58,9 @@ jobs:
       - name: Test offline POI extractor and progress logging
         run: python3 scripts/test_build_poi_database.py
 
+      - name: Test offline road graph builder and reference router
+        run: python3 scripts/test_build_road_graph.py
+
       - name: Test verified OSM PBF cache and retry behavior
         run: python3 scripts/test_prepare_georgia_pbf.py
 
@@ -139,6 +142,66 @@ jobs:
           fi
           echo "Installed Osmosis Debian package: ${osmosis_package_version}"
           echo "Installed PyOsmium Debian package: ${pyosmium_package_version}"
+
+      - name: Restore most recent offline road graph
+        uses: actions/cache/restore@v4
+        with:
+          path: app/src/main/assets/offline/georgia-roads.bin
+          key: georgia-roads-v1-${{ runner.os }}-restore-only
+          restore-keys: |
+            georgia-roads-v1-${{ runner.os }}-
+
+      - name: Check restored road graph
+        id: roads-state
+        shell: bash
+        run: |
+          roads=app/src/main/assets/offline/georgia-roads.bin
+          if [[ -s "$roads" && "$(head -c 4 "$roads")" == "GRT1" ]]; then
+            echo "exists=true" >> "$GITHUB_OUTPUT"
+            echo "Restored road graph: $(stat -c %s "$roads") bytes"
+          else
+            rm -f "$roads"
+            echo "exists=false" >> "$GITHUB_OUTPUT"
+            echo "No usable road graph in cache."
+          fi
+
+      # The road graph is optional: if it cannot be built, the map and APK are still produced and
+      # the app reports routes as unavailable. A previously cached graph is kept on failure.
+      # Failure is handled inside the script (not by hiding it with a workflow-level override).
+      - name: Generate offline road graph (optional)
+        id: generate-roads
+        if: ${{ steps.roads-state.outputs.exists != 'true' || github.event_name == 'schedule' || inputs.refresh_map == true }}
+        shell: bash
+        run: |
+          # `set -e` is ignored inside a command tested by `if`, so every step reports failure explicitly.
+          build_roads() {
+            if ! python3 -c "import osmium" 2>/dev/null; then
+              sudo apt-get update || return 1
+              sudo apt-get install --yes python3-pyosmium || return 1
+            fi
+            if [[ ! -s data/cache/georgia-latest.osm.pbf ]]; then
+              bash scripts/prepare_georgia_pbf.sh || return 1
+            fi
+            local out="${RUNNER_TEMP}/georgia-roads.bin"
+            python3 scripts/build_road_graph.py data/cache/georgia-latest.osm.pbf "$out" --summary "${RUNNER_TEMP}/georgia-roads-summary.json" || return 1
+            python3 scripts/verify_road_graph.py "$out" || return 1
+            mkdir -p app/src/main/assets/offline || return 1
+            mv "$out" app/src/main/assets/offline/georgia-roads.bin || return 1
+            cat "${RUNNER_TEMP}/georgia-roads-summary.json" || true
+          }
+          if ( build_roads ); then
+            echo "generated=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "generated=false" >> "$GITHUB_OUTPUT"
+            echo "::warning::The offline road graph could not be generated. The APK is built without a new graph and the app will report routes as unavailable if none was cached."
+          fi
+
+      - name: Cache generated road graph
+        if: ${{ steps.generate-roads.outputs.generated == 'true' }}
+        uses: actions/cache/save@v4
+        with:
+          path: app/src/main/assets/offline/georgia-roads.bin
+          key: georgia-roads-v1-${{ runner.os }}-${{ github.run_id }}
 
       - name: Build Mapsforge map-writer plugin
         if: ${{ success() && (steps.map-state.outputs.exists != 'true' || github.event_name == 'schedule' || inputs.refresh_map == true) }}

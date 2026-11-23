@@ -127,10 +127,10 @@ def main() -> int:
 
     if bundle_manifest.get("mapBoundingBox") != EXPECTED_GEORGIA_BBOX:
         return fail("the static bundle manifest bbox does not match the map build bbox.")
-    if bundle_manifest.get("appVersion") != "0.5.9":
-        return fail("the static bundle manifest appVersion must match this source package (0.5.9).")
-    if 'versionName = "0.5.9"' not in app_build or "versionCode = 21" not in app_build:
-        return fail("the Android Gradle version must be 0.5.9 (versionCode 21).")
+    if bundle_manifest.get("appVersion") != "0.7.0":
+        return fail("the static bundle manifest appVersion must match this source package (0.7.0).")
+    if 'versionName = "0.7.0"' not in app_build or "versionCode = 23" not in app_build:
+        return fail("the Android Gradle version must be 0.7.0 (versionCode 23).")
     if "PoiRepository.ensureInstalled" not in poi_ui or "PoiRepository.search" not in poi_ui or "poi.detailLines()" not in poi_ui:
         return fail("the Discover screen must install/search the local POI database and render available detail tags.")
     for token in ("poiFileSha256", "SQLiteDatabase.OPEN_READONLY", "instr(search_text, ?)", "nameEn", "nameRu", "nameKa", "fun detailLines()", "tagsJson"):
@@ -248,6 +248,9 @@ def main() -> int:
 
     if "scripts/verify_map_build_config.py" not in workflow:
         return fail("workflow must run the map builder preflight before the expensive steps.")
+    for token in ("scripts/test_build_road_graph.py", "scripts/build_road_graph.py", "scripts/verify_road_graph.py", "georgia-roads-v1-"):
+        if token not in workflow:
+            return fail(f"workflow must build, verify and cache the optional road graph ({token} is missing).")
     if "continue-on-error: true" in workflow:
         return fail("map preparation must fail fast; do not hide failed prerequisites.")
 
