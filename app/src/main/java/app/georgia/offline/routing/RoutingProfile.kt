@@ -2,6 +2,8 @@ package app.georgia.offline.routing
 
 import kotlin.math.max
 
+private const val CLASS_COUNT = 22
+
 /**
  * How the person travels. [bit] matches the access masks stored in the road graph and the speed
  * tables mirror `scripts/road_graph_format.py`, which is the specification of the data file.
@@ -36,9 +38,5 @@ enum class RoutingProfile(
     fun speedMps(roadClass: Int, flags: Int): Double {
         val index = if (roadClass in 0 until CLASS_COUNT) roadClass else 0
         return if (flags and RoadGraph.FLAG_UNPAVED != 0) unpavedMps[index] else pavedMps[index]
-    }
-
-    private companion object {
-        const val CLASS_COUNT = 22
     }
 }

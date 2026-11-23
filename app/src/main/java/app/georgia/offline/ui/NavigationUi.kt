@@ -29,6 +29,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.rotate
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.dp
 import app.georgia.offline.domain.GeoMath
 import app.georgia.offline.routing.Maneuver
 import app.georgia.offline.routing.Route
