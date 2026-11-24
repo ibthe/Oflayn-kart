@@ -1,5 +1,15 @@
 package app.georgia.offline.ui
 
+import androidx.compose.foundation.background
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.shadow
+import androidx.compose.ui.graphics.Color
+import app.georgia.offline.ui.theme.accentBrush
+import app.georgia.offline.ui.theme.edgeBrush
+import app.georgia.offline.ui.theme.glass
 import android.content.Context
 import android.speech.tts.TextToSpeech
 import androidx.compose.foundation.BorderStroke
@@ -221,10 +231,11 @@ fun RoutePlannerCard(
     onCancel: () -> Unit
 ) {
     Surface(
-        modifier = Modifier.fillMaxWidth(),
+        modifier = Modifier.fillMaxWidth().appear(),
         shape = RoundedCornerShape(Radius.card),
-        color = MaterialTheme.colorScheme.background.copy(alpha = 0.97f),
-        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant)
+        color = MaterialTheme.colorScheme.glass(0.96f),
+        border = BorderStroke(1.dp, MaterialTheme.colorScheme.edgeBrush()),
+        shadowElevation = 16.dp
     ) {
         Column(Modifier.padding(Space.m), verticalArrangement = Arrangement.spacedBy(Space.s)) {
             val route = session.route
@@ -241,13 +252,7 @@ fun RoutePlannerCard(
             )
             Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(Space.xs)) {
                 RoutingProfile.entries.forEach { option ->
-                    FilterChip(
-                        selected = session.profile == option,
-                        onClick = { onProfile(option) },
-                        label = { Text(option.label) },
-                        shape = RoundedCornerShape(50),
-                        colors = profileChipColors()
-                    )
+                    SelectPill(label = option.label, selected = session.profile == option, onClick = { onProfile(option) })
                 }
             }
             session.message?.let {
@@ -255,11 +260,13 @@ fun RoutePlannerCard(
             }
             Row(horizontalArrangement = Arrangement.spacedBy(Space.xxs), verticalAlignment = Alignment.CenterVertically) {
                 if (route == null) {
-                    Button(onClick = onPlan, enabled = !session.busy && location != null) {
-                        Text(if (session.busy) "Считаю…" else "Маршрут")
-                    }
+                    GradientButton(
+                        text = if (session.busy) "Считаю…" else "Маршрут",
+                        onClick = onPlan,
+                        enabled = !session.busy && location != null
+                    )
                 } else {
-                    Button(onClick = onStart) { Text("Начать") }
+                    GradientButton(text = "Начать", onClick = onStart)
                 }
                 TextButton(onClick = onExternal, contentPadding = PaddingValues(horizontal = Space.s)) { Text("В навигаторе") }
                 TextButton(onClick = onCancel, contentPadding = PaddingValues(horizontal = Space.s)) { Text("Отмена") }
@@ -272,24 +279,37 @@ fun RoutePlannerCard(
 @Composable
 fun NavigationBanner(route: Route, along: Double, modifier: Modifier = Modifier) {
     val next = route.nextStep(along)
-    Surface(
-        modifier = modifier.fillMaxWidth(),
-        shape = RoundedCornerShape(Radius.card),
-        color = MaterialTheme.colorScheme.primary,
-        contentColor = MaterialTheme.colorScheme.onPrimary
+    Box(
+        modifier = modifier.fillMaxWidth().appear()
+            .shadow(16.dp, RoundedCornerShape(Radius.card))
+            .clip(RoundedCornerShape(Radius.card))
+            .background(MaterialTheme.colorScheme.accentBrush())
     ) {
         Row(Modifier.padding(Space.m), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(Space.m)) {
-            Text(
-                if (next != null) maneuverGlyph(next.maneuver) else "●",
-                modifier = Modifier.rotate(if (next != null) maneuverRotation(next.maneuver) else 0f),
-                style = MaterialTheme.typography.headlineMedium
-            )
+            Box(
+                Modifier.size(64.dp).clip(CircleShape).background(MaterialTheme.colorScheme.onPrimary.copy(alpha = 0.18f)),
+                contentAlignment = Alignment.Center
+            ) {
+                Text(
+                    if (next != null) maneuverGlyph(next.maneuver) else "●",
+                    modifier = Modifier.rotate(if (next != null) maneuverRotation(next.maneuver) else 0f),
+                    style = MaterialTheme.typography.headlineMedium,
+                    color = MaterialTheme.colorScheme.onPrimary
+                )
+            }
             Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(Space.xxs)) {
                 Text(
                     if (next != null) GeoMath.formatDistance((next.distanceFromStartMeters - along).coerceAtLeast(0.0)) else "—",
-                    style = MaterialTheme.typography.titleLarge
+                    style = MaterialTheme.typography.headlineSmall,
+                    color = MaterialTheme.colorScheme.onPrimary
                 )
-                Text(next?.text ?: "Следуйте по маршруту", style = MaterialTheme.typography.bodyMedium, maxLines = 2, overflow = TextOverflow.Ellipsis)
+                Text(
+                    next?.text ?: "Следуйте по маршруту",
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onPrimary,
+                    maxLines = 2,
+                    overflow = TextOverflow.Ellipsis
+                )
             }
         }
     }
@@ -301,10 +321,11 @@ fun NavigationFooter(route: Route, session: RouteSession, onStop: () -> Unit) {
     val remaining = (route.distanceMeters - session.along).coerceAtLeast(0.0)
     val seconds = if (route.distanceMeters > 0) route.durationSeconds * remaining / route.distanceMeters else 0.0
     Surface(
-        modifier = Modifier.fillMaxWidth(),
+        modifier = Modifier.fillMaxWidth().appear(),
         shape = RoundedCornerShape(Radius.card),
-        color = MaterialTheme.colorScheme.background.copy(alpha = 0.97f),
-        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant)
+        color = MaterialTheme.colorScheme.glass(0.96f),
+        border = BorderStroke(1.dp, MaterialTheme.colorScheme.edgeBrush()),
+        shadowElevation = 16.dp
     ) {
         Row(
             Modifier.padding(horizontal = Space.m, vertical = Space.s),
@@ -312,7 +333,7 @@ fun NavigationFooter(route: Route, session: RouteSession, onStop: () -> Unit) {
             horizontalArrangement = Arrangement.spacedBy(Space.xs)
         ) {
             Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(Space.xxs)) {
-                Text("${GeoMath.formatDistance(remaining)} · ${formatDuration(seconds)}", style = MaterialTheme.typography.titleMedium)
+                Text("${GeoMath.formatDistance(remaining)} · ${formatDuration(seconds)}", style = MaterialTheme.typography.titleLarge)
                 Text(
                     if (session.busy) "Пересчитываю маршрут…" else "© OpenStreetMap",
                     style = MaterialTheme.typography.labelSmall,
@@ -322,7 +343,7 @@ fun NavigationFooter(route: Route, session: RouteSession, onStop: () -> Unit) {
             TextButton(onClick = { session.voice = !session.voice }, contentPadding = PaddingValues(horizontal = Space.s)) {
                 Text(if (session.voice) "Голос: вкл" else "Голос: выкл")
             }
-            Button(onClick = onStop) { Text("Завершить") }
+            GradientButton(text = "Завершить", onClick = onStop)
         }
     }
 }

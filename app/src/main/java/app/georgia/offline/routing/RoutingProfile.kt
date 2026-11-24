@@ -2,7 +2,6 @@ package app.georgia.offline.routing
 
 import kotlin.math.max
 
-// Top-level on purpose: a companion object of an enum is not yet initialised when the entries are built.
 private const val CLASS_COUNT = 22
 
 /**

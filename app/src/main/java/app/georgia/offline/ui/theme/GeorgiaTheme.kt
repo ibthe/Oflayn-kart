@@ -19,11 +19,11 @@ import androidx.core.view.WindowCompat
 import app.georgia.offline.R
 
 private val GeorgiaShapes = Shapes(
-    extraSmall = RoundedCornerShape(8.dp),
-    small = RoundedCornerShape(12.dp),
+    extraSmall = RoundedCornerShape(12.dp),
+    small = RoundedCornerShape(16.dp),
     medium = RoundedCornerShape(Radius.card),
-    large = RoundedCornerShape(32.dp),
-    extraLarge = RoundedCornerShape(40.dp)
+    large = RoundedCornerShape(36.dp),
+    extraLarge = RoundedCornerShape(44.dp)
 )
 
 // Inter (SIL OFL 1.1), bundled and subset to Latin + Cyrillic. Inter Display is the
@@ -50,9 +50,9 @@ private fun text(weight: FontWeight, size: Int, line: Int, tracking: Double, fam
 )
 
 private val GeorgiaTypography = Typography().copy(
-    headlineMedium = text(FontWeight.Light, 34, 40, -0.9, InterDisplay),
-    headlineSmall = text(FontWeight.Light, 28, 34, -0.6, InterDisplay),
-    titleLarge = text(FontWeight.Normal, 22, 28, -0.4, InterDisplay),
+    headlineMedium = text(FontWeight.SemiBold, 36, 42, -1.2),
+    headlineSmall = text(FontWeight.SemiBold, 26, 32, -0.7),
+    titleLarge = text(FontWeight.SemiBold, 22, 28, -0.5),
     titleMedium = text(FontWeight.SemiBold, 17, 24, -0.25),
     titleSmall = text(FontWeight.Medium, 14, 20, -0.05),
     bodyLarge = text(FontWeight.Normal, 16, 24, -0.15),

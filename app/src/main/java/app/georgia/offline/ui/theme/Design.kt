@@ -1,5 +1,8 @@
 package app.georgia.offline.ui.theme
 
+import androidx.compose.material3.ColorScheme
+import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
 
 /**
@@ -14,14 +17,25 @@ object Space {
     val l = 24.dp
     val xl = 32.dp
 
-    /** Left/right screen margin; equal to [card] so text inside a card aligns with the screen edge rhythm. */
+    /** Left/right screen margin. */
     val screen = 20.dp
 
     /** Inner padding of every card and panel. */
     val card = 20.dp
 }
 
-/** One corner radius for every surface (cards, map, panels); controls use a full pill. */
+/** One generous corner radius for every surface (cards, map, panels); controls use a full pill. */
 object Radius {
-    val card = 24.dp
+    val card = 28.dp
 }
+
+/** The signature accent gradient: primary glowing into tertiary. */
+fun ColorScheme.accentBrush(): Brush = Brush.linearGradient(listOf(primary, tertiary))
+
+/** Hairline that is bright at the top edge and fades out, so panels look lit from above. */
+fun ColorScheme.edgeBrush(): Brush = Brush.verticalGradient(
+    listOf(outlineVariant.copy(alpha = 1f), outlineVariant.copy(alpha = 0.25f))
+)
+
+/** Translucent surface colour used by floating glass elements over the map. */
+fun ColorScheme.glass(alpha: Float = 0.88f): Color = surfaceContainerHighest.copy(alpha = alpha)

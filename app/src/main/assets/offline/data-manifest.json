@@ -35,7 +35,7 @@
   "languageCoverage": "Only OSM name variants present in source data are written; no automatic translation.",
   "status": "configured-for-generation-and-verification-by-github-actions; source-zip-does-not-contain-generated-binaries",
   "mapBuildPipeline": "GitHub Actions: cached verified country OSM PBF -> Mapsforge Map Writer -> APK assets",
-  "appVersion": "0.7.1",
+  "appVersion": "0.7.0",
   "mapBoundingBox": "41.00,39.95,43.65,46.80",
   "mapBoundingBoxOrder": [
     "minLatitude",

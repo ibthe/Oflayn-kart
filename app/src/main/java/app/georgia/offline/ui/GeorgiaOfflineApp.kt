@@ -1,6 +1,29 @@
 package app.georgia.offline.ui
 
 import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.compose.animation.AnimatedContent
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.animateColorAsState
+import androidx.compose.animation.core.Spring
+import androidx.compose.animation.core.animateDpAsState
+import androidx.compose.animation.core.spring
+import androidx.compose.animation.core.tween
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.slideInVertically
+import androidx.compose.animation.slideOutVertically
+import androidx.compose.animation.togetherWith
+import androidx.compose.foundation.layout.BoxWithConstraints
+import androidx.compose.foundation.layout.offset
+import androidx.compose.foundation.layout.width
+import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.ui.draw.shadow
+import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.SolidColor
+import app.georgia.offline.ui.theme.accentBrush
+import app.georgia.offline.ui.theme.edgeBrush
+import app.georgia.offline.ui.theme.glass
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -66,6 +89,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
@@ -99,17 +123,26 @@ fun GeorgiaOfflineApp(settings: LocalSettings) {
     // A tab name saved by an older version (for example the removed ROUTE tab) falls back to the map.
     val currentTab = AppTab.entries.firstOrNull { it.name == selectedTab } ?: AppTab.MAP
     GeorgiaTheme(palette = settings.palette) {
-        Scaffold(
-            bottomBar = { MinimalNavBar(selected = currentTab.name, onSelect = { selectedTab = it }) }
-        ) { padding ->
-            when (currentTab) {
-                AppTab.MAP -> MapScreen(Modifier.padding(padding), settings, navigation)
-                AppTab.DISCOVER -> DiscoverScreen(Modifier.padding(padding), settings) { name, latitude, longitude ->
-                    navigation.target = NavigationTarget(name, latitude, longitude)
-                    selectedTab = AppTab.MAP.name
+        Box(Modifier.fillMaxSize().background(MaterialTheme.colorScheme.background).aurora()) {
+            Scaffold(
+                containerColor = Color.Transparent,
+                bottomBar = { MinimalNavBar(selected = currentTab.name, onSelect = { selectedTab = it }) }
+            ) { padding ->
+                AnimatedContent(
+                    targetState = currentTab,
+                    transitionSpec = { fadeIn(tween(280)) togetherWith fadeOut(tween(160)) },
+                    label = "tabs"
+                ) { tab ->
+                    when (tab) {
+                        AppTab.MAP -> MapScreen(Modifier.padding(padding), settings, navigation)
+                        AppTab.DISCOVER -> DiscoverScreen(Modifier.padding(padding), settings) { name, latitude, longitude ->
+                            navigation.target = NavigationTarget(name, latitude, longitude)
+                            selectedTab = AppTab.MAP.name
+                        }
+                        AppTab.TOOLS -> ToolsScreen(Modifier.padding(padding), settings)
+                        AppTab.SETTINGS -> SettingsScreen(Modifier.padding(padding), settings)
+                    }
                 }
-                AppTab.TOOLS -> ToolsScreen(Modifier.padding(padding), settings)
-                AppTab.SETTINGS -> SettingsScreen(Modifier.padding(padding), settings)
             }
         }
     }
@@ -117,22 +150,25 @@ fun GeorgiaOfflineApp(settings: LocalSettings) {
 
 @Composable
 internal fun PageColumn(modifier: Modifier = Modifier, content: @Composable ColumnScope.() -> Unit) {
-    Column(
-        modifier = modifier.fillMaxSize().verticalScroll(rememberScrollState())
-            .padding(start = Space.screen, end = Space.screen, top = Space.m, bottom = Space.xl),
-        verticalArrangement = Arrangement.spacedBy(Space.m),
-        content = content
-    )
+    val stagger = remember { Stagger() }
+    CompositionLocalProvider(LocalStagger provides stagger) {
+        Column(
+            modifier = modifier.fillMaxSize().verticalScroll(rememberScrollState())
+                .padding(start = Space.screen, end = Space.screen, top = Space.l, bottom = Space.xl),
+            verticalArrangement = Arrangement.spacedBy(Space.m),
+            content = content
+        )
+    }
 }
 
-/** The one surface used for every block of content: hairline border, no shadow, one radius. */
+/** The one surface used for every block of content: lit hairline border, one generous radius, rises in on entry. */
 @Composable
 internal fun Panel(modifier: Modifier = Modifier, padding: Dp = Space.card, content: @Composable ColumnScope.() -> Unit) {
     Surface(
-        modifier = modifier.fillMaxWidth(),
+        modifier = modifier.fillMaxWidth().appearInOrder(),
         shape = RoundedCornerShape(Radius.card),
-        color = MaterialTheme.colorScheme.surfaceContainerHighest,
-        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant)
+        color = MaterialTheme.colorScheme.surfaceContainerHighest.copy(alpha = 0.92f),
+        border = BorderStroke(1.dp, MaterialTheme.colorScheme.edgeBrush())
     ) {
         Column(
             Modifier.fillMaxWidth().padding(padding),
@@ -145,40 +181,60 @@ internal fun Panel(modifier: Modifier = Modifier, padding: Dp = Space.card, cont
 @Composable
 private fun SectionLabel(text: String) {
     Text(
-        text,
-        modifier = Modifier.padding(start = Space.xs, top = Space.xs),
-        style = MaterialTheme.typography.titleSmall,
-        color = MaterialTheme.colorScheme.onSurfaceVariant
+        text.uppercase(),
+        modifier = Modifier.padding(start = Space.xs, top = Space.s).appearInOrder(),
+        style = MaterialTheme.typography.labelLarge.copy(letterSpacing = 1.2.sp),
+        color = MaterialTheme.colorScheme.primary
     )
 }
 
 @Composable
 private fun MinimalNavBar(selected: String, onSelect: (String) -> Unit) {
-    Surface(color = MaterialTheme.colorScheme.background) {
-        Column {
-            HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
-            Row(
-                Modifier.fillMaxWidth().navigationBarsPadding().padding(horizontal = Space.s, vertical = Space.xs),
-                horizontalArrangement = Arrangement.SpaceBetween
-            ) {
-                AppTab.entries.forEach { tab ->
-                    val active = selected == tab.name
-                    Column(
-                        modifier = Modifier.weight(1f).clip(RoundedCornerShape(Space.m)).clickable { onSelect(tab.name) }.padding(vertical = Space.s),
-                        horizontalAlignment = Alignment.CenterHorizontally,
-                        verticalArrangement = Arrangement.spacedBy(Space.xs)
-                    ) {
-                        Box(
-                            Modifier.size(width = 20.dp, height = 3.dp).clip(CircleShape)
-                                .background(if (active) MaterialTheme.colorScheme.tertiary else androidx.compose.ui.graphics.Color.Transparent)
+    val scheme = MaterialTheme.colorScheme
+    val tabs = AppTab.entries
+    val index = tabs.indexOfFirst { it.name == selected }.coerceAtLeast(0)
+    Box(Modifier.fillMaxWidth().navigationBarsPadding().padding(horizontal = Space.m, vertical = Space.xs)) {
+        Surface(
+            modifier = Modifier.fillMaxWidth(),
+            shape = CircleShape,
+            color = scheme.glass(0.94f),
+            border = BorderStroke(1.dp, scheme.edgeBrush()),
+            shadowElevation = 16.dp
+        ) {
+            BoxWithConstraints(Modifier.padding(Space.xxs)) {
+                val slot = maxWidth / tabs.size
+                val slideOffset by animateDpAsState(
+                    targetValue = slot * index,
+                    animationSpec = spring(dampingRatio = 0.68f, stiffness = Spring.StiffnessMediumLow),
+                    label = "tabOffset"
+                )
+                // The glowing selection pill slides (with a little overshoot) to the chosen tab.
+                Box(
+                    Modifier.offset(x = slideOffset).width(slot).height(60.dp)
+                        .background(brush = scheme.accentBrush(), shape = CircleShape, alpha = 0.2f)
+                )
+                Row(Modifier.fillMaxWidth().height(60.dp)) {
+                    tabs.forEachIndexed { i, tab ->
+                        val active = i == index
+                        val tint by animateColorAsState(
+                            if (active) scheme.primary else scheme.onSurfaceVariant,
+                            animationSpec = tween(240),
+                            label = "tabTint"
                         )
-                        Text(
-                            tab.label,
-                            style = MaterialTheme.typography.labelMedium,
-                            color = if (active) MaterialTheme.colorScheme.onSurface else MaterialTheme.colorScheme.onSurfaceVariant,
-                            fontWeight = if (active) FontWeight.SemiBold else FontWeight.Medium,
-                            maxLines = 1
-                        )
+                        Column(
+                            modifier = Modifier.weight(1f).fillMaxSize().clip(CircleShape).bounceClick { onSelect(tab.name) },
+                            horizontalAlignment = Alignment.CenterHorizontally,
+                            verticalArrangement = Arrangement.Center
+                        ) {
+                            NavGlyph(kind = i, color = tint)
+                            Text(
+                                tab.label,
+                                style = MaterialTheme.typography.labelSmall,
+                                color = tint,
+                                fontWeight = if (active) FontWeight.SemiBold else FontWeight.Medium,
+                                maxLines = 1
+                            )
+                        }
                     }
                 }
             }
@@ -186,23 +242,14 @@ private fun MinimalNavBar(selected: String, onSelect: (String) -> Unit) {
     }
 }
 
-/** Frosted pill that floats over the map. */
+/** Glass pill that floats over the map. */
 @Composable
-private fun MapChip(modifier: Modifier = Modifier, onClick: (() -> Unit)? = null, content: @Composable RowScope.() -> Unit) {
-    Surface(
-        modifier = modifier.clip(CircleShape).let { if (onClick != null) it.clickable(onClick = onClick) else it },
-        shape = CircleShape,
-        color = MaterialTheme.colorScheme.background.copy(alpha = 0.92f),
-        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant)
-    ) {
-        Row(
-            Modifier.padding(horizontal = Space.m, vertical = Space.xs + Space.xxs / 2),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(Space.xs),
-            content = content
-        )
-    }
-}
+private fun MapChip(
+    modifier: Modifier = Modifier,
+    onClick: (() -> Unit)? = null,
+    centered: Boolean = false,
+    content: @Composable RowScope.() -> Unit
+) = GlassPill(modifier = modifier, onClick = onClick, centered = centered, content = content)
 
 @Composable
 private fun MapDetails(
@@ -399,7 +446,11 @@ private fun MapScreen(modifier: Modifier, settings: LocalSettings, navigation: N
                 fitToken = session.fitToken,
                 onLongPress = { point -> navigation.target = NavigationTarget("Точка на карте", point.latitude, point.longitude) }
             )
-            if (showDetails) {
+            AnimatedVisibility(
+                visible = showDetails,
+                enter = fadeIn(tween(260)) + slideInVertically(tween(360)) { it / 6 },
+                exit = fadeOut(tween(180)) + slideOutVertically(tween(240)) { it / 6 }
+            ) {
                 Surface(modifier = Modifier.fillMaxSize(), color = MaterialTheme.colorScheme.background.copy(alpha = 0.97f)) {
                     Column(
                         Modifier.fillMaxSize().verticalScroll(rememberScrollState())
@@ -409,13 +460,16 @@ private fun MapScreen(modifier: Modifier, settings: LocalSettings, navigation: N
                         MapDetails(settings, true, preferredLanguage, isImporting, importMessage, importError, openPicker)
                     }
                 }
+            }
+            if (showDetails) {
+                // The details overlay above is drawn by AnimatedVisibility; no other top chrome while it is open.
             } else if (session.navigating && session.route != null) {
                 NavigationBanner(session.route!!, session.along, Modifier.align(Alignment.TopCenter).padding(Space.s))
             } else {
                 Column(Modifier.align(Alignment.TopStart).padding(Space.s), verticalArrangement = Arrangement.spacedBy(Space.xs)) {
                     MapChip {
-                        Box(Modifier.size(8.dp).clip(CircleShape).background(MaterialTheme.colorScheme.tertiary))
-                        Text("Без сети", style = MaterialTheme.typography.labelMedium)
+                        PulseDot(MaterialTheme.colorScheme.tertiary)
+                        Text("Без сети", style = MaterialTheme.typography.labelLarge)
                     }
                     val trackerError = tracker.error
                     if (trackerError != null) {
@@ -438,24 +492,43 @@ private fun MapScreen(modifier: Modifier, settings: LocalSettings, navigation: N
                 Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.Bottom) {
                     if (!showDetails) {
                         Column(verticalArrangement = Arrangement.spacedBy(Space.xs)) {
-                            MapChip(onClick = { zoomInToken++ }) { Text("+", style = MaterialTheme.typography.titleMedium) }
-                            MapChip(onClick = { zoomOutToken++ }) { Text("−", style = MaterialTheme.typography.titleMedium) }
+                            MapChip(modifier = Modifier.size(48.dp), onClick = { zoomInToken++ }, centered = true) {
+                                Text("+", style = MaterialTheme.typography.titleLarge)
+                            }
+                            MapChip(modifier = Modifier.size(48.dp), onClick = { zoomOutToken++ }, centered = true) {
+                                Text("−", style = MaterialTheme.typography.titleLarge)
+                            }
                         }
                     } else {
                         Box {}
                     }
                     Column(horizontalAlignment = Alignment.End, verticalArrangement = Arrangement.spacedBy(Space.xs)) {
                         if (!showDetails) {
-                            MapChip(onClick = {
-                                tracker.start()
-                                recenterToken++
-                            }) {
-                                Text(if (tracker.location != null) "Где я" else "Найти меня", style = MaterialTheme.typography.labelMedium)
+                            Row(
+                                Modifier.height(48.dp)
+                                    .shadow(12.dp, CircleShape)
+                                    .clip(CircleShape)
+                                    .background(MaterialTheme.colorScheme.accentBrush())
+                                    .bounceClick {
+                                        tracker.start()
+                                        recenterToken++
+                                    }
+                                    .padding(horizontal = Space.m),
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(Space.xs)
+                            ) {
+                                CrosshairGlyph(MaterialTheme.colorScheme.onPrimary)
+                                Text(
+                                    if (tracker.location != null) "Где я" else "Найти меня",
+                                    style = MaterialTheme.typography.labelLarge,
+                                    fontWeight = FontWeight.SemiBold,
+                                    color = MaterialTheme.colorScheme.onPrimary
+                                )
                             }
                         }
                         if (!session.navigating || showDetails) {
                             MapChip(onClick = { showDetails = !showDetails }) {
-                                Text(if (showDetails) "Закрыть" else "О карте", style = MaterialTheme.typography.labelMedium)
+                                Text(if (showDetails) "Закрыть" else "О карте", style = MaterialTheme.typography.labelLarge)
                             }
                         }
                     }
@@ -568,16 +641,7 @@ private fun DiscoverScreen(modifier: Modifier, settings: LocalSettings, onNaviga
         )
         Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(Space.xs)) {
             categories.forEach { (id, label) ->
-                FilterChip(
-                    selected = selectedCategory == id,
-                    onClick = { selectedCategory = id },
-                    label = { Text(label) },
-                    shape = RoundedCornerShape(50),
-                    colors = FilterChipDefaults.filterChipColors(
-                        selectedContainerColor = MaterialTheme.colorScheme.primaryContainer,
-                        selectedLabelColor = MaterialTheme.colorScheme.onPrimaryContainer
-                    )
-                )
+                SelectPill(label = label, selected = selectedCategory == id, onClick = { selectedCategory = id })
             }
         }
         Row(
@@ -696,16 +760,7 @@ private fun SettingsScreen(modifier: Modifier, settings: LocalSettings) {
             Text("Язык названий", style = MaterialTheme.typography.titleSmall)
             Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(Space.xs)) {
                 listOf("en" to "English", "ru" to "Русский", "ka" to "ქართული").forEach { (code, label) ->
-                    FilterChip(
-                        selected = code in settings.enabledLanguages,
-                        onClick = { settings.setLanguage(code, code !in settings.enabledLanguages) },
-                        label = { Text(label) },
-                        shape = RoundedCornerShape(50),
-                        colors = FilterChipDefaults.filterChipColors(
-                            selectedContainerColor = MaterialTheme.colorScheme.primaryContainer,
-                            selectedLabelColor = MaterialTheme.colorScheme.onPrimaryContainer
-                        )
-                    )
+                    SelectPill(label = label, selected = code in settings.enabledLanguages, onClick = { settings.setLanguage(code, code !in settings.enabledLanguages) })
                 }
             }
             Text(
@@ -717,16 +772,7 @@ private fun SettingsScreen(modifier: Modifier, settings: LocalSettings) {
             Text("Стиль", style = MaterialTheme.typography.titleSmall)
             Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(Space.xs)) {
                 listOf("classic" to "Классика", "outdoor" to "Рельеф", "motorider" to "Авто", "biker" to "Велосипед").forEach { (value, label) ->
-                    FilterChip(
-                        selected = settings.mapTheme == value,
-                        onClick = { settings.updateMapTheme(value) },
-                        label = { Text(label) },
-                        shape = RoundedCornerShape(50),
-                        colors = FilterChipDefaults.filterChipColors(
-                            selectedContainerColor = MaterialTheme.colorScheme.primaryContainer,
-                            selectedLabelColor = MaterialTheme.colorScheme.onPrimaryContainer
-                        )
-                    )
+                    SelectPill(label = label, selected = settings.mapTheme == value, onClick = { settings.updateMapTheme(value) })
                 }
             }
         }
@@ -789,15 +835,18 @@ private fun ThemePicker(selectedId: String, onSelect: (String) -> Unit) {
                 verticalArrangement = Arrangement.spacedBy(Space.xs)
             ) {
                 Box(
-                    Modifier.size(52.dp).clip(CircleShape).background(option.scheme.background)
+                    Modifier.size(56.dp).clip(CircleShape).background(option.scheme.background)
                         .border(
-                            width = if (selected) 2.dp else 1.dp,
-                            color = if (selected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.outline,
+                            width = if (selected) 3.dp else 1.dp,
+                            brush = if (selected) MaterialTheme.colorScheme.accentBrush() else SolidColor(MaterialTheme.colorScheme.outline),
                             shape = CircleShape
                         ),
                     contentAlignment = Alignment.Center
                 ) {
-                    Box(Modifier.size(22.dp).clip(CircleShape).background(option.scheme.primary))
+                    Box(
+                        Modifier.size(26.dp).clip(CircleShape)
+                            .background(Brush.linearGradient(listOf(option.scheme.primary, option.scheme.tertiary)))
+                    )
                 }
                 Text(
                     option.title,
@@ -813,8 +862,8 @@ private fun ThemePicker(selectedId: String, onSelect: (String) -> Unit) {
 
 @Composable
 internal fun PageTitle(title: String, subtitle: String? = null) {
-    Column(Modifier.padding(bottom = Space.xs), verticalArrangement = Arrangement.spacedBy(Space.xxs)) {
-        Text(title, style = MaterialTheme.typography.headlineMedium)
+    Column(Modifier.padding(bottom = Space.xs).appearInOrder(), verticalArrangement = Arrangement.spacedBy(Space.xxs)) {
+        Text(title, style = MaterialTheme.typography.headlineMedium.copy(brush = MaterialTheme.colorScheme.accentBrush()))
         if (subtitle != null) {
             Text(subtitle, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
         }
