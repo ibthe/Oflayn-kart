@@ -234,6 +234,7 @@ fun RoutePlannerCard(
         modifier = Modifier.fillMaxWidth().appear(),
         shape = RoundedCornerShape(Radius.card),
         color = MaterialTheme.colorScheme.glass(0.96f),
+        contentColor = MaterialTheme.colorScheme.onSurface,
         border = BorderStroke(1.dp, MaterialTheme.colorScheme.edgeBrush()),
         shadowElevation = 16.dp
     ) {
@@ -324,6 +325,7 @@ fun NavigationFooter(route: Route, session: RouteSession, onStop: () -> Unit) {
         modifier = Modifier.fillMaxWidth().appear(),
         shape = RoundedCornerShape(Radius.card),
         color = MaterialTheme.colorScheme.glass(0.96f),
+        contentColor = MaterialTheme.colorScheme.onSurface,
         border = BorderStroke(1.dp, MaterialTheme.colorScheme.edgeBrush()),
         shadowElevation = 16.dp
     ) {

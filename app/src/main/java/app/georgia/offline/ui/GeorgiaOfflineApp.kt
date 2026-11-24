@@ -126,6 +126,7 @@ fun GeorgiaOfflineApp(settings: LocalSettings) {
         Box(Modifier.fillMaxSize().background(MaterialTheme.colorScheme.background).aurora()) {
             Scaffold(
                 containerColor = Color.Transparent,
+                contentColor = MaterialTheme.colorScheme.onBackground,
                 bottomBar = { MinimalNavBar(selected = currentTab.name, onSelect = { selectedTab = it }) }
             ) { padding ->
                 AnimatedContent(
@@ -168,6 +169,7 @@ internal fun Panel(modifier: Modifier = Modifier, padding: Dp = Space.card, cont
         modifier = modifier.fillMaxWidth().appearInOrder(),
         shape = RoundedCornerShape(Radius.card),
         color = MaterialTheme.colorScheme.surfaceContainerHighest.copy(alpha = 0.92f),
+        contentColor = MaterialTheme.colorScheme.onSurface,
         border = BorderStroke(1.dp, MaterialTheme.colorScheme.edgeBrush())
     ) {
         Column(
@@ -198,6 +200,7 @@ private fun MinimalNavBar(selected: String, onSelect: (String) -> Unit) {
             modifier = Modifier.fillMaxWidth(),
             shape = CircleShape,
             color = scheme.glass(0.94f),
+            contentColor = scheme.onSurface,
             border = BorderStroke(1.dp, scheme.edgeBrush()),
             shadowElevation = 16.dp
         ) {
@@ -451,7 +454,11 @@ private fun MapScreen(modifier: Modifier, settings: LocalSettings, navigation: N
                 enter = fadeIn(tween(260)) + slideInVertically(tween(360)) { it / 6 },
                 exit = fadeOut(tween(180)) + slideOutVertically(tween(240)) { it / 6 }
             ) {
-                Surface(modifier = Modifier.fillMaxSize(), color = MaterialTheme.colorScheme.background.copy(alpha = 0.97f)) {
+                Surface(
+                    modifier = Modifier.fillMaxSize(),
+                    color = MaterialTheme.colorScheme.background.copy(alpha = 0.97f),
+                    contentColor = MaterialTheme.colorScheme.onBackground
+                ) {
                     Column(
                         Modifier.fillMaxSize().verticalScroll(rememberScrollState())
                             .padding(start = Space.card, end = Space.card, top = Space.card, bottom = Space.xl + Space.l)

@@ -175,6 +175,7 @@ internal fun GlassPill(
         modifier = modifier.let { if (onClick != null) it.bounceClick(onClick = onClick) else it },
         shape = CircleShape,
         color = scheme.glass(0.9f),
+        contentColor = scheme.onSurface,
         border = BorderStroke(1.dp, scheme.edgeBrush()),
         shadowElevation = 8.dp
     ) {
