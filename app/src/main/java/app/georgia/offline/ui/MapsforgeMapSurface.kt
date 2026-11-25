@@ -42,6 +42,16 @@ private object MapsforgeGraphics {
     }
 }
 
+/** Lowest zoom the person can reach: the whole of Georgia fits on screen, nothing smaller. */
+private const val MIN_ZOOM: Byte = 6
+private const val MAX_ZOOM: Byte = 18
+
+/** What kind of saved point a marker stands for. */
+enum class PlaceKind { SAVED, CAR }
+
+/** A saved point drawn on the map; the selected one is enlarged and haloed. */
+class MapPlace(val id: String, val latitude: Double, val longitude: Double, val kind: PlaceKind)
+
 /** Displays a local Mapsforge map file. This view never creates an online tile source. */
 @Composable
 fun MapsforgeMapSurface(
@@ -60,11 +70,21 @@ fun MapsforgeMapSurface(
     routeColor: Int = 0xFF2F6FED.toInt(),
     followUser: Boolean = false,
     fitToken: Int = 0,
+    places: List<MapPlace> = emptyList(),
+    selectedPlaceId: String? = null,
+    origin: LatLong? = null,
+    savedColor: Int = 0xFF7B5CFF.toInt(),
+    carColor: Int = 0xFF1FB89A.toInt(),
+    originColor: Int = 0xFF1FB89A.toInt(),
+    focusToken: Int = 0,
+    onPlaceTap: ((String?) -> Unit)? = null,
     onLongPress: ((LatLong) -> Unit)? = null
 ) {
     val currentLongPress by rememberUpdatedState(onLongPress)
-    key(mapFile.absolutePath, mapFile.lastModified(), preferredLanguage, mapTheme) {
-        val overlays = remember { MapOverlays(accentColor, destinationColor, routeColor) }
+    val currentPlaces by rememberUpdatedState(places)
+    val currentPlaceTap by rememberUpdatedState(onPlaceTap)
+    key(mapFile.absolutePath, mapFile.lastModified(), preferredLanguage, mapTheme, accentColor, routeColor) {
+        val overlays = remember { MapOverlays(accentColor, destinationColor, routeColor, savedColor, carColor, originColor) }
         var mapViewRef by remember { mutableStateOf<MapView?>(null) }
         var mapDataStoreRef by remember { mutableStateOf<MapFile?>(null) }
         var rendererError by remember { mutableStateOf<String?>(null) }
@@ -97,6 +117,10 @@ fun MapsforgeMapSurface(
                             resolveMapTheme(mapTheme)
                         )
                         layerManager.layers.add(renderLayer)
+                        // The map can neither be shrunk to a speck nor dragged away from Georgia.
+                        model.mapViewPosition.setZoomLevelMin(MIN_ZOOM)
+                        model.mapViewPosition.setZoomLevelMax(MAX_ZOOM)
+                        dataStore.boundingBox()?.let { model.mapViewPosition.setMapLimit(it) }
                         val initialPosition = dataStore.startPosition()
                         if (initialPosition != null) {
                             setCenter(initialPosition)
@@ -104,7 +128,7 @@ fun MapsforgeMapSurface(
                             setCenter(LatLong(42.0, 43.5))
                         }
                         val initialZoom = dataStore.startZoomLevel()
-                        setZoomLevel(initialZoom?.takeIf { it.toInt() in 1..18 } ?: 7.toByte())
+                        setZoomLevel(initialZoom?.takeIf { it.toInt() in MIN_ZOOM..MAX_ZOOM } ?: 7.toByte())
                         mapDataStoreRef = dataStore
                     } catch (error: Exception) {
                         rendererError = error.message ?: "Не удалось открыть карту."
@@ -112,6 +136,28 @@ fun MapsforgeMapSurface(
                     // Long press sets a navigation target. The listener returns false, so Mapsforge
                     // still handles every gesture itself.
                     val detector = GestureDetector(viewContext, object : GestureDetector.SimpleOnGestureListener() {
+                        // A tap near a saved point selects it; a tap on empty map clears the selection.
+                        override fun onSingleTapConfirmed(event: MotionEvent): Boolean {
+                            val callback = currentPlaceTap ?: return false
+                            val density = viewContext.resources.displayMetrics.density
+                            val reach = 30f * density
+                            var best: String? = null
+                            var bestSquared = reach * reach
+                            for (place in currentPlaces) {
+                                val pixel = mapViewProjection.toPixels(LatLong(place.latitude, place.longitude)) ?: continue
+                                // The pin's body sits above its tip, which is anchored on the point.
+                                val dx = pixel.x - event.x
+                                val dy = pixel.y - 18f * density - event.y
+                                val squared = dx * dx + dy * dy
+                                if (squared < bestSquared) {
+                                    bestSquared = squared
+                                    best = place.id
+                                }
+                            }
+                            callback(best)
+                            return false
+                        }
+
                         override fun onLongPress(event: MotionEvent) {
                             val point = mapViewProjection.fromPixels(event.x.toDouble(), event.y.toDouble())
                             if (point != null) currentLongPress?.invoke(point)
@@ -127,7 +173,7 @@ fun MapsforgeMapSurface(
             update = { view ->
                 overlays.sync(
                     view,
-                    OverlayState(userLocation, destination, recenterToken, zoomInToken, zoomOutToken, routePoints, followUser, fitToken)
+                    OverlayState(userLocation, destination, recenterToken, zoomInToken, zoomOutToken, routePoints, followUser, fitToken, places, selectedPlaceId, origin, focusToken)
                 )
             }
         )
@@ -151,7 +197,9 @@ fun MapsforgeMapSurface(
 
 
 private fun resolveMapTheme(value: String) = when (value) {
-    "outdoor" -> MapsforgeThemes.HILLSHADING
+    // The built-in HILLSHADING style draws only elevation shading and needs elevation (DEM) tiles; the offline
+    // data has none, so it rendered a blank white map. "outdoor" now uses the nature-oriented Osmarender style.
+    "outdoor" -> MapsforgeThemes.OSMARENDER
     "motorider" -> MapsforgeThemes.MOTORIDER
     "biker" -> MapsforgeThemes.BIKER
     "osmarender" -> MapsforgeThemes.OSMARENDER
@@ -168,11 +216,28 @@ private class OverlayState(
     val zoomOutToken: Int,
     val routePoints: DoubleArray?,
     val followUser: Boolean,
-    val fitToken: Int
+    val fitToken: Int,
+    val places: List<MapPlace>,
+    val selectedPlaceId: String?,
+    val origin: LatLong?,
+    val focusToken: Int
 )
 
 /** Position marker, accuracy circle, destination marker, route line and the straight guide line. */
-private class MapOverlays(private val accentColor: Int, private val destinationColor: Int, private val routeColor: Int) {
+private class MapOverlays(
+    private val accentColor: Int,
+    private val destinationColor: Int,
+    private val routeColor: Int,
+    private val savedColor: Int,
+    private val carColor: Int,
+    private val originColor: Int
+) {
+    private val placeMarkers = ArrayList<Marker>()
+    private var placeKey = ""
+    private var originMarker: Marker? = null
+    private var originAt: LatLong? = null
+    private var handledFocus = 0
+    private var focusedPlace: String? = null
     private var me: Marker? = null
     private var accuracy: Circle? = null
     private var destinationMarker: Marker? = null
@@ -240,6 +305,53 @@ private class MapOverlays(private val accentColor: Int, private val destinationC
             destinationMarker = null
         }
 
+        // Route start chosen from a saved point ("route from here").
+        val origin = state.origin
+        if (origin != null) {
+            if (originMarker == null || originAt != origin) {
+                originMarker?.let { layers.remove(it) }
+                val (bitmap, offset) = pinBitmap(view.context, originColor, "A", false, density)
+                val created = Marker(origin, bitmap, 0, offset)
+                originMarker = created
+                originAt = origin
+                layers.add(created)
+            }
+        } else if (originMarker != null) {
+            originMarker?.let { layers.remove(it) }
+            originMarker = null
+            originAt = null
+        }
+
+        // Saved points: rebuilt only when the list or the selection changes; the selected pin is drawn last, on top.
+        val key = state.places.joinToString("|") { "${it.id}:${it.latitude}:${it.longitude}" } + "#" + state.selectedPlaceId
+        if (key != placeKey) {
+            placeKey = key
+            placeMarkers.forEach { layers.remove(it) }
+            placeMarkers.clear()
+            val ordered = state.places.sortedBy { if (it.id == state.selectedPlaceId) 1 else 0 }
+            for (place in ordered) {
+                val selected = place.id == state.selectedPlaceId
+                val (bitmap, offset) = if (place.kind == PlaceKind.CAR) {
+                    pinBitmap(view.context, carColor, "P", selected, density)
+                } else {
+                    pinBitmap(view.context, savedColor, null, selected, density)
+                }
+                val marker = Marker(LatLong(place.latitude, place.longitude), bitmap, 0, offset)
+                placeMarkers.add(marker)
+                layers.add(marker)
+            }
+        }
+        // Bring a newly selected point into view.
+        val selectedPlace = state.places.firstOrNull { it.id == state.selectedPlaceId }
+        if (selectedPlace != null && (focusedPlace != selectedPlace.id || state.focusToken != handledFocus)) {
+            focusedPlace = selectedPlace.id
+            handledFocus = state.focusToken
+            view.setCenter(LatLong(selectedPlace.latitude, selectedPlace.longitude))
+            if (view.model.mapViewPosition.zoomLevel.toInt() < 13) view.setZoomLevel(14.toByte())
+        } else if (selectedPlace == null) {
+            focusedPlace = null
+        }
+
         // Road route: a white casing under a coloured line, inserted below the markers.
         val route = state.routePoints
         if (route != null && route.size >= 4) {
@@ -300,7 +412,7 @@ private class MapOverlays(private val accentColor: Int, private val destinationC
             }
             val box = BoundingBox(minLat, minLon, maxLat, maxLon)
             val zoom = LatLongUtils.zoomForBounds(view.dimension, box, view.model.displayModel.tileSize).toInt() - 1
-            view.model.mapViewPosition.mapPosition = MapPosition(box.centerPoint, zoom.coerceIn(5, 17).toByte())
+            view.model.mapViewPosition.mapPosition = MapPosition(box.centerPoint, zoom.coerceIn(MIN_ZOOM.toInt(), 17).toByte())
         }
         if (state.followUser && here != null) {
             view.setCenter(here)
@@ -351,4 +463,65 @@ private fun markerBitmap(context: Context, color: Int, destination: Boolean): or
         canvas.drawCircle(center, center, center * 0.28f, brush)
     }
     return AndroidGraphicFactory.convertToBitmap(android.graphics.drawable.BitmapDrawable(context.resources, bitmap))
+}
+
+/**
+ * A map pin (teardrop) with the tip anchored on the point. [label] is drawn inside; with no label a star is drawn.
+ * A selected pin is larger and has a coloured halo. Returns the bitmap and the vertical offset that puts its tip on the point.
+ */
+private fun pinBitmap(context: Context, color: Int, label: String?, selected: Boolean, density: Float): Pair<org.mapsforge.core.graphics.Bitmap, Int> {
+    val scale = if (selected) 1.3f else 1f
+    val radius = 13f * density * scale
+    val pad = 7f * density
+    val width = ((radius + pad) * 2).toInt()
+    val cx = width / 2f
+    val cy = pad + radius
+    val tipY = cy + radius * 2.05f
+    val height = (tipY + pad * 0.6f).toInt()
+    val bitmap = android.graphics.Bitmap.createBitmap(width, height, android.graphics.Bitmap.Config.ARGB_8888)
+    val canvas = android.graphics.Canvas(bitmap)
+    val brush = android.graphics.Paint(android.graphics.Paint.ANTI_ALIAS_FLAG)
+
+    if (selected) {
+        brush.color = withAlpha(color, 70)
+        canvas.drawCircle(cx, cy, radius + pad * 0.95f, brush)
+    }
+    fun drawPin(outset: Float, paintColor: Int) {
+        brush.color = paintColor
+        val r = radius + outset
+        canvas.drawCircle(cx, cy, r, brush)
+        val angle = Math.toRadians(38.0)
+        val path = android.graphics.Path()
+        path.moveTo(cx - (r * Math.cos(angle)).toFloat(), cy + (r * Math.sin(angle)).toFloat())
+        path.lineTo(cx, tipY + outset * 0.8f)
+        path.lineTo(cx + (r * Math.cos(angle)).toFloat(), cy + (r * Math.sin(angle)).toFloat())
+        path.close()
+        canvas.drawPath(path, brush)
+    }
+    drawPin(2f * density, android.graphics.Color.WHITE)
+    drawPin(0f, color)
+
+    brush.color = android.graphics.Color.WHITE
+    if (label != null) {
+        brush.textAlign = android.graphics.Paint.Align.CENTER
+        brush.typeface = android.graphics.Typeface.create(android.graphics.Typeface.DEFAULT, android.graphics.Typeface.BOLD)
+        brush.textSize = radius * 1.15f
+        canvas.drawText(label, cx, cy - (brush.ascent() + brush.descent()) / 2f, brush)
+    } else {
+        val star = android.graphics.Path()
+        val outer = radius * 0.62f
+        val inner = outer * 0.45f
+        for (i in 0 until 10) {
+            val r = if (i % 2 == 0) outer else inner
+            val a = Math.toRadians(-90.0 + i * 36.0)
+            val x = cx + (r * Math.cos(a)).toFloat()
+            val y = cy + (r * Math.sin(a)).toFloat()
+            if (i == 0) star.moveTo(x, y) else star.lineTo(x, y)
+        }
+        star.close()
+        canvas.drawPath(star, brush)
+    }
+    val converted = AndroidGraphicFactory.convertToBitmap(android.graphics.drawable.BitmapDrawable(context.resources, bitmap))
+    // Marker centres its bitmap on the point; shift it up so the tip lands there instead.
+    return converted to -((tipY - height / 2f).toInt())
 }

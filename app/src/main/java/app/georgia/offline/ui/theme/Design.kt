@@ -1,6 +1,7 @@
 package app.georgia.offline.ui.theme
 
 import androidx.compose.material3.ColorScheme
+import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
@@ -39,3 +40,9 @@ fun ColorScheme.edgeBrush(): Brush = Brush.verticalGradient(
 
 /** Translucent surface colour used by floating glass elements over the map. */
 fun ColorScheme.glass(alpha: Float = 0.88f): Color = surfaceContainerHighest.copy(alpha = alpha)
+
+/**
+ * How opaque the floating layers (cards, navigation bar, map chips, route panels) are.
+ * Set by the person in settings; 1.0 is fully solid, lower values let the background show through.
+ */
+val LocalLayerAlpha = staticCompositionLocalOf { 0.92f }

@@ -32,6 +32,16 @@ object PoiRepository {
         val longitude: Double,
         val tagsJson: String = "{}"
     ) {
+        /** The one name to show for [language], falling back to the nearest readable alternative. */
+        fun nameIn(language: String): String = pickName(language, name, nameEn, nameRu, nameKa)
+
+        /** Settlement written in the OSM address tags, if the object has one. */
+        fun taggedSettlement(): String? {
+            val tags = runCatching { JSONObject(tagsJson) }.getOrNull() ?: return null
+            return listOf("addr:city", "addr:town", "addr:village", "addr:place")
+                .firstNotNullOfOrNull { key -> tags.optString(key, "").trim().takeIf { it.isNotEmpty() } }
+        }
+
         fun namesFor(enabledLanguages: Set<String>): List<String> {
             val values = buildList {
                 if ("en" in enabledLanguages && nameEn.isNotBlank()) add(nameEn)
@@ -69,6 +79,80 @@ object PoiRepository {
                 first("operator", "brand")?.let { add("Оператор / бренд" to it) }
             }.take(8)
         }
+    }
+
+    /** A city, town, village or hamlet from the same database, used to say where an object is. */
+    data class Settlement(
+        val subcategory: String,
+        val name: String,
+        val nameEn: String,
+        val nameRu: String,
+        val nameKa: String,
+        val latitude: Double,
+        val longitude: Double
+    ) {
+        fun nameIn(language: String): String = pickName(language, name, nameEn, nameRu, nameKa)
+    }
+
+    /** Picks one name: the chosen language first, then the most readable alternatives. */
+    fun pickName(language: String, name: String, en: String, ru: String, ka: String): String {
+        val order = when (language) {
+            "ru" -> listOf(ru, en, name, ka)
+            "en" -> listOf(en, ru, name, ka)
+            else -> listOf(ka, name, en, ru)
+        }
+        return order.firstOrNull { it.isNotBlank() } ?: ""
+    }
+
+    @Volatile private var settlementCache: Pair<String, List<Settlement>>? = null
+
+    /** All settlements, read once per database file (a few thousand rows) and kept in memory. */
+    suspend fun settlements(database: File): List<Settlement> = withContext(Dispatchers.IO) {
+        val key = "${database.absolutePath}:${database.length()}"
+        settlementCache?.takeIf { it.first == key }?.let { return@withContext it.second }
+        val db = SQLiteDatabase.openDatabase(database.absolutePath, null, SQLiteDatabase.OPEN_READONLY)
+        val loaded = try {
+            db.rawQuery(
+                "SELECT subcategory, name, name_en, name_ru, name_ka, latitude, longitude FROM poi WHERE category = 'settlement'",
+                null
+            ).use { cursor ->
+                buildList {
+                    while (cursor.moveToNext()) {
+                        add(Settlement(
+                            subcategory = cursor.getString(0).orEmpty(),
+                            name = cursor.getString(1).orEmpty(),
+                            nameEn = cursor.getString(2).orEmpty(),
+                            nameRu = cursor.getString(3).orEmpty(),
+                            nameKa = cursor.getString(4).orEmpty(),
+                            latitude = cursor.getDouble(5),
+                            longitude = cursor.getDouble(6)
+                        ))
+                    }
+                }
+            }
+        } finally {
+            db.close()
+        }
+        settlementCache = key to loaded
+        loaded
+    }
+
+    /** The closest settlement within [maxKm], by flat-earth distance (fine at Georgia's latitude). */
+    fun nearestSettlement(settlements: List<Settlement>, latitude: Double, longitude: Double, maxKm: Double = 30.0): Settlement? {
+        val kmPerLon = 111.32 * Math.cos(Math.toRadians(latitude))
+        var best: Settlement? = null
+        var bestSquared = maxKm * maxKm
+        for (candidate in settlements) {
+            val dy = (candidate.latitude - latitude) * 110.57
+            if (dy * dy >= bestSquared) continue
+            val dx = (candidate.longitude - longitude) * kmPerLon
+            val squared = dx * dx + dy * dy
+            if (squared < bestSquared) {
+                bestSquared = squared
+                best = candidate
+            }
+        }
+        return best
     }
 
     data class SearchResult(val database: File?, val poiCount: Int, val message: String?)

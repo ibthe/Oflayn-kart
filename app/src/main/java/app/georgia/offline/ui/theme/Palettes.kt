@@ -4,194 +4,205 @@ import androidx.compose.material3.ColorScheme
 import androidx.compose.material3.darkColorScheme
 import androidx.compose.material3.lightColorScheme
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.luminance
+import androidx.compose.ui.graphics.toArgb
+import kotlin.math.abs
+import kotlin.math.max
+import kotlin.math.min
 
 /**
- * Five complete themes. Ice, Mint and Sunset are light; Aurora and Neon are dark.
- *
- * Every palette pairs a saturated accent (primary) with a second glow colour (tertiary): the two
- * form the accent gradient used by buttons, the navigation bar and the route line. Backgrounds
- * stay tinted off-white / off-black so the vivid accents carry the personality while body text
- * keeps comfortable contrast.
+ * Brightness of the interface. [DIM] sits between the two: a soft slate-grey look that is
+ * easier on the eyes than pure black in a lit room and than glaring white in the evening.
  */
-data class AppPalette(
+enum class ThemeMode(val id: String, val title: String) {
+    LIGHT("light", "Светлая"),
+    DIM("dim", "Сумерки"),
+    DARK("dark", "Тёмная");
+
+    val isDark: Boolean get() = this != LIGHT
+}
+
+/** What the person chose in settings; [SYSTEM] follows the phone's light/dark setting. */
+val THEME_MODE_CHOICES = listOf("system" to "Авто", "light" to "Светлая", "dim" to "Сумерки", "dark" to "Тёмная")
+
+fun resolveThemeMode(choice: String, systemDark: Boolean): ThemeMode = when (choice) {
+    "light" -> ThemeMode.LIGHT
+    "dim" -> ThemeMode.DIM
+    "dark" -> ThemeMode.DARK
+    else -> if (systemDark) ThemeMode.DARK else ThemeMode.LIGHT
+}
+
+/** Primary (the main accent) and tertiary (the second glow colour) for one brightness mode. */
+private class Accent(val primary: String, val tertiary: String)
+
+/**
+ * One colour theme = one family of accents that exists in all three brightness modes.
+ * Neutrals (backgrounds, text, borders) are generated from [hue] / [tint] so every
+ * theme keeps the same visual rhythm. [highContrast] themes use pure black/white
+ * text and strong borders instead of the soft neutrals.
+ */
+class AppPalette internal constructor(
     val id: String,
     val title: String,
-    val isDark: Boolean,
-    val scheme: ColorScheme
-)
+    val highContrast: Boolean,
+    private val hue: Float,
+    private val tint: Float,
+    private val light: Accent,
+    private val dim: Accent,
+    private val dark: Accent
+) {
+    private val cache = HashMap<ThemeMode, ColorScheme>()
 
-private fun c(argb: Long) = Color(argb)
+    fun scheme(mode: ThemeMode): ColorScheme = cache.getOrPut(mode) { build(mode) }
 
-private val MistScheme = lightColorScheme(
-    primary = c(0xFF2547E8),
-    onPrimary = c(0xFFFFFFFF),
-    primaryContainer = c(0xFFDDE4FF),
-    onPrimaryContainer = c(0xFF0E1F7A),
-    secondary = c(0xFF4B5878),
-    onSecondary = c(0xFFFFFFFF),
-    secondaryContainer = c(0xFFE4E8F5),
-    onSecondaryContainer = c(0xFF1B2340),
-    tertiary = c(0xFF0B7BD6),
-    onTertiary = c(0xFFFFFFFF),
-    tertiaryContainer = c(0xFFD6EBFF),
-    onTertiaryContainer = c(0xFF062F57),
-    background = c(0xFFF3F6FD),
-    onBackground = c(0xFF121A33),
-    surface = c(0xFFF3F6FD),
-    onSurface = c(0xFF121A33),
-    surfaceVariant = c(0xFFE4E9F6),
-    onSurfaceVariant = c(0xFF4B5878),
-    surfaceContainerLowest = c(0xFFFFFFFF),
-    surfaceContainerLow = c(0xFFF8FAFF),
-    surfaceContainer = c(0xFFEBEFFA),
-    surfaceContainerHigh = c(0xFFE3E8F6),
-    surfaceContainerHighest = c(0xFFFFFFFF),
-    outline = c(0xFF7C89AD),
-    outlineVariant = c(0xFFD5DCF0),
-    error = c(0xFFBA1A1A),
-    onError = c(0xFFFFFFFF),
-    errorContainer = c(0xFFFDE8E6),
-    onErrorContainer = c(0xFF410002)
-)
+    private fun build(mode: ThemeMode): ColorScheme {
+        val accent = when (mode) {
+            ThemeMode.LIGHT -> light
+            ThemeMode.DIM -> dim
+            ThemeMode.DARK -> dark
+        }
+        val primary = hex(accent.primary)
+        val tertiary = hex(accent.tertiary)
+        fun n(lightness: Float, saturation: Float = tint) = hsl(hue, saturation, lightness)
 
-private val SageScheme = lightColorScheme(
-    primary = c(0xFF0B7A55),
-    onPrimary = c(0xFFFFFFFF),
-    primaryContainer = c(0xFFCFF5E3),
-    onPrimaryContainer = c(0xFF033D2A),
-    secondary = c(0xFF4A6558),
-    onSecondary = c(0xFFFFFFFF),
-    secondaryContainer = c(0xFFDFEEE6),
-    onSecondaryContainer = c(0xFF132A20),
-    tertiary = c(0xFF0F8C62),
-    onTertiary = c(0xFFFFFFFF),
-    tertiaryContainer = c(0xFFC9F7E0),
-    onTertiaryContainer = c(0xFF05402B),
-    background = c(0xFFF1F8F4),
-    onBackground = c(0xFF0F2219),
-    surface = c(0xFFF1F8F4),
-    onSurface = c(0xFF0F2219),
-    surfaceVariant = c(0xFFE0EEE6),
-    onSurfaceVariant = c(0xFF46604F),
-    surfaceContainerLowest = c(0xFFFFFFFF),
-    surfaceContainerLow = c(0xFFF7FCF9),
-    surfaceContainer = c(0xFFE8F3ED),
-    surfaceContainerHigh = c(0xFFDFEDE5),
-    surfaceContainerHighest = c(0xFFFFFFFF),
-    outline = c(0xFF6E9380),
-    outlineVariant = c(0xFFCFE3D8),
-    error = c(0xFFBA1A1A),
-    onError = c(0xFFFFFFFF),
-    errorContainer = c(0xFFFDE8E6),
-    onErrorContainer = c(0xFF410002)
-)
+        // Lightness ladders per mode: [background, lowest, low, container, high, highest, text, textVariant, outline, outlineVariant].
+        val ladder = when {
+            highContrast && mode == ThemeMode.LIGHT -> floatArrayOf(1.0f, 1.0f, 0.97f, 0.94f, 0.91f, 1.0f, 0.0f, 0.16f, 0.30f, 0.38f)
+            highContrast && mode == ThemeMode.DIM -> floatArrayOf(0.14f, 0.10f, 0.16f, 0.19f, 0.23f, 0.18f, 1.0f, 0.92f, 0.78f, 0.62f)
+            highContrast -> floatArrayOf(0.0f, 0.0f, 0.05f, 0.08f, 0.12f, 0.06f, 1.0f, 0.93f, 0.80f, 0.64f)
+            mode == ThemeMode.LIGHT -> floatArrayOf(0.965f, 1.0f, 0.985f, 0.935f, 0.91f, 1.0f, 0.10f, 0.32f, 0.55f, 0.86f)
+            mode == ThemeMode.DIM -> floatArrayOf(0.20f, 0.15f, 0.23f, 0.26f, 0.30f, 0.275f, 0.92f, 0.73f, 0.52f, 0.34f)
+            else -> floatArrayOf(0.045f, 0.03f, 0.07f, 0.095f, 0.12f, 0.10f, 0.93f, 0.71f, 0.45f, 0.20f)
+        }
+        val sat = if (highContrast) 0.0f else if (mode == ThemeMode.DIM) tint * 0.8f else tint
+        val background = n(ladder[0], sat)
+        val text = n(ladder[6], sat)
+        val textVariant = n(ladder[7], sat)
 
-private val SandScheme = lightColorScheme(
-    primary = c(0xFFD13B1F),
-    onPrimary = c(0xFFFFFFFF),
-    primaryContainer = c(0xFFFFE0D6),
-    onPrimaryContainer = c(0xFF5C1000),
-    secondary = c(0xFF7A5A4E),
-    onSecondary = c(0xFFFFFFFF),
-    secondaryContainer = c(0xFFF5E6DF),
-    onSecondaryContainer = c(0xFF2E1810),
-    tertiary = c(0xFFCC5A12),
-    onTertiary = c(0xFFFFFFFF),
-    tertiaryContainer = c(0xFFFFE3CC),
-    onTertiaryContainer = c(0xFF4A2100),
-    background = c(0xFFFFF6F1),
-    onBackground = c(0xFF2A150E),
-    surface = c(0xFFFFF6F1),
-    onSurface = c(0xFF2A150E),
-    surfaceVariant = c(0xFFF5E5DD),
-    onSurfaceVariant = c(0xFF735548),
-    surfaceContainerLowest = c(0xFFFFFFFF),
-    surfaceContainerLow = c(0xFFFFFAF7),
-    surfaceContainer = c(0xFFFBEDE6),
-    surfaceContainerHigh = c(0xFFF6E4DB),
-    surfaceContainerHighest = c(0xFFFFFFFF),
-    outline = c(0xFFA8826F),
-    outlineVariant = c(0xFFEBD6CB),
-    error = c(0xFFBA1A1A),
-    onError = c(0xFFFFFFFF),
-    errorContainer = c(0xFFFDE8E6),
-    onErrorContainer = c(0xFF410002)
-)
+        val dark = mode.isDark
+        val primaryContainer = mix(primary, background, if (dark) 0.68f else 0.84f)
+        val tertiaryContainer = mix(tertiary, background, if (dark) 0.68f else 0.84f)
+        val onPrimaryContainer = if (dark) mix(primary, Color.White, 0.72f) else mix(primary, Color.Black, 0.55f)
+        val onTertiaryContainer = if (dark) mix(tertiary, Color.White, 0.72f) else mix(tertiary, Color.Black, 0.55f)
+        val secondary = textVariant
+        val secondaryContainer = n(ladder[4], sat)
+        val error = if (dark) hex("FF8A80") else hex("B3261E")
+        val errorContainer = if (dark) hex("5C1A18") else hex("FDE8E6")
 
-private val DuskScheme = darkColorScheme(
-    primary = c(0xFFB79CFF),
-    onPrimary = c(0xFF1A0B45),
-    primaryContainer = c(0xFF3A2878),
-    onPrimaryContainer = c(0xFFE6DDFF),
-    secondary = c(0xFFA9A3C9),
-    onSecondary = c(0xFF17142B),
-    secondaryContainer = c(0xFF2B2745),
-    onSecondaryContainer = c(0xFFE4E0F7),
-    tertiary = c(0xFF3DF2D0),
-    onTertiary = c(0xFF00382F),
-    tertiaryContainer = c(0xFF0E4A44),
-    onTertiaryContainer = c(0xFFB8FFF0),
-    background = c(0xFF0A0914),
-    onBackground = c(0xFFECE9FA),
-    surface = c(0xFF0A0914),
-    onSurface = c(0xFFECE9FA),
-    surfaceVariant = c(0xFF2B2745),
-    onSurfaceVariant = c(0xFFA9A3C9),
-    surfaceContainerLowest = c(0xFF07060F),
-    surfaceContainerLow = c(0xFF110F1E),
-    surfaceContainer = c(0xFF171428),
-    surfaceContainerHigh = c(0xFF1E1A34),
-    surfaceContainerHighest = c(0xFF15122A),
-    outline = c(0xFF6A6490),
-    outlineVariant = c(0xFF2E2A4A),
-    error = c(0xFFFF8A80),
-    onError = c(0xFF5C0A06),
-    errorContainer = c(0xFF5C1A18),
-    onErrorContainer = c(0xFFFFDAD6)
-)
+        val base = if (dark) darkColorScheme() else lightColorScheme()
+        return base.copy(
+            primary = primary,
+            onPrimary = onColorFor(primary),
+            primaryContainer = primaryContainer,
+            onPrimaryContainer = onPrimaryContainer,
+            secondary = secondary,
+            onSecondary = onColorFor(secondary),
+            secondaryContainer = secondaryContainer,
+            onSecondaryContainer = text,
+            tertiary = tertiary,
+            onTertiary = onColorFor(tertiary),
+            tertiaryContainer = tertiaryContainer,
+            onTertiaryContainer = onTertiaryContainer,
+            background = background,
+            onBackground = text,
+            surface = background,
+            onSurface = text,
+            surfaceVariant = n(ladder[4], sat),
+            onSurfaceVariant = textVariant,
+            surfaceContainerLowest = n(ladder[1], sat),
+            surfaceContainerLow = n(ladder[2], sat),
+            surfaceContainer = n(ladder[3], sat),
+            surfaceContainerHigh = n(ladder[4], sat),
+            surfaceContainerHighest = n(ladder[5], sat),
+            outline = n(ladder[8], sat),
+            outlineVariant = n(ladder[9], sat),
+            error = error,
+            onError = onColorFor(error),
+            errorContainer = errorContainer,
+            onErrorContainer = if (dark) hex("FFDAD6") else hex("410002")
+        )
+    }
+}
 
-private val GraphiteScheme = darkColorScheme(
-    primary = c(0xFFCFFF4A),
-    onPrimary = c(0xFF1A2400),
-    primaryContainer = c(0xFF3B4D00),
-    onPrimaryContainer = c(0xFFE8FFB0),
-    secondary = c(0xFFA6ADA0),
-    onSecondary = c(0xFF151810),
-    secondaryContainer = c(0xFF262A20),
-    onSecondaryContainer = c(0xFFE4E9DC),
-    tertiary = c(0xFF2EE6FF),
-    onTertiary = c(0xFF00363F),
-    tertiaryContainer = c(0xFF0A4A55),
-    onTertiaryContainer = c(0xFFC2F6FF),
-    background = c(0xFF060708),
-    onBackground = c(0xFFEAEDE6),
-    surface = c(0xFF060708),
-    onSurface = c(0xFFEAEDE6),
-    surfaceVariant = c(0xFF262A20),
-    onSurfaceVariant = c(0xFFA6ADA0),
-    surfaceContainerLowest = c(0xFF040505),
-    surfaceContainerLow = c(0xFF0C0E0B),
-    surfaceContainer = c(0xFF121510),
-    surfaceContainerHigh = c(0xFF191D15),
-    surfaceContainerHighest = c(0xFF101310),
-    outline = c(0xFF5F665A),
-    outlineVariant = c(0xFF282D22),
-    error = c(0xFFFF8A80),
-    onError = c(0xFF5C0A06),
-    errorContainer = c(0xFF5C1A18),
-    onErrorContainer = c(0xFFFFDAD6)
-)
-
+/** Five colour families plus two high-contrast themes; each exists in light, dim and dark. */
 val AppPalettes: List<AppPalette> = listOf(
-    AppPalette("mist", "Лёд", false, MistScheme),
-    AppPalette("sage", "Мята", false, SageScheme),
-    AppPalette("sand", "Закат", false, SandScheme),
-    AppPalette("dusk", "Аврора", true, DuskScheme),
-    AppPalette("graphite", "Неон", true, GraphiteScheme)
+    AppPalette(
+        "mist", "Лёд", false, 225f, 0.30f,
+        Accent("2547E8", "0B7BD6"), Accent("93AAFF", "4DB8FF"), Accent("8EA6FF", "4CC2FF")
+    ),
+    AppPalette(
+        "sage", "Мята", false, 150f, 0.22f,
+        Accent("0B7A55", "0F8C62"), Accent("58E0AE", "2CD6C0"), Accent("62EDB6", "38E0D0")
+    ),
+    AppPalette(
+        "sand", "Закат", false, 20f, 0.30f,
+        Accent("D13B1F", "CC5A12"), Accent("FF9A78", "FFB35C"), Accent("FF8F66", "FFB454")
+    ),
+    AppPalette(
+        "dusk", "Аврора", false, 255f, 0.35f,
+        Accent("6A3FE0", "0E8F83"), Accent("B79CFF", "3DF2D0"), Accent("B79CFF", "3DF2D0")
+    ),
+    AppPalette(
+        "graphite", "Неон", false, 95f, 0.10f,
+        Accent("3F6B00", "0A7F96"), Accent("CFFF4A", "2EE6FF"), Accent("CFFF4A", "2EE6FF")
+    ),
+    AppPalette(
+        "hc_mono", "Контраст", true, 0f, 0f,
+        Accent("0033CC", "00508F"), Accent("A9C8FF", "6FE3EA"), Accent("8CB8FF", "5CE1E6")
+    ),
+    AppPalette(
+        "hc_amber", "Контраст+", true, 0f, 0f,
+        Accent("7A2E00", "00566B"), Accent("FFC83D", "4DD0E1"), Accent("FFD60A", "00E5FF")
+    )
 )
 
-/** Used until the person picks a theme: Ice in light mode, Aurora when the phone is in dark mode. */
-fun defaultPaletteId(systemDark: Boolean): String = if (systemDark) "dusk" else "mist"
+/** Used until the person picks a colour theme. */
+const val DEFAULT_PALETTE_ID = "mist"
 
 fun paletteById(id: String?): AppPalette =
     AppPalettes.firstOrNull { it.id == id } ?: AppPalettes.first()
+
+// ---- colour helpers ----
+
+private fun hex(value: String): Color = Color(0xFF000000.toInt() or value.toLong(16).toInt())
+
+private fun hsl(hue: Float, saturation: Float, lightness: Float): Color {
+    val c = (1f - abs(2f * lightness - 1f)) * saturation
+    val hp = (((hue % 360f) + 360f) % 360f) / 60f
+    val x = c * (1f - abs(hp % 2f - 1f))
+    val (r1, g1, b1) = when {
+        hp < 1f -> Triple(c, x, 0f)
+        hp < 2f -> Triple(x, c, 0f)
+        hp < 3f -> Triple(0f, c, x)
+        hp < 4f -> Triple(0f, x, c)
+        hp < 5f -> Triple(x, 0f, c)
+        else -> Triple(c, 0f, x)
+    }
+    val m = lightness - c / 2f
+    return Color(min(1f, max(0f, r1 + m)), min(1f, max(0f, g1 + m)), min(1f, max(0f, b1 + m)))
+}
+
+/** [amount] of [other] mixed into [base]. */
+private fun mix(base: Color, other: Color, amount: Float): Color = Color(
+    red = base.red + (other.red - base.red) * amount,
+    green = base.green + (other.green - base.green) * amount,
+    blue = base.blue + (other.blue - base.blue) * amount
+)
+
+private fun contrast(a: Color, b: Color): Float {
+    val l1 = max(a.luminance(), b.luminance())
+    val l2 = min(a.luminance(), b.luminance())
+    return (l1 + 0.05f) / (l2 + 0.05f)
+}
+
+/** Near-black or white, whichever reads better on [background]. */
+private fun onColorFor(background: Color): Color {
+    val white = Color.White
+    val ink = Color(0xFF0B0B10)
+    return if (contrast(background, white) >= contrast(background, ink)) white else ink
+}
+
+/** Exposed for tests: contrast ratio between text and its background. */
+fun contrastRatio(foreground: Color, background: Color): Float = contrast(foreground, background)
+
+internal fun Color.argb(): Int = toArgb()

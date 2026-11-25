@@ -107,7 +107,12 @@ import app.georgia.offline.ui.theme.AppPalettes
 import app.georgia.offline.ui.theme.GeorgiaTheme
 import app.georgia.offline.ui.theme.Radius
 import app.georgia.offline.ui.theme.Space
-import app.georgia.offline.ui.theme.defaultPaletteId
+import app.georgia.offline.ui.theme.LocalLayerAlpha
+import app.georgia.offline.ui.theme.THEME_MODE_CHOICES
+import app.georgia.offline.ui.theme.ThemeMode
+import app.georgia.offline.ui.theme.paletteById
+import app.georgia.offline.ui.theme.resolveThemeMode
+import androidx.compose.material3.Slider
 
 private enum class AppTab(val label: String) {
     MAP("Карта"),
@@ -120,30 +125,40 @@ private enum class AppTab(val label: String) {
 fun GeorgiaOfflineApp(settings: LocalSettings) {
     var selectedTab by rememberSaveable { mutableStateOf(AppTab.MAP.name) }
     val navigation = remember { NavigationState() }
+    val tracker = rememberLocationTracker()
     // A tab name saved by an older version (for example the removed ROUTE tab) falls back to the map.
     val currentTab = AppTab.entries.firstOrNull { it.name == selectedTab } ?: AppTab.MAP
-    GeorgiaTheme(palette = settings.palette) {
-        Box(Modifier.fillMaxSize().background(MaterialTheme.colorScheme.background).aurora()) {
-            Scaffold(
-                containerColor = Color.Transparent,
-                contentColor = MaterialTheme.colorScheme.onBackground,
-                bottomBar = { MinimalNavBar(selected = currentTab.name, onSelect = { selectedTab = it }) }
-            ) { padding ->
-                AnimatedContent(
-                    targetState = currentTab,
-                    transitionSpec = { fadeIn(tween(280)) togetherWith fadeOut(tween(160)) },
-                    label = "tabs"
-                ) { tab ->
-                    when (tab) {
-                        AppTab.MAP -> MapScreen(Modifier.padding(padding), settings, navigation)
-                        AppTab.DISCOVER -> DiscoverScreen(Modifier.padding(padding), settings) { name, latitude, longitude ->
-                            navigation.target = NavigationTarget(name, latitude, longitude)
-                            selectedTab = AppTab.MAP.name
+    val mode = resolveThemeMode(settings.themeMode, isSystemInDarkTheme())
+    GeorgiaTheme(paletteId = settings.palette, mode = mode) {
+        CompositionLocalProvider(LocalLayerAlpha provides settings.layerOpacity) {
+            Box(Modifier.fillMaxSize().background(MaterialTheme.colorScheme.background).aurora()) {
+                Scaffold(
+                    containerColor = Color.Transparent,
+                    contentColor = MaterialTheme.colorScheme.onBackground,
+                    bottomBar = { MinimalNavBar(selected = currentTab.name, onSelect = { selectedTab = it }) }
+                ) { padding ->
+                    AnimatedContent(
+                        targetState = currentTab,
+                        transitionSpec = { fadeIn(tween(280)) togetherWith fadeOut(tween(160)) },
+                        label = "tabs"
+                    ) { tab ->
+                        when (tab) {
+                            AppTab.MAP -> MapScreen(Modifier.padding(padding), settings, navigation, tracker)
+                            AppTab.DISCOVER -> DiscoverScreen(Modifier.padding(padding), settings, tracker) { name, latitude, longitude ->
+                                navigation.target = NavigationTarget(name, latitude, longitude)
+                                navigation.selectedPlaceId = null
+                                selectedTab = AppTab.MAP.name
+                            }
+                            AppTab.TOOLS -> ToolsScreen(Modifier.padding(padding), settings, tracker)
+                            AppTab.SETTINGS -> SettingsScreen(Modifier.padding(padding), settings) { placeId ->
+                                navigation.selectedPlaceId = placeId
+                                navigation.focusToken++
+                                selectedTab = AppTab.MAP.name
+                            }
                         }
-                        AppTab.TOOLS -> ToolsScreen(Modifier.padding(padding), settings)
-                        AppTab.SETTINGS -> SettingsScreen(Modifier.padding(padding), settings)
                     }
                 }
+                LocationDialogs(tracker)
             }
         }
     }
@@ -168,7 +183,7 @@ internal fun Panel(modifier: Modifier = Modifier, padding: Dp = Space.card, cont
     Surface(
         modifier = modifier.fillMaxWidth().appearInOrder(),
         shape = RoundedCornerShape(Radius.card),
-        color = MaterialTheme.colorScheme.surfaceContainerHighest.copy(alpha = 0.92f),
+        color = MaterialTheme.colorScheme.surfaceContainerHighest.copy(alpha = LocalLayerAlpha.current),
         contentColor = MaterialTheme.colorScheme.onSurface,
         border = BorderStroke(1.dp, MaterialTheme.colorScheme.edgeBrush())
     ) {
@@ -199,7 +214,7 @@ private fun MinimalNavBar(selected: String, onSelect: (String) -> Unit) {
         Surface(
             modifier = Modifier.fillMaxWidth(),
             shape = CircleShape,
-            color = scheme.glass(0.94f),
+            color = scheme.glass(LocalLayerAlpha.current),
             contentColor = scheme.onSurface,
             border = BorderStroke(1.dp, scheme.edgeBrush()),
             shadowElevation = 16.dp
@@ -320,7 +335,7 @@ private fun openExternalNavigator(context: android.content.Context, target: Navi
 }
 
 @Composable
-private fun MapScreen(modifier: Modifier, settings: LocalSettings, navigation: NavigationState) {
+private fun MapScreen(modifier: Modifier, settings: LocalSettings, navigation: NavigationState, tracker: LocationTracker) {
     val context = LocalContext.current
     val coroutineScope = rememberCoroutineScope()
     var isImporting by remember { mutableStateOf(false) }
@@ -383,13 +398,19 @@ private fun MapScreen(modifier: Modifier, settings: LocalSettings, navigation: N
 
     val openPicker: () -> Unit = { mapPicker.launch(arrayOf("*/*")) }
     var showDetails by rememberSaveable { mutableStateOf(false) }
-    val tracker = rememberLocationTracker()
     var recenterToken by remember { mutableIntStateOf(0) }
     var zoomInToken by remember { mutableIntStateOf(0) }
     var zoomOutToken by remember { mutableIntStateOf(0) }
     val target = navigation.target
     // Choosing a destination is the person's request for guidance, so start positioning for it.
-    LaunchedEffect(target) { if (target != null && !tracker.active) tracker.start() }
+    // (A route that starts from a chosen point needs no GPS to be drawn.)
+    LaunchedEffect(target, navigation.origin) { if (target != null && navigation.origin == null && !tracker.active) tracker.start() }
+
+    val savedPlaces = settings.allPlaces()
+    val mapPlaces = remember(savedPlaces) {
+        savedPlaces.map { MapPlace(it.id, it.latitude, it.longitude, if (it.id == LocalSettings.CAR_PLACE_ID) PlaceKind.CAR else PlaceKind.SAVED) }
+    }
+    val selectedPlace = savedPlaces.firstOrNull { it.id == navigation.selectedPlaceId }
 
     val session = remember { RouteSession() }
     val speaker = remember { Speaker(context) }
@@ -400,13 +421,15 @@ private fun MapScreen(modifier: Modifier, settings: LocalSettings, navigation: N
         onDispose { hostView.keepScreenOn = false }
     }
     // A new or cleared destination invalidates any route.
-    LaunchedEffect(target) { session.reset() }
+    LaunchedEffect(target, navigation.origin) { session.reset() }
 
     fun planFrom(fix: android.location.Location?, rerouting: Boolean) {
-        val goal = navigation.target
-        if (fix == null || goal == null) return
+        val goal = navigation.target ?: return
+        // "Route from here" starts at the chosen point; otherwise at the GPS position.
+        val startLat = navigation.origin?.latitude ?: fix?.latitude ?: return
+        val startLon = navigation.origin?.longitude ?: fix?.longitude ?: return
         coroutineScope.launch {
-            session.plan(context, fix.latitude, fix.longitude, goal.latitude, goal.longitude, rerouting)
+            session.plan(context, startLat, startLon, goal.latitude, goal.longitude, rerouting)
             if (rerouting && session.navigating && session.voice && session.message == null) speaker.speak("Маршрут перестроен")
         }
     }
@@ -447,7 +470,18 @@ private fun MapScreen(modifier: Modifier, settings: LocalSettings, navigation: N
                 routeColor = MaterialTheme.colorScheme.tertiary.toArgb(),
                 followUser = session.navigating,
                 fitToken = session.fitToken,
-                onLongPress = { point -> navigation.target = NavigationTarget("Точка на карте", point.latitude, point.longitude) }
+                places = mapPlaces,
+                selectedPlaceId = navigation.selectedPlaceId,
+                origin = navigation.origin?.let { LatLong(it.latitude, it.longitude) },
+                savedColor = MaterialTheme.colorScheme.primary.toArgb(),
+                carColor = MaterialTheme.colorScheme.tertiary.toArgb(),
+                originColor = MaterialTheme.colorScheme.tertiary.toArgb(),
+                focusToken = navigation.focusToken,
+                onPlaceTap = { id -> if (!session.navigating) navigation.selectedPlaceId = id },
+                onLongPress = { point ->
+                    navigation.target = NavigationTarget("Точка на карте", point.latitude, point.longitude)
+                    navigation.selectedPlaceId = null
+                }
             )
             AnimatedVisibility(
                 visible = showDetails,
@@ -540,16 +574,46 @@ private fun MapScreen(modifier: Modifier, settings: LocalSettings, navigation: N
                         }
                     }
                 }
-                if (target != null && !showDetails) {
+                if (!showDetails) {
                     val activeRoute = session.route
-                    if (session.navigating && activeRoute != null) {
+                    if (target != null && session.navigating && activeRoute != null) {
                         NavigationFooter(activeRoute, session) {
                             session.reset()
-                            navigation.target = null
+                            navigation.clearRoute()
                         }
-                    } else {
+                    } else if (selectedPlace != null) {
+                        val isCar = selectedPlace.id == LocalSettings.CAR_PLACE_ID
+                        SavedPlaceCard(
+                            place = selectedPlace,
+                            distanceText = tracker.location?.let {
+                                GeoMath.formatDistance(GeoMath.distanceMeters(it.latitude, it.longitude, selectedPlace.latitude, selectedPlace.longitude)) + " от вас"
+                            },
+                            isCar = isCar,
+                            onRouteHere = {
+                                navigation.target = NavigationTarget(selectedPlace.name, selectedPlace.latitude, selectedPlace.longitude)
+                                navigation.selectedPlaceId = null
+                            },
+                            onRouteFrom = {
+                                navigation.origin = NavigationTarget(selectedPlace.name, selectedPlace.latitude, selectedPlace.longitude)
+                                navigation.selectedPlaceId = null
+                            },
+                            onRename = { settings.renamePlace(selectedPlace.id, it) },
+                            onDelete = {
+                                settings.removePlace(selectedPlace.id)
+                                navigation.selectedPlaceId = null
+                            },
+                            onClose = { navigation.selectedPlaceId = null }
+                        )
+                    } else if (target != null) {
+                        val alreadySaved = settings.allPlaces().any {
+                            kotlin.math.abs(it.latitude - target.latitude) < 1e-5 && kotlin.math.abs(it.longitude - target.longitude) < 1e-5
+                        }
                         RoutePlannerCard(
                             target = target,
+                            origin = navigation.origin,
+                            onSave = if (alreadySaved) null else {
+                                { settings.addPlace(target.name, target.latitude, target.longitude) }
+                            },
                             location = tracker.location,
                             session = session,
                             onProfile = { option ->
@@ -562,8 +626,10 @@ private fun MapScreen(modifier: Modifier, settings: LocalSettings, navigation: N
                                 if (session.voice) activeRoute?.steps?.firstOrNull()?.let { speaker.speak(it.text) }
                             },
                             onExternal = { openExternalNavigator(context, target) },
-                            onCancel = { navigation.target = null }
+                            onCancel = { navigation.clearRoute() }
                         )
+                    } else if (navigation.origin != null) {
+                        OriginHintCard(navigation.origin!!, onCancel = { navigation.origin = null })
                     }
                 }
             }
@@ -585,162 +651,7 @@ private fun MapScreen(modifier: Modifier, settings: LocalSettings, navigation: N
 }
 
 @Composable
-private fun DiscoverScreen(modifier: Modifier, settings: LocalSettings, onNavigate: (String, Double, Double) -> Unit) {
-    val context = LocalContext.current
-    var query by rememberSaveable { mutableStateOf("") }
-    var selectedCategory by rememberSaveable { mutableStateOf("all") }
-    var database by remember { mutableStateOf<File?>(null) }
-    var poiCount by remember { mutableStateOf(0) }
-    var results by remember { mutableStateOf<List<PoiRepository.PoiRecord>>(emptyList()) }
-    var loading by remember { mutableStateOf(false) }
-    var statusMessage by remember { mutableStateOf("Подготавливаю локальную базу объектов…") }
-    var statusIsError by remember { mutableStateOf(false) }
-
-    LaunchedEffect(Unit) {
-        loading = true
-        val installation = PoiRepository.ensureInstalled(context)
-        database = installation.database
-        poiCount = installation.poiCount
-        statusMessage = installation.message ?: "Локальная база готова: ${installation.poiCount} объектов. Поиск работает без интернета."
-        statusIsError = installation.message != null
-        loading = false
-    }
-
-    LaunchedEffect(database, query, selectedCategory) {
-        val localDatabase = database ?: return@LaunchedEffect
-        delay(180)
-        loading = true
-        try {
-            results = PoiRepository.search(localDatabase, query, selectedCategory)
-            statusIsError = false
-            statusMessage = "Найдено: ${results.size}. В базе: $poiCount объектов."
-        } catch (error: Exception) {
-            results = emptyList()
-            statusIsError = true
-            statusMessage = error.message ?: "Не удалось выполнить локальный поиск."
-        } finally {
-            loading = false
-        }
-    }
-
-    val categories = listOf(
-        "all" to "Все", "tourism" to "Туризм", "historic" to "История",
-        "nature" to "Природа", "food" to "Еда", "lodging" to "Жильё",
-        "medical" to "Медицина", "transport" to "Транспорт", "services" to "Сервисы",
-        "shops" to "Магазины", "settlement" to "Города и села"
-    )
-
-    PageColumn(modifier) {
-        PageTitle("Места")
-        OutlinedTextField(
-            value = query,
-            onValueChange = { query = it },
-            modifier = Modifier.fillMaxWidth(),
-            shape = RoundedCornerShape(50),
-            placeholder = { Text("Название, адрес, телефон, ქართულად") },
-            singleLine = true,
-            colors = OutlinedTextFieldDefaults.colors(
-                focusedContainerColor = MaterialTheme.colorScheme.surfaceContainerHighest,
-                unfocusedContainerColor = MaterialTheme.colorScheme.surfaceContainerHighest,
-                focusedBorderColor = MaterialTheme.colorScheme.primary,
-                unfocusedBorderColor = MaterialTheme.colorScheme.outlineVariant
-            )
-        )
-        Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(Space.xs)) {
-            categories.forEach { (id, label) ->
-                SelectPill(label = label, selected = selectedCategory == id, onClick = { selectedCategory = id })
-            }
-        }
-        Row(
-            Modifier.fillMaxWidth().padding(horizontal = Space.xs),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(Space.s)
-        ) {
-            if (loading) CircularProgressIndicator(modifier = Modifier.size(14.dp), strokeWidth = 2.dp)
-            Text(
-                statusMessage,
-                style = MaterialTheme.typography.bodySmall,
-                color = if (statusIsError) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.onSurfaceVariant
-            )
-        }
-        if (database == null) {
-            InfoCard(
-                "Офлайн-справочник пока не встроен",
-                "После успешной генерации карты GitHub Actions добавит локальную SQLite-базу POI в APK. Она включает только объекты из OpenStreetMap; отсутствующие переводы автоматически не создаются."
-            )
-        } else if (results.isEmpty() && !loading) {
-            InfoCard("Ничего не найдено", "Попробуй другое написание или выбери категорию «Все».")
-        } else {
-            Panel(padding = 0.dp) {
-                results.forEachIndexed { index, poi ->
-                    if (index > 0) HorizontalDivider(Modifier.padding(horizontal = Space.card), color = MaterialTheme.colorScheme.outlineVariant)
-                    Column(
-                        Modifier.fillMaxWidth().padding(horizontal = Space.card, vertical = Space.m),
-                        verticalArrangement = Arrangement.spacedBy(Space.xxs)
-                    ) {
-                        poi.namesFor(settings.enabledLanguages).forEachIndexed { nameIndex, label ->
-                            if (nameIndex == 0) {
-                                Text(label, style = MaterialTheme.typography.titleMedium)
-                            } else {
-                                Text(label, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                            }
-                        }
-                        Text(
-                            "${poiCategoryLabel(poi.category)} · ${PoiLabels.subcategoryLabel(poi.subcategory)}",
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
-                        )
-                        poi.detailLines().forEach { (label, value) ->
-                            Text(
-                                "$label: $value",
-                                style = MaterialTheme.typography.bodySmall,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant
-                            )
-                        }
-                        Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-                            Text(
-                                "${"%.5f".format(java.util.Locale.US, poi.latitude)}, ${"%.5f".format(java.util.Locale.US, poi.longitude)}",
-                                style = MaterialTheme.typography.labelMedium.copy(fontFeatureSettings = "tnum"),
-                                color = MaterialTheme.colorScheme.onSurfaceVariant
-                            )
-                        }
-                        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(Space.xs)) {
-                            TextButton(onClick = {
-                                onNavigate(poi.namesFor(settings.enabledLanguages).firstOrNull() ?: "Цель", poi.latitude, poi.longitude)
-                            }) { Text("Навигация") }
-                            TextButton(onClick = { copyToClipboard(context, GeoFormatting.decimalCoordinates(poi.latitude, poi.longitude)) }) {
-                                Text("Копировать")
-                            }
-                        }
-                    }
-                }
-            }
-        }
-        Text(
-            "© OpenStreetMap contributors · ODbL 1.0. Названия показаны на тех языках, которые есть в исходных данных.",
-            modifier = Modifier.padding(horizontal = Space.xs),
-            style = MaterialTheme.typography.labelSmall,
-            color = MaterialTheme.colorScheme.onSurfaceVariant
-        )
-    }
-}
-
-private fun poiCategoryLabel(category: String): String = when (category) {
-    "food" -> "Еда и напитки"
-    "lodging" -> "Жильё"
-    "tourism" -> "Достопримечательности"
-    "medical" -> "Медицина"
-    "transport" -> "Транспорт и заправки"
-    "services" -> "Сервисы"
-    "shops" -> "Магазины"
-    "historic" -> "История и культура"
-    "nature" -> "Природа"
-    "settlement" -> "Населённые пункты"
-    else -> category
-}
-
-@Composable
-private fun SettingsScreen(modifier: Modifier, settings: LocalSettings) {
+private fun SettingsScreen(modifier: Modifier, settings: LocalSettings, onShowOnMap: (String) -> Unit) {
     val context = LocalContext.current
     val folderPicker = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocumentTree()) { uri ->
         if (uri != null) {
@@ -759,26 +670,60 @@ private fun SettingsScreen(modifier: Modifier, settings: LocalSettings) {
 
         SectionLabel("Оформление")
         Panel {
-            ThemePicker(settings.palette ?: defaultPaletteId(isSystemInDarkTheme())) { settings.updatePalette(it) }
+            val mode = resolveThemeMode(settings.themeMode, isSystemInDarkTheme())
+            Text("Яркость", style = MaterialTheme.typography.titleSmall)
+            Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(Space.xs)) {
+                THEME_MODE_CHOICES.forEach { (id, label) ->
+                    SelectPill(label = label, selected = settings.themeMode == id, onClick = { settings.updateThemeMode(id) })
+                }
+            }
+            Text(
+                "«Сумерки» — мягкая серо-синяя тема между светлой и тёмной. «Авто» следует за настройкой телефона.",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+            HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
+            Text("Цветовая тема", style = MaterialTheme.typography.titleSmall)
+            ThemePicker(settings.palette, mode) { settings.updatePalette(it) }
+            Text(
+                "Две последние темы контрастные: чёрный и белый с яркими акцентами, для плохого зрения и яркого солнца.",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+            HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
+            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
+                Text("Прозрачность панелей", style = MaterialTheme.typography.titleSmall)
+                Text("${(settings.layerOpacity * 100).toInt()}%", style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.primary)
+            }
+            Slider(
+                value = settings.layerOpacity,
+                onValueChange = { settings.updateLayerOpacity(it) },
+                valueRange = LocalSettings.MIN_LAYER_OPACITY..1f
+            )
+            Text(
+                "Меню, карточки, кнопки на карте и нижняя панель: влево прозрачнее, вправо плотнее.",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
         }
 
         SectionLabel("Карта")
         Panel {
             Text("Язык названий", style = MaterialTheme.typography.titleSmall)
             Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(Space.xs)) {
-                listOf("en" to "English", "ru" to "Русский", "ka" to "ქართული").forEach { (code, label) ->
-                    SelectPill(label = label, selected = code in settings.enabledLanguages, onClick = { settings.setLanguage(code, code !in settings.enabledLanguages) })
+                listOf("ru" to "Русский", "en" to "English", "ka" to "ქართული").forEach { (code, label) ->
+                    SelectPill(label = label, selected = settings.language == code, onClick = { settings.updateLanguage(code) })
                 }
             }
             Text(
-                "На карте показывается один язык: English → Русский → ქართული.",
+                "Названия на карте и в списке мест показываются только на этом языке. Если перевода в данных нет, берётся ближайший доступный.",
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant
             )
             HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
             Text("Стиль", style = MaterialTheme.typography.titleSmall)
             Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(Space.xs)) {
-                listOf("classic" to "Классика", "outdoor" to "Рельеф", "motorider" to "Авто", "biker" to "Велосипед").forEach { (value, label) ->
+                listOf("classic" to "Классика", "outdoor" to "Природа", "motorider" to "Авто", "biker" to "Велосипед").forEach { (value, label) ->
                     SelectPill(label = label, selected = settings.mapTheme == value, onClick = { settings.updateMapTheme(value) })
                 }
             }
@@ -809,17 +754,9 @@ private fun SettingsScreen(modifier: Modifier, settings: LocalSettings) {
             }
         }
 
-        SectionLabel("Скоро")
-        Panel(padding = 0.dp) {
-            listOf(
-                "Мои места" to "Избранное, заметки и GPX-треки; все данные только на устройстве."
-            ).forEachIndexed { index, (title, body) ->
-                if (index > 0) HorizontalDivider(Modifier.padding(horizontal = Space.card), color = MaterialTheme.colorScheme.outlineVariant)
-                Column(Modifier.fillMaxWidth().padding(horizontal = Space.card, vertical = Space.m), verticalArrangement = Arrangement.spacedBy(Space.xxs)) {
-                    Text(title, style = MaterialTheme.typography.titleSmall)
-                    Text(body, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                }
-            }
+        SectionLabel("Мои места")
+        Panel {
+            SavedPlacesList(settings, onShowOnMap)
         }
 
         Text(
@@ -832,17 +769,18 @@ private fun SettingsScreen(modifier: Modifier, settings: LocalSettings) {
 }
 
 @Composable
-private fun ThemePicker(selectedId: String, onSelect: (String) -> Unit) {
-    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+private fun ThemePicker(selectedId: String, mode: ThemeMode, onSelect: (String) -> Unit) {
+    Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(Space.xs)) {
         AppPalettes.forEach { option ->
             val selected = option.id == selectedId
+            val preview = option.scheme(mode)
             Column(
-                modifier = Modifier.weight(1f).clip(RoundedCornerShape(Space.m)).clickable { onSelect(option.id) }.padding(vertical = Space.xs),
+                modifier = Modifier.width(76.dp).clip(RoundedCornerShape(Space.m)).clickable { onSelect(option.id) }.padding(vertical = Space.xs),
                 horizontalAlignment = Alignment.CenterHorizontally,
                 verticalArrangement = Arrangement.spacedBy(Space.xs)
             ) {
                 Box(
-                    Modifier.size(56.dp).clip(CircleShape).background(option.scheme.background)
+                    Modifier.size(56.dp).clip(CircleShape).background(preview.background)
                         .border(
                             width = if (selected) 3.dp else 1.dp,
                             brush = if (selected) MaterialTheme.colorScheme.accentBrush() else SolidColor(MaterialTheme.colorScheme.outline),
@@ -852,7 +790,7 @@ private fun ThemePicker(selectedId: String, onSelect: (String) -> Unit) {
                 ) {
                     Box(
                         Modifier.size(26.dp).clip(CircleShape)
-                            .background(Brush.linearGradient(listOf(option.scheme.primary, option.scheme.tertiary)))
+                            .background(Brush.linearGradient(listOf(preview.primary, preview.tertiary)))
                     )
                 }
                 Text(

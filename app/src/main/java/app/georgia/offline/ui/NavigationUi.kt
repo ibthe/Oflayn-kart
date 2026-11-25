@@ -222,6 +222,8 @@ private fun profileChipColors() = FilterChipDefaults.filterChipColors(
 @Composable
 fun RoutePlannerCard(
     target: NavigationTarget,
+    origin: NavigationTarget?,
+    onSave: (() -> Unit)?,
     location: android.location.Location?,
     session: RouteSession,
     onProfile: (RoutingProfile) -> Unit,
@@ -233,15 +235,35 @@ fun RoutePlannerCard(
     Surface(
         modifier = Modifier.fillMaxWidth().appear(),
         shape = RoundedCornerShape(Radius.card),
-        color = MaterialTheme.colorScheme.glass(0.96f),
+        color = MaterialTheme.colorScheme.glass(app.georgia.offline.ui.theme.LocalLayerAlpha.current),
         contentColor = MaterialTheme.colorScheme.onSurface,
         border = BorderStroke(1.dp, MaterialTheme.colorScheme.edgeBrush()),
         shadowElevation = 16.dp
     ) {
         Column(Modifier.padding(Space.m), verticalArrangement = Arrangement.spacedBy(Space.s)) {
             val route = session.route
-            val distance = location?.let { GeoMath.distanceMeters(it.latitude, it.longitude, target.latitude, target.longitude) }
-            Text(target.name, style = MaterialTheme.typography.titleMedium, maxLines = 1, overflow = TextOverflow.Ellipsis)
+            val startLat = origin?.latitude ?: location?.latitude
+            val startLon = origin?.longitude ?: location?.longitude
+            val distance = if (startLat != null && startLon != null) {
+                GeoMath.distanceMeters(startLat, startLon, target.latitude, target.longitude)
+            } else {
+                null
+            }
+            if (origin != null) {
+                Text(
+                    "От: ${origin.name}",
+                    style = MaterialTheme.typography.labelLarge,
+                    color = MaterialTheme.colorScheme.tertiary,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
+                )
+            }
+            Text(
+                if (origin != null) "До: ${target.name}" else target.name,
+                style = MaterialTheme.typography.titleMedium,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis
+            )
             Text(
                 when {
                     route != null -> "${GeoMath.formatDistance(route.distanceMeters)} по дорогам · ${formatDuration(route.durationSeconds)}"
@@ -259,17 +281,29 @@ fun RoutePlannerCard(
             session.message?.let {
                 Text(it, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.error)
             }
+            if (origin != null && route != null) {
+                Text(
+                    "Это просмотр маршрута от выбранной точки. Чтобы вести по нему, постройте маршрут от своего положения.",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
             Row(horizontalArrangement = Arrangement.spacedBy(Space.xxs), verticalAlignment = Alignment.CenterVertically) {
                 if (route == null) {
                     GradientButton(
                         text = if (session.busy) "Считаю…" else "Маршрут",
                         onClick = onPlan,
-                        enabled = !session.busy && location != null
+                        enabled = !session.busy && (origin != null || location != null)
                     )
-                } else {
+                } else if (origin == null) {
                     GradientButton(text = "Начать", onClick = onStart)
                 }
-                TextButton(onClick = onExternal, contentPadding = PaddingValues(horizontal = Space.s)) { Text("В навигаторе") }
+                if (onSave != null) {
+                    TextButton(onClick = onSave, contentPadding = PaddingValues(horizontal = Space.s)) { Text("Сохранить") }
+                }
+                if (origin == null) {
+                    TextButton(onClick = onExternal, contentPadding = PaddingValues(horizontal = Space.s)) { Text("В навигаторе") }
+                }
                 TextButton(onClick = onCancel, contentPadding = PaddingValues(horizontal = Space.s)) { Text("Отмена") }
             }
         }
@@ -324,7 +358,7 @@ fun NavigationFooter(route: Route, session: RouteSession, onStop: () -> Unit) {
     Surface(
         modifier = Modifier.fillMaxWidth().appear(),
         shape = RoundedCornerShape(Radius.card),
-        color = MaterialTheme.colorScheme.glass(0.96f),
+        color = MaterialTheme.colorScheme.glass(app.georgia.offline.ui.theme.LocalLayerAlpha.current),
         contentColor = MaterialTheme.colorScheme.onSurface,
         border = BorderStroke(1.dp, MaterialTheme.colorScheme.edgeBrush()),
         shadowElevation = 16.dp

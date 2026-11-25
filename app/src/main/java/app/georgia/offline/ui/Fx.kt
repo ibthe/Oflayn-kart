@@ -174,7 +174,7 @@ internal fun GlassPill(
     Surface(
         modifier = modifier.let { if (onClick != null) it.bounceClick(onClick = onClick) else it },
         shape = CircleShape,
-        color = scheme.glass(0.9f),
+        color = scheme.glass(app.georgia.offline.ui.theme.LocalLayerAlpha.current),
         contentColor = scheme.onSurface,
         border = BorderStroke(1.dp, scheme.edgeBrush()),
         shadowElevation = 8.dp

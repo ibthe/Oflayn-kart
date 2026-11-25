@@ -1,7 +1,6 @@
 package app.georgia.offline.ui.theme
 
 import android.app.Activity
-import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Shapes
@@ -64,26 +63,25 @@ private val GeorgiaTypography = Typography().copy(
 )
 
 /**
- * One theme = one complete appearance (light or dark). [palette] is null until the person
- * chooses one; then the phone's light/dark mode picks Mist or Dusk.
+ * One theme = a colour family ([paletteId]) in one brightness [mode]. The status-bar and
+ * navigation-bar icons follow the chosen mode, not the phone's.
  */
 @Composable
-fun GeorgiaTheme(palette: String?, content: @Composable () -> Unit) {
-    val selected = paletteById(palette ?: defaultPaletteId(isSystemInDarkTheme()))
+fun GeorgiaTheme(paletteId: String, mode: ThemeMode, content: @Composable () -> Unit) {
+    val scheme = paletteById(paletteId).scheme(mode)
     val view = LocalView.current
     if (!view.isInEditMode) {
         SideEffect {
             val window = (view.context as? Activity)?.window
             if (window != null) {
                 val controller = WindowCompat.getInsetsController(window, view)
-                // Status/navigation icons must follow the chosen theme, not the phone's mode.
-                controller.isAppearanceLightStatusBars = !selected.isDark
-                controller.isAppearanceLightNavigationBars = !selected.isDark
+                controller.isAppearanceLightStatusBars = !mode.isDark
+                controller.isAppearanceLightNavigationBars = !mode.isDark
             }
         }
     }
     MaterialTheme(
-        colorScheme = selected.scheme,
+        colorScheme = scheme,
         typography = GeorgiaTypography,
         shapes = GeorgiaShapes,
         content = content
