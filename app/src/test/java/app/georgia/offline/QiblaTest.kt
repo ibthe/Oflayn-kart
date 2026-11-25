@@ -12,9 +12,9 @@ class QiblaTest {
         assertTrue("bearing was $bearing", bearing in 190.0..205.0)
     }
 
-    @Test fun distanceFromTbilisiIsAboutThreeAndAHalfThousandKilometres() {
+    @Test fun distanceFromTbilisiIsAboutTwoThousandThreeHundredKilometres() {
         val distance = Qibla.distanceKm(41.7151, 44.8271)
-        assertTrue("distance was $distance", distance in 3200.0..3500.0)
+        assertTrue("distance was $distance", distance in 2250.0..2360.0)
     }
 
     @Test fun bearingFromLondonPointsSouthEast() {
