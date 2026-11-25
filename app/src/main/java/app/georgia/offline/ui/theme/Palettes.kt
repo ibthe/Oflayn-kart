@@ -33,7 +33,7 @@ fun resolveThemeMode(choice: String, systemDark: Boolean): ThemeMode = when (cho
 }
 
 /** Primary (the main accent) and tertiary (the second glow colour) for one brightness mode. */
-private class Accent(val primary: String, val tertiary: String)
+internal class Accent(val primary: String, val tertiary: String)
 
 /**
  * One colour theme = one family of accents that exists in all three brightness modes.

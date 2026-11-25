@@ -142,7 +142,7 @@ fun MapsforgeMapSurface(
                             val density = viewContext.resources.displayMetrics.density
                             val reach = 30f * density
                             var best: String? = null
-                            var bestSquared = reach * reach
+                            var bestSquared = (reach * reach).toDouble()
                             for (place in currentPlaces) {
                                 val pixel = mapViewProjection.toPixels(LatLong(place.latitude, place.longitude)) ?: continue
                                 // The pin's body sits above its tip, which is anchored on the point.
