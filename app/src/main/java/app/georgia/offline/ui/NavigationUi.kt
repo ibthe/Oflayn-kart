@@ -238,7 +238,7 @@ fun RoutePlannerCard(
     onCancel: () -> Unit
 ) {
     Surface(
-        modifier = Modifier.fillMaxWidth().appear(),
+        modifier = Modifier.fillMaxWidth().appear().dismissOnSwipeDown(onCancel),
         shape = RoundedCornerShape(Radius.card),
         color = MaterialTheme.colorScheme.glass(app.georgia.offline.ui.theme.LocalLayerAlpha.current),
         contentColor = MaterialTheme.colorScheme.onSurface,
@@ -315,7 +315,12 @@ fun RoutePlannerCard(
             )
             Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(Space.xs)) {
                 RoutingProfile.entries.forEach { option ->
-                    SelectPill(label = option.label, selected = session.profile == option, onClick = { onProfile(option) })
+                    SelectPill(
+                        label = option.label,
+                        selected = session.profile == option,
+                        onClick = { onProfile(option) },
+                        transparentWhenUnselected = true
+                    )
                 }
             }
             session.message?.let {
@@ -328,25 +333,48 @@ fun RoutePlannerCard(
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
             }
-            Row(horizontalArrangement = Arrangement.spacedBy(Space.xxs), verticalAlignment = Alignment.CenterVertically) {
-                if (selectionMode == null) {
-                    if (route == null) {
-                        GradientButton(
-                            text = if (session.busy) "Считаю…" else "Маршрут",
-                            onClick = onPlan,
-                            enabled = !session.busy && (origin != null || location != null)
-                        )
-                    } else if (origin == null) {
-                        GradientButton(text = "Начать", onClick = onStart)
+            if (selectionMode == null) {
+                if (route == null) {
+                    GradientButton(
+                        text = if (session.busy) "Считаю…" else "Построить маршрут",
+                        onClick = onPlan,
+                        modifier = Modifier.fillMaxWidth(),
+                        enabled = !session.busy && (origin != null || location != null)
+                    )
+                } else if (origin == null) {
+                    GradientButton(text = "Начать навигацию", onClick = onStart, modifier = Modifier.fillMaxWidth())
+                }
+            }
+            Row(
+                Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(Space.xs),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                if (onSave != null) {
+                    TextButton(
+                        onClick = onSave,
+                        modifier = Modifier.weight(1f),
+                        contentPadding = PaddingValues(horizontal = Space.xs)
+                    ) {
+                        Text("Сохранить", maxLines = 1, softWrap = false, overflow = TextOverflow.Ellipsis)
                     }
                 }
-                if (onSave != null) {
-                    TextButton(onClick = onSave, contentPadding = PaddingValues(horizontal = Space.s)) { Text("Сохранить") }
-                }
                 if (origin == null && selectionMode == null) {
-                    TextButton(onClick = onExternal, contentPadding = PaddingValues(horizontal = Space.s)) { Text("В навигаторе") }
+                    TextButton(
+                        onClick = onExternal,
+                        modifier = Modifier.weight(1f),
+                        contentPadding = PaddingValues(horizontal = Space.xs)
+                    ) {
+                        Text("Навигатор", maxLines = 1, softWrap = false, overflow = TextOverflow.Ellipsis)
+                    }
                 }
-                TextButton(onClick = onCancel, contentPadding = PaddingValues(horizontal = Space.s)) { Text("Отмена") }
+            }
+            TextButton(
+                onClick = onCancel,
+                modifier = Modifier.align(Alignment.End),
+                contentPadding = PaddingValues(horizontal = Space.s)
+            ) {
+                Text("Закрыть")
             }
         }
     }
