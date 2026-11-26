@@ -51,7 +51,7 @@ fun ToolsScreen(modifier: Modifier = Modifier, settings: LocalSettings, tracker:
                 Text("Компас", style = MaterialTheme.typography.titleMedium, modifier = Modifier.fillMaxWidth())
                 if (heading == null) {
                     Text(
-                        "На устройстве нет датчика ориентации, необходимого для электронного компаса.",
+                        "Не найден датчик поворота или пара акселерометр + магнитометр, необходимые для электронного компаса.",
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                         modifier = Modifier.fillMaxWidth()
                     )
