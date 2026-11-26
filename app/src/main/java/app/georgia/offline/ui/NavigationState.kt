@@ -3,6 +3,7 @@ package app.georgia.offline.ui
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.setValue
 
 /** A point chosen by long-press on the map, from the places list or from the saved points. */
@@ -23,6 +24,27 @@ class NavigationState {
 
     /** Route start picked on the map; null means "from my GPS position". */
     var origin by mutableStateOf<NavigationTarget?>(null)
+
+    /** Ordered intermediate stops between origin and destination. */
+    val viaPoints = mutableStateListOf<NavigationTarget>()
+
+    fun addWaypoint(point: NavigationTarget, index: Int = viaPoints.size) {
+        viaPoints.add(index.coerceIn(0, viaPoints.size), point)
+    }
+
+    fun updateWaypoint(index: Int, point: NavigationTarget) {
+        if (index in viaPoints.indices) viaPoints[index] = point
+    }
+
+    fun removeWaypoint(index: Int) {
+        if (index in viaPoints.indices) viaPoints.removeAt(index)
+    }
+
+    fun moveWaypoint(from: Int, to: Int) {
+        if (from !in viaPoints.indices || to !in viaPoints.indices || from == to) return
+        val point = viaPoints.removeAt(from)
+        viaPoints.add(to, point)
+    }
 
     /** The next long-press on the map edits this endpoint. Null keeps the default "choose destination" action. */
     var pointSelection by mutableStateOf<RoutePointRole?>(null)
@@ -69,12 +91,14 @@ class NavigationState {
         val currentTarget = target ?: return
         origin = NavigationTarget(currentTarget.name, currentTarget.latitude, currentTarget.longitude)
         target = NavigationTarget(currentOrigin.name, currentOrigin.latitude, currentOrigin.longitude)
+        viaPoints.reverse()
         pointSelection = null
     }
 
     fun clearRoute() {
         target = null
         origin = null
+        viaPoints.clear()
         pointSelection = null
         routeMenuVisible = false
     }
