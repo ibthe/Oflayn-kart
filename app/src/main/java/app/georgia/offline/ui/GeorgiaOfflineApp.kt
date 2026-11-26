@@ -479,8 +479,7 @@ private fun MapScreen(modifier: Modifier, settings: LocalSettings, navigation: N
                 focusToken = navigation.focusToken,
                 onPlaceTap = { id -> if (!session.navigating) navigation.selectedPlaceId = id },
                 onLongPress = { point ->
-                    navigation.target = NavigationTarget("Точка на карте", point.latitude, point.longitude)
-                    navigation.selectedPlaceId = null
+                    navigation.chooseMapPoint("Точка на карте", point.latitude, point.longitude)
                 }
             )
             AnimatedVisibility(
@@ -591,10 +590,12 @@ private fun MapScreen(modifier: Modifier, settings: LocalSettings, navigation: N
                             isCar = isCar,
                             onRouteHere = {
                                 navigation.target = NavigationTarget(selectedPlace.name, selectedPlace.latitude, selectedPlace.longitude)
+                                navigation.pointSelection = null
                                 navigation.selectedPlaceId = null
                             },
                             onRouteFrom = {
                                 navigation.origin = NavigationTarget(selectedPlace.name, selectedPlace.latitude, selectedPlace.longitude)
+                                navigation.pointSelection = null
                                 navigation.selectedPlaceId = null
                             },
                             onRename = { settings.renamePlace(selectedPlace.id, it) },
@@ -620,6 +621,11 @@ private fun MapScreen(modifier: Modifier, settings: LocalSettings, navigation: N
                                 session.profile = option
                                 if (session.route != null) planFrom(tracker.location, rerouting = true)
                             },
+                            selectionMode = navigation.pointSelection,
+                            onChooseOrigin = { navigation.pointSelection = RoutePointRole.START },
+                            onChooseDestination = { navigation.pointSelection = RoutePointRole.DESTINATION },
+                            onUseMyLocation = { navigation.useMyLocation() },
+                            onSwap = { navigation.swapEndpoints() },
                             onPlan = { planFrom(tracker.location, rerouting = false) },
                             onStart = {
                                 session.beginNavigation()
