@@ -76,8 +76,14 @@ class LocationTracker internal constructor() {
     fun start() {
         error = null
         when {
-            !hasPermission() -> dialog = LocationDialog.RATIONALE
-            !providerEnabled() -> dialog = LocationDialog.ENABLE_GPS
+            !hasPermission() -> {
+                active = false
+                dialog = LocationDialog.RATIONALE
+            }
+            !providerEnabled() -> {
+                active = false
+                dialog = LocationDialog.ENABLE_GPS
+            }
             else -> active = true
         }
     }
@@ -171,6 +177,7 @@ fun rememberLocationTracker(): LocationTracker {
                     tracker.error = null
                 }
                 override fun onProviderDisabled(provider: String) {
+                    tracker.active = false
                     tracker.error = "Геолокация отключена в настройках телефона."
                 }
             }
@@ -188,6 +195,7 @@ fun rememberLocationTracker(): LocationTracker {
                 tracker.error = "Android не разрешил доступ к геолокации."
                 tracker.active = false
             } catch (_: IllegalArgumentException) {
+                tracker.active = false
                 tracker.error = "На устройстве нет подходящего источника геолокации."
             }
             onDispose { runCatching { manager.removeUpdates(listener) } }
