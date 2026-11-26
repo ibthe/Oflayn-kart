@@ -18,6 +18,9 @@ enum class RoutePointRole { START, DESTINATION }
 class NavigationState {
     var target by mutableStateOf<NavigationTarget?>(null)
 
+    /** Whether the route-planning sheet is currently visible; hiding it must not discard the route. */
+    var routeMenuVisible by mutableStateOf(false)
+
     /** Route start picked on the map; null means "from my GPS position". */
     var origin by mutableStateOf<NavigationTarget?>(null)
 
@@ -42,6 +45,16 @@ class NavigationState {
         }
         pointSelection = null
         selectedPlaceId = null
+        routeMenuVisible = true
+    }
+
+    fun closeRouteMenu() {
+        routeMenuVisible = false
+        pointSelection = null
+    }
+
+    fun openRouteMenu() {
+        if (target != null) routeMenuVisible = true
     }
 
     /** Uses the live GPS position as the route start. */
@@ -63,5 +76,6 @@ class NavigationState {
         target = null
         origin = null
         pointSelection = null
+        routeMenuVisible = false
     }
 }
