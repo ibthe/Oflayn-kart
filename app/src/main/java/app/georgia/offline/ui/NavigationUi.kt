@@ -148,7 +148,14 @@ class RouteSession {
         val projection = current.project(lat, lon, segmentHint)
         segmentHint = projection.segment
         along = projection.alongMeters
-        if (current.distanceMeters - along < ARRIVE_METERS) return TrackingEvent.ARRIVED
+        // Route progress alone is not proof of arrival: a GPS fix can project onto the
+        // final segment while the person is still far away from the destination.
+        val destinationDistance = if (current.pointCount > 0) {
+            GeoMath.distanceMeters(lat, lon, current.lat(current.pointCount - 1), current.lon(current.pointCount - 1))
+        } else {
+            Double.MAX_VALUE
+        }
+        if (destinationDistance <= ARRIVE_METERS) return TrackingEvent.ARRIVED
         if (projection.offRouteMeters > OFF_ROUTE_METERS) {
             offRouteFixes++
             if (offRouteFixes >= 3 && !busy && nowMillis - lastRerouteAt > 10_000L) {
