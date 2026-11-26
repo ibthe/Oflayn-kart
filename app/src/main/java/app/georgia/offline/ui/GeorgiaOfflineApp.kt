@@ -537,6 +537,7 @@ private fun MapScreen(modifier: Modifier, settings: LocalSettings, navigation: N
                 onMapTap = { point ->
                     if (!session.navigating) {
                         navigation.selectedPlaceId = null
+                        selectedMapPoi = null
                         coroutineScope.launch {
                             selectedMapPoi = poiDatabase?.let {
                                 PoiRepository.nearestPoi(it, point.latitude, point.longitude)
