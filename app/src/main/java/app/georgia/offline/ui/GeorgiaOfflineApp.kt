@@ -286,9 +286,16 @@ private fun MapStylePicker(settings: LocalSettings) {
 
     Column(verticalArrangement = Arrangement.spacedBy(Space.xs)) {
         MapChip(onClick = { expanded = !expanded }) {
-            Text("Стиль карты", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
-            Text(selectedLabel, style = MaterialTheme.typography.labelLarge, fontWeight = FontWeight.SemiBold)
-            Text(if (expanded) "Скрыть" else "Выбрать", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.primary)
+            Text(
+                "Стиль: $selectedLabel",
+                style = MaterialTheme.typography.labelLarge,
+                fontWeight = FontWeight.SemiBold
+            )
+            Text(
+                if (expanded) "⌃" else "⌄",
+                style = MaterialTheme.typography.labelMedium,
+                color = MaterialTheme.colorScheme.primary
+            )
         }
         AnimatedVisibility(
             visible = expanded,
@@ -296,27 +303,33 @@ private fun MapStylePicker(settings: LocalSettings) {
             exit = fadeOut(tween(140)) + slideOutVertically(tween(180)) { -it / 5 }
         ) {
             Surface(
-                modifier = Modifier.widthIn(max = 260.dp),
+                modifier = Modifier.widthIn(min = 208.dp, max = 260.dp),
                 shape = RoundedCornerShape(20.dp),
                 color = MaterialTheme.colorScheme.glass(LocalLayerAlpha.current),
                 contentColor = MaterialTheme.colorScheme.onSurface,
                 border = BorderStroke(1.dp, MaterialTheme.colorScheme.edgeBrush()),
                 shadowElevation = 6.dp
             ) {
-                Row(
-                    Modifier.horizontalScroll(rememberScrollState()).padding(horizontal = Space.xs, vertical = 4.dp),
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(4.dp)
+                Column(
+                    Modifier.padding(horizontal = Space.s, vertical = Space.xs),
+                    verticalArrangement = Arrangement.spacedBy(Space.xs)
                 ) {
-                    choices.forEach { (value, label) ->
-                        SelectPill(
-                            label = label,
-                            selected = settings.mapTheme == value,
-                            onClick = {
-                                settings.updateMapTheme(value)
-                                expanded = false
+                    choices.chunked(2).forEach { rowChoices ->
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(Space.xs)
+                        ) {
+                            rowChoices.forEach { (value, label) ->
+                                SelectPill(
+                                    label = label,
+                                    selected = settings.mapTheme == value,
+                                    onClick = {
+                                        settings.updateMapTheme(value)
+                                        expanded = false
+                                    }
+                                )
                             }
-                        )
+                        }
                     }
                 }
             }
