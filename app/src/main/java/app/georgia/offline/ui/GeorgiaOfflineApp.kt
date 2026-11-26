@@ -679,6 +679,7 @@ private fun MapScreen(modifier: Modifier, settings: LocalSettings, navigation: N
                         if (mapStyleExpanded) 160.dp else 0.dp,
                     language = settings.language,
                     onSelect = { poi ->
+                        poiLookupJob?.cancel()
                         selectedMapPoi = poi
                         navigation.selectedPlaceId = null
                         mapSearchQuery = ""
