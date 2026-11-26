@@ -97,8 +97,14 @@ internal fun DiscoverScreen(
 
     LaunchedEffect(database, query, selectedCategory) {
         val localDatabase = database ?: return@LaunchedEffect
-        delay(180)
+        // Do not leave old rows tappable while a new offline query is pending.
+        results = emptyList()
+        settlementOf = emptyMap()
+        expandedId = null
         loading = true
+        statusIsError = false
+        statusMessage = "Ищу в офлайн-базе…"
+        delay(180)
         try {
             val found = PoiRepository.search(localDatabase, query, selectedCategory)
             val settlements = PoiRepository.settlements(localDatabase)
