@@ -826,6 +826,9 @@ private fun MapScreen(modifier: Modifier, settings: LocalSettings, navigation: N
                             onPlan = { planFrom(tracker.location, rerouting = false) },
                             onStart = {
                                 session.beginNavigation()
+                                // Planning controls must leave the map when turn-by-turn guidance starts.
+                                // Closing the sheet preserves the route and all of its waypoints.
+                                navigation.closeRouteMenu()
                                 if (session.voice) activeRoute?.steps?.firstOrNull()?.let { speaker.speak(it.text) }
                             },
                             onExternal = { openExternalNavigator(context, target) },
