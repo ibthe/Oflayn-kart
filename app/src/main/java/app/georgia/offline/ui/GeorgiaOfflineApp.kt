@@ -93,6 +93,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -476,6 +477,8 @@ private fun MapScreen(modifier: Modifier, settings: LocalSettings, navigation: N
     var poiDatabase by remember { mutableStateOf<File?>(null) }
     var poiDatabaseLoading by remember { mutableStateOf(true) }
     var poiDatabaseMessage by remember { mutableStateOf<String?>(null) }
+    var mapSearchError by remember { mutableStateOf<String?>(null) }
+    var poiLookupJob by remember { mutableStateOf<Job?>(null) }
     var selectedMapPoi by remember { mutableStateOf<PoiRepository.PoiRecord?>(null) }
     var mapSearchQuery by rememberSaveable { mutableStateOf("") }
     var mapSearchCategory by rememberSaveable { mutableStateOf("all") }
@@ -494,11 +497,13 @@ private fun MapScreen(modifier: Modifier, settings: LocalSettings, navigation: N
         val bounds = mapSearchViewport ?: return@LaunchedEffect
         if (mapSearchQuery.isBlank() && mapSearchCategory == "all") {
             mapSearchResults = emptyList()
+            mapSearchError = null
             mapSearchLoading = false
             return@LaunchedEffect
         }
         // Never leave old results tappable while a new query or viewport is being resolved.
         mapSearchResults = emptyList()
+        mapSearchError = null
         mapSearchLoading = true
         delay(180)
         try {
@@ -506,8 +511,9 @@ private fun MapScreen(modifier: Modifier, settings: LocalSettings, navigation: N
                 db, mapSearchQuery, bounds.north, bounds.south, bounds.east, bounds.west,
                 category = mapSearchCategory, limit = 60
             )
-        } catch (_: Exception) {
+        } catch (error: Exception) {
             mapSearchResults = emptyList()
+            mapSearchError = error.message ?: "Не удалось выполнить поиск по локальной базе."
         } finally {
             mapSearchLoading = false
         }
@@ -596,12 +602,14 @@ private fun MapScreen(modifier: Modifier, settings: LocalSettings, navigation: N
                 focusToken = navigation.focusToken,
                 onPlaceTap = { id ->
                     if (!session.navigating) {
+                        poiLookupJob?.cancel()
                         selectedMapPoi = null
                         navigation.selectedPlaceId = id
                     }
                 },
                 onViewportChanged = { bounds -> mapSearchViewport = bounds },
                 onSearchResultTap = { index ->
+                    poiLookupJob?.cancel()
                     mapSearchResults.getOrNull(index)?.let { poi ->
                         selectedMapPoi = poi
                         navigation.selectedPlaceId = null
@@ -611,17 +619,22 @@ private fun MapScreen(modifier: Modifier, settings: LocalSettings, navigation: N
                 },
                 onMapTap = { point ->
                     if (!session.navigating) {
+                        poiLookupJob?.cancel()
                         navigation.selectedPlaceId = null
                         selectedMapPoi = null
-                        coroutineScope.launch {
-                            selectedMapPoi = poiDatabase?.let {
-                                PoiRepository.nearestPoi(it, point.latitude, point.longitude)
+                        poiLookupJob = coroutineScope.launch {
+                            val database = poiDatabase ?: return@launch
+                            selectedMapPoi = try {
+                                PoiRepository.nearestPoi(database, point.latitude, point.longitude)
+                            } catch (_: Exception) {
+                                null
                             }
                         }
                     }
                 },
                 onLongPress = { point ->
                     if (!session.navigating) {
+                        poiLookupJob?.cancel()
                         session.reset()
                         selectedMapPoi = null
                         navigation.chooseMapPoint("Точка на карте", point.latitude, point.longitude)
@@ -661,6 +674,7 @@ private fun MapScreen(modifier: Modifier, settings: LocalSettings, navigation: N
                     loading = mapSearchLoading,
                     databaseLoading = poiDatabaseLoading,
                     databaseMessage = poiDatabaseMessage,
+                    searchError = mapSearchError,
                     topOffset = (if (tracker.error != null || (tracker.active && tracker.location == null)) 104.dp else 64.dp) +
                         if (mapStyleExpanded) 160.dp else 0.dp,
                     language = settings.language,
@@ -913,6 +927,7 @@ private fun MapViewportSearchBox(
     loading: Boolean,
     databaseLoading: Boolean,
     databaseMessage: String?,
+    searchError: String?,
     topOffset: Dp,
     language: String,
     onSelect: (PoiRepository.PoiRecord) -> Unit
@@ -976,6 +991,13 @@ private fun MapViewportSearchBox(
             } else if (databaseMessage != null) {
                 Text(
                     databaseMessage,
+                    modifier = Modifier.padding(horizontal = Space.xs, vertical = Space.xs),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.error
+                )
+            } else if (searchError != null) {
+                Text(
+                    searchError,
                     modifier = Modifier.padding(horizontal = Space.xs, vertical = Space.xs),
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.error
