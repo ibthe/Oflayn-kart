@@ -78,6 +78,7 @@ fun MapsforgeMapSurface(
     fitToken: Int = 0,
     places: List<MapPlace> = emptyList(),
     selectedPlaceId: String? = null,
+    selectedPoi: LatLong? = null,
     origin: LatLong? = null,
     savedColor: Int = 0xFF7B5CFF.toInt(),
     carColor: Int = 0xFF1FB89A.toInt(),
@@ -289,7 +290,7 @@ fun MapsforgeMapSurface(
             update = { view ->
                 overlays.sync(
                     view,
-                    OverlayState(userLocation, destination, recenterToken, zoomInToken, zoomOutToken, routePoints, viaPoints, followUser, fitToken, places, selectedPlaceId, origin, focusToken)
+                    OverlayState(userLocation, destination, recenterToken, zoomInToken, zoomOutToken, routePoints, viaPoints, followUser, fitToken, places, selectedPlaceId, selectedPoi, origin, focusToken)
                 )
             }
         )
@@ -353,6 +354,7 @@ private class OverlayState(
     val fitToken: Int,
     val places: List<MapPlace>,
     val selectedPlaceId: String?,
+    val selectedPoi: LatLong?,
     val origin: LatLong?,
     val focusToken: Int
 )
@@ -372,6 +374,8 @@ private class MapOverlays(
     private var originAt: LatLong? = null
     private var handledFocus = 0
     private var focusedPlace: String? = null
+    private var selectedPoiMarker: Marker? = null
+    private var selectedPoiAt: LatLong? = null
     private var me: Marker? = null
     private var accuracy: Circle? = null
     private var destinationMarker: Marker? = null
@@ -479,6 +483,21 @@ private class MapOverlays(
                 layers.add(marker)
             }
         }
+        // A tapped POI remains visibly anchored to its geographic coordinate while the map pans or zooms.
+        val selectedPoi = state.selectedPoi
+        if (selectedPoi != null) {
+            if (selectedPoiMarker == null || selectedPoiAt != selectedPoi) {
+                selectedPoiMarker?.let { layers.remove(it) }
+                val (bitmap, offset) = pinBitmap(view.context, accentColor, "•", true, density)
+                selectedPoiMarker = Marker(selectedPoi, bitmap, 0, offset).also { layers.add(it) }
+                selectedPoiAt = selectedPoi
+            }
+        } else if (selectedPoiMarker != null) {
+            layers.remove(selectedPoiMarker!!)
+            selectedPoiMarker = null
+            selectedPoiAt = null
+        }
+
         // Bring a newly selected point into view.
         val selectedPlace = state.places.firstOrNull { it.id == state.selectedPlaceId }
         if (selectedPlace != null && (focusedPlace != selectedPlace.id || state.focusToken != handledFocus)) {
