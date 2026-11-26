@@ -280,22 +280,24 @@ private fun PlaceRow(
                 if (settlementName != null) InfoLine("Населённый пункт", settlementName)
                 poi.detailLines().forEach { (label, value) -> InfoLine(label, value) }
                 InfoLine("Координаты", "${"%.5f".format(java.util.Locale.US, poi.latitude)}, ${"%.5f".format(java.util.Locale.US, poi.longitude)}")
-                Column(
+                // Keep the two primary actions side by side, with equal visual weight.
+                Row(
                     Modifier.fillMaxWidth(),
-                    verticalArrangement = Arrangement.spacedBy(Space.xs)
+                    horizontalArrangement = Arrangement.spacedBy(Space.xs),
+                    verticalAlignment = Alignment.CenterVertically
                 ) {
                     GradientButton(
-                        text = "Маршрут сюда",
+                        text = "Маршрут",
                         onClick = onRoute,
-                        modifier = Modifier.fillMaxWidth()
+                        modifier = Modifier.weight(1f)
                     )
                     OutlinedButton(
                         onClick = onSave,
-                        modifier = Modifier.fillMaxWidth(),
+                        modifier = Modifier.weight(1f),
                         enabled = !saved
                     ) {
                         Text(
-                            if (saved) "Сохранено" else "Сохранить",
+                            if (saved) "В избранном" else "В избранное",
                             maxLines = 1,
                             softWrap = false
                         )
