@@ -127,6 +127,9 @@ fun GeorgiaOfflineApp(settings: LocalSettings) {
     var selectedTab by rememberSaveable { mutableStateOf(AppTab.MAP.name) }
     val navigation = remember { NavigationState() }
     val tracker = rememberLocationTracker()
+    // Keep route data above AnimatedContent so switching tabs does not discard it.
+    val routeSession = remember { RouteSession() }
+    LaunchedEffect(navigation.target, navigation.origin) { routeSession.reset() }
     // A tab name saved by an older version (for example the removed ROUTE tab) falls back to the map.
     val currentTab = AppTab.entries.firstOrNull { it.name == selectedTab } ?: AppTab.MAP
     val mode = resolveThemeMode(settings.themeMode, isSystemInDarkTheme())
@@ -144,7 +147,7 @@ fun GeorgiaOfflineApp(settings: LocalSettings) {
                         label = "tabs"
                     ) { tab ->
                         when (tab) {
-                            AppTab.MAP -> MapScreen(Modifier.padding(padding), settings, navigation, tracker)
+                            AppTab.MAP -> MapScreen(Modifier.padding(padding), settings, navigation, tracker, routeSession)
                             AppTab.DISCOVER -> DiscoverScreen(Modifier.padding(padding), settings, tracker) { name, latitude, longitude ->
                                 navigation.target = NavigationTarget(name, latitude, longitude)
                                 navigation.selectedPlaceId = null
@@ -387,7 +390,7 @@ private fun openExternalNavigator(context: android.content.Context, target: Navi
 }
 
 @Composable
-private fun MapScreen(modifier: Modifier, settings: LocalSettings, navigation: NavigationState, tracker: LocationTracker) {
+private fun MapScreen(modifier: Modifier, settings: LocalSettings, navigation: NavigationState, tracker: LocationTracker, session: RouteSession) {
     val context = LocalContext.current
     val coroutineScope = rememberCoroutineScope()
     var isImporting by remember { mutableStateOf(false) }
@@ -464,7 +467,6 @@ private fun MapScreen(modifier: Modifier, settings: LocalSettings, navigation: N
     }
     val selectedPlace = savedPlaces.firstOrNull { it.id == navigation.selectedPlaceId }
 
-    val session = remember { RouteSession() }
     val speaker = remember { Speaker(context) }
     DisposableEffect(Unit) { onDispose { speaker.shutdown() } }
     val hostView = LocalView.current
@@ -472,8 +474,7 @@ private fun MapScreen(modifier: Modifier, settings: LocalSettings, navigation: N
         hostView.keepScreenOn = session.navigating
         onDispose { hostView.keepScreenOn = false }
     }
-    // A new or cleared destination invalidates any route.
-    LaunchedEffect(target, navigation.origin) { session.reset() }
+    // Route state is owned by GeorgiaOfflineApp and survives MapScreen leaving composition.
 
     fun planFrom(fix: android.location.Location?, rerouting: Boolean) {
         val goal = navigation.target ?: return
