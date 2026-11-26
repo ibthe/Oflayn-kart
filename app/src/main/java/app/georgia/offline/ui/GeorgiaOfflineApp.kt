@@ -533,10 +533,10 @@ private fun MapScreen(modifier: Modifier, settings: LocalSettings, navigation: N
                     if (!showDetails) {
                         Column(verticalArrangement = Arrangement.spacedBy(Space.xs)) {
                             MapChip(modifier = Modifier.size(48.dp), onClick = { zoomInToken++ }, centered = true) {
-                                Text("+", style = MaterialTheme.typography.titleLarge)
+                                ZoomGlyph(color = MaterialTheme.colorScheme.onSurface, zoomIn = true)
                             }
                             MapChip(modifier = Modifier.size(48.dp), onClick = { zoomOutToken++ }, centered = true) {
-                                Text("−", style = MaterialTheme.typography.titleLarge)
+                                ZoomGlyph(color = MaterialTheme.colorScheme.onSurface, zoomIn = false)
                             }
                         }
                     } else {
