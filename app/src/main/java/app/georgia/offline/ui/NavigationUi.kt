@@ -227,6 +227,11 @@ fun RoutePlannerCard(
     location: android.location.Location?,
     session: RouteSession,
     onProfile: (RoutingProfile) -> Unit,
+    selectionMode: RoutePointRole?,
+    onChooseOrigin: () -> Unit,
+    onChooseDestination: () -> Unit,
+    onUseMyLocation: () -> Unit,
+    onSwap: () -> Unit,
     onPlan: () -> Unit,
     onStart: () -> Unit,
     onExternal: () -> Unit,
@@ -249,21 +254,56 @@ fun RoutePlannerCard(
             } else {
                 null
             }
-            if (origin != null) {
+            Column(verticalArrangement = Arrangement.spacedBy(Space.xs)) {
+                Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                    Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(Space.xxs)) {
+                        Text("ОТКУДА", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                        Text(
+                            origin?.name ?: "Моё местоположение",
+                            style = MaterialTheme.typography.bodyLarge,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis
+                        )
+                    }
+                    TextButton(onClick = onChooseOrigin, contentPadding = PaddingValues(horizontal = Space.s)) {
+                        Text(if (selectionMode == RoutePointRole.START) "Выбор…" else "Изменить")
+                    }
+                }
+                Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                    Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(Space.xxs)) {
+                        Text("КУДА", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                        Text(
+                            target.name,
+                            style = MaterialTheme.typography.bodyLarge,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis
+                        )
+                    }
+                    TextButton(onClick = onChooseDestination, contentPadding = PaddingValues(horizontal = Space.s)) {
+                        Text(if (selectionMode == RoutePointRole.DESTINATION) "Выбор…" else "Изменить")
+                    }
+                }
+                if (origin != null) {
+                    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
+                        TextButton(onClick = onUseMyLocation, contentPadding = PaddingValues(horizontal = Space.s)) {
+                            Text("Моё местоположение")
+                        }
+                        TextButton(onClick = onSwap, contentPadding = PaddingValues(horizontal = Space.s)) {
+                            Text("Поменять местами")
+                        }
+                    }
+                }
+            }
+            if (selectionMode != null) {
                 Text(
-                    "От: ${origin.name}",
-                    style = MaterialTheme.typography.labelLarge,
-                    color = MaterialTheme.colorScheme.tertiary,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis
+                    if (selectionMode == RoutePointRole.START)
+                        "Удерживайте нужное место на карте, чтобы задать начало маршрута."
+                    else
+                        "Удерживайте нужное место на карте, чтобы изменить пункт назначения.",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.primary
                 )
             }
-            Text(
-                if (origin != null) "До: ${target.name}" else target.name,
-                style = MaterialTheme.typography.titleMedium,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis
-            )
             Text(
                 when {
                     route != null -> "${GeoMath.formatDistance(route.distanceMeters)} по дорогам · ${formatDuration(route.durationSeconds)}"
@@ -289,19 +329,21 @@ fun RoutePlannerCard(
                 )
             }
             Row(horizontalArrangement = Arrangement.spacedBy(Space.xxs), verticalAlignment = Alignment.CenterVertically) {
-                if (route == null) {
-                    GradientButton(
-                        text = if (session.busy) "Считаю…" else "Маршрут",
-                        onClick = onPlan,
-                        enabled = !session.busy && (origin != null || location != null)
-                    )
-                } else if (origin == null) {
-                    GradientButton(text = "Начать", onClick = onStart)
+                if (selectionMode == null) {
+                    if (route == null) {
+                        GradientButton(
+                            text = if (session.busy) "Считаю…" else "Маршрут",
+                            onClick = onPlan,
+                            enabled = !session.busy && (origin != null || location != null)
+                        )
+                    } else if (origin == null) {
+                        GradientButton(text = "Начать", onClick = onStart)
+                    }
                 }
                 if (onSave != null) {
                     TextButton(onClick = onSave, contentPadding = PaddingValues(horizontal = Space.s)) { Text("Сохранить") }
                 }
-                if (origin == null) {
+                if (origin == null && selectionMode == null) {
                     TextButton(onClick = onExternal, contentPadding = PaddingValues(horizontal = Space.s)) { Text("В навигаторе") }
                 }
                 TextButton(onClick = onCancel, contentPadding = PaddingValues(horizontal = Space.s)) { Text("Отмена") }
