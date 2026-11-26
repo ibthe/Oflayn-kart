@@ -958,26 +958,30 @@ private fun MapViewportSearchBox(
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
                 } else {
-                    results.take(6).forEachIndexed { index, poi ->
-                        if (index > 0) HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
-                        Column(
-                            Modifier.fillMaxWidth().clickable { onSelect(poi) }.padding(horizontal = Space.xs, vertical = Space.xs),
-                            verticalArrangement = Arrangement.spacedBy(2.dp)
-                        ) {
-                            Text(
-                                poi.nameIn(language).ifBlank { "Без названия" },
-                                style = MaterialTheme.typography.bodyMedium,
-                                fontWeight = FontWeight.SemiBold,
-                                maxLines = 1,
-                                overflow = TextOverflow.Ellipsis
-                            )
-                            Text(
-                                "${PoiLabels.subcategoryLabel(poi.subcategory).ifBlank { poiCategoryLabel(poi.category) }} · ${"%.5f".format(java.util.Locale.ROOT, poi.latitude)}, ${"%.5f".format(java.util.Locale.ROOT, poi.longitude)}",
-                                style = MaterialTheme.typography.bodySmall,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                maxLines = 1,
-                                overflow = TextOverflow.Ellipsis
-                            )
+                    Column(
+                        Modifier.fillMaxWidth().heightIn(max = 240.dp).verticalScroll(rememberScrollState())
+                    ) {
+                        results.take(6).forEachIndexed { index, poi ->
+                            if (index > 0) HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
+                            Column(
+                                Modifier.fillMaxWidth().clickable { onSelect(poi) }.padding(horizontal = Space.xs, vertical = Space.xs),
+                                verticalArrangement = Arrangement.spacedBy(2.dp)
+                            ) {
+                                Text(
+                                    poi.nameIn(language).ifBlank { "Без названия" },
+                                    style = MaterialTheme.typography.bodyMedium,
+                                    fontWeight = FontWeight.SemiBold,
+                                    maxLines = 1,
+                                    overflow = TextOverflow.Ellipsis
+                                )
+                                Text(
+                                    "${PoiLabels.subcategoryLabel(poi.subcategory).ifBlank { poiCategoryLabel(poi.category) }} · ${"%.5f".format(java.util.Locale.ROOT, poi.latitude)}, ${"%.5f".format(java.util.Locale.ROOT, poi.longitude)}",
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                    maxLines = 1,
+                                    overflow = TextOverflow.Ellipsis
+                                )
+                            }
                         }
                     }
                     if (results.size > 6) {
