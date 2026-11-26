@@ -129,7 +129,7 @@ fun GeorgiaOfflineApp(settings: LocalSettings) {
     val tracker = rememberLocationTracker()
     // Keep route data above AnimatedContent so switching tabs does not discard it.
     val routeSession = remember { RouteSession() }
-    LaunchedEffect(navigation.target, navigation.origin) { routeSession.reset() }
+    LaunchedEffect(navigation.target, navigation.origin, navigation.viaPoints.toList()) { routeSession.reset() }
     // A tab name saved by an older version (for example the removed ROUTE tab) falls back to the map.
     val currentTab = AppTab.entries.firstOrNull { it.name == selectedTab } ?: AppTab.MAP
     val mode = resolveThemeMode(settings.themeMode, isSystemInDarkTheme())
@@ -459,7 +459,15 @@ private fun MapScreen(modifier: Modifier, settings: LocalSettings, navigation: N
         val startLat = navigation.origin?.latitude ?: fix?.latitude ?: return
         val startLon = navigation.origin?.longitude ?: fix?.longitude ?: return
         coroutineScope.launch {
-            session.plan(context, startLat, startLon, goal.latitude, goal.longitude, rerouting)
+            session.plan(
+                context,
+                startLat,
+                startLon,
+                goal.latitude,
+                goal.longitude,
+                rerouting,
+                navigation.viaPoints.map { it.latitude to it.longitude }
+            )
             if (!rerouting && session.route != null) {
                 delay(7_000)
                 if (!session.navigating && session.route != null) session.fitToken++
@@ -501,6 +509,10 @@ private fun MapScreen(modifier: Modifier, settings: LocalSettings, navigation: N
                 zoomInToken = zoomInToken,
                 zoomOutToken = zoomOutToken,
                 routePoints = if (navigation.pointSelection == null) session.route?.points else null,
+                viaPoints = session.route?.steps
+                    ?.filter { it.maneuver == app.georgia.offline.routing.Maneuver.WAYPOINT }
+                    ?.map { LatLong(it.lat, it.lon) }
+                    ?: emptyList(),
                 routeColor = MaterialTheme.colorScheme.tertiary.toArgb(),
                 followUser = session.navigating,
                 fitToken = session.fitToken,
@@ -515,6 +527,29 @@ private fun MapScreen(modifier: Modifier, settings: LocalSettings, navigation: N
                 onLongPress = { point ->
                     if (!session.navigating) session.reset()
                     navigation.chooseMapPoint("Точка на карте", point.latitude, point.longitude)
+                },
+                onRouteDrag = { handle, index, point ->
+                    if (!session.navigating) {
+                        val moved = NavigationTarget("Точка маршрута", point.latitude, point.longitude)
+                        when (handle) {
+                            RouteDragTarget.START -> navigation.origin = moved
+                            RouteDragTarget.DESTINATION -> navigation.target = moved
+                            RouteDragTarget.WAYPOINT -> navigation.updateWaypoint(index, moved)
+                            RouteDragTarget.ROUTE_LINE -> {
+                                val currentRoute = session.route
+                                val along = currentRoute?.project(point.latitude, point.longitude)?.alongMeters ?: Double.MAX_VALUE
+                                val insertAt = navigation.viaPoints.indexOfFirst { via ->
+                                    currentRoute?.project(via.latitude, via.longitude)?.alongMeters?.let { it > along } == true
+                                }.let { if (it < 0) navigation.viaPoints.size else it }
+                                navigation.addWaypoint(moved, insertAt)
+                            }
+                        }
+                        session.reset()
+                        coroutineScope.launch {
+                            delay(120)
+                            planFrom(tracker.location, rerouting = false)
+                        }
+                    }
                 }
             )
             if (target != null && !navigation.routeMenuVisible && !session.navigating && navigation.pointSelection == null) {
@@ -657,6 +692,17 @@ private fun MapScreen(modifier: Modifier, settings: LocalSettings, navigation: N
                         RoutePlannerCard(
                             target = target,
                             origin = navigation.origin,
+                            viaPoints = navigation.viaPoints,
+                            onMoveWaypoint = { from, to ->
+                                navigation.moveWaypoint(from, to)
+                                session.reset()
+                                coroutineScope.launch { delay(120); planFrom(tracker.location, rerouting = false) }
+                            },
+                            onRemoveWaypoint = { index ->
+                                navigation.removeWaypoint(index)
+                                session.reset()
+                                coroutineScope.launch { delay(120); planFrom(tracker.location, rerouting = false) }
+                            },
                             onSave = if (alreadySaved) null else {
                                 { settings.addPlace(target.name, target.latitude, target.longitude) }
                             },
