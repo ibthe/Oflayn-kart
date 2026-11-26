@@ -152,7 +152,9 @@ fun GeorgiaOfflineApp(settings: LocalSettings) {
             TrackingEvent.ARRIVED -> {
                 if (routeSession.voice) speaker.speak("Вы прибыли в пункт назначения")
                 android.widget.Toast.makeText(context, "Вы прибыли в пункт назначения", android.widget.Toast.LENGTH_LONG).show()
-                navigation.target = null
+                // Arrival ends the whole route, including intermediate stops; do not
+                // accidentally reuse old waypoints when a new destination is chosen later.
+                navigation.clearRoute()
             }
             TrackingEvent.REROUTE -> {
                 val origin = navigation.origin
