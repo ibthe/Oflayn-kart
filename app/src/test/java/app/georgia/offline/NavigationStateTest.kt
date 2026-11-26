@@ -63,6 +63,30 @@ class NavigationStateTest {
     }
 
     @Test
+    fun closingRouteMenuKeepsDestinationAndPlannedRouteContext() {
+        val state = NavigationState()
+        state.chooseMapPoint("Destination", 41.7, 44.8)
+        val destination = state.target
+
+        state.closeRouteMenu()
+
+        assertEquals(false, state.routeMenuVisible)
+        assertSame(destination, state.target)
+    }
+
+    @Test
+    fun routeMenuCanBeReopenedAfterClosing() {
+        val state = NavigationState()
+        state.chooseMapPoint("Destination", 41.7, 44.8)
+        state.closeRouteMenu()
+
+        state.openRouteMenu()
+
+        assertEquals(true, state.routeMenuVisible)
+        assertEquals("Destination", state.target?.name)
+    }
+
+    @Test
     fun myLocationClearsExplicitStartAndPendingSelection() {
         val state = NavigationState()
         state.origin = app.georgia.offline.ui.NavigationTarget("Start", 41.6, 44.7)
