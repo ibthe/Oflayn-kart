@@ -321,7 +321,11 @@ private fun MapChip(
 ) = GlassPill(modifier = modifier, onClick = onClick, centered = centered, content = content)
 
 @Composable
-private fun MapStylePicker(settings: LocalSettings) {
+private fun MapStylePicker(
+    settings: LocalSettings,
+    expanded: Boolean,
+    onExpandedChange: (Boolean) -> Unit
+) {
     val choices = listOf(
         "classic" to "Классика",
         "oflayn_natural" to "Oflayn Natural",
@@ -330,11 +334,10 @@ private fun MapStylePicker(settings: LocalSettings) {
         "motorider" to "Авто",
         "biker" to "Велосипед"
     )
-    var expanded by rememberSaveable { mutableStateOf(false) }
     val selectedLabel = choices.firstOrNull { it.first == settings.mapTheme }?.second ?: "Классика"
 
     Column(verticalArrangement = Arrangement.spacedBy(Space.xs)) {
-        MapChip(onClick = { expanded = !expanded }) {
+        MapChip(onClick = { onExpandedChange(!expanded) }) {
             Text(
                 "Стиль: $selectedLabel",
                 style = MaterialTheme.typography.labelLarge,
@@ -374,7 +377,7 @@ private fun MapStylePicker(settings: LocalSettings) {
                                     selected = settings.mapTheme == value,
                                     onClick = {
                                         settings.updateMapTheme(value)
-                                        expanded = false
+                                        onExpandedChange(false)
                                     }
                                 )
                             }
@@ -484,6 +487,7 @@ private fun MapScreen(modifier: Modifier, settings: LocalSettings, navigation: N
     var mapSearchResults by remember { mutableStateOf<List<PoiRepository.PoiRecord>>(emptyList()) }
     var mapSearchViewport by remember { mutableStateOf<MapViewportBounds?>(null) }
     var mapSearchLoading by remember { mutableStateOf(false) }
+    var mapStyleExpanded by rememberSaveable { mutableStateOf(false) }
     LaunchedEffect(Unit) { poiDatabase = PoiRepository.ensureInstalled(context).database }
     LaunchedEffect(poiDatabase, mapSearchViewport, mapSearchQuery, mapSearchCategory) {
         val db = poiDatabase ?: return@LaunchedEffect
@@ -643,7 +647,8 @@ private fun MapScreen(modifier: Modifier, settings: LocalSettings, navigation: N
                     onCategoryChange = { mapSearchCategory = it },
                     results = mapSearchResults,
                     loading = mapSearchLoading,
-                    topOffset = if (tracker.error != null || (tracker.active && tracker.location == null)) 144.dp else 104.dp,
+                    topOffset = (if (tracker.error != null || (tracker.active && tracker.location == null)) 144.dp else 104.dp) +
+                        if (mapStyleExpanded) 140.dp else 0.dp,
                     language = settings.language,
                     onSelect = { poi ->
                         selectedMapPoi = poi
@@ -686,7 +691,7 @@ private fun MapScreen(modifier: Modifier, settings: LocalSettings, navigation: N
                         verticalArrangement = Arrangement.spacedBy(Space.xs)
                     ) {
                         NavigationBanner(session.route!!, session.along)
-                        MapStylePicker(settings)
+                        MapStylePicker(settings, expanded = mapStyleExpanded, onExpandedChange = { mapStyleExpanded = it })
                     }
                 } else {
                     Column(
@@ -703,7 +708,7 @@ private fun MapScreen(modifier: Modifier, settings: LocalSettings, navigation: N
                         } else if (tracker.active && tracker.location == null) {
                             MapChip { Text("Ищу сигнал GPS…", style = MaterialTheme.typography.labelMedium) }
                         }
-                        MapStylePicker(settings)
+                        MapStylePicker(settings, expanded = mapStyleExpanded, onExpandedChange = { mapStyleExpanded = it })
                     }
                     Text(
                         "© OpenStreetMap",
