@@ -49,6 +49,9 @@ private const val MAX_ZOOM: Byte = 18
 /** What kind of saved point a marker stands for. */
 enum class PlaceKind { SAVED, CAR }
 
+/** The route element captured by a drag gesture on the map. */
+enum class RouteDragTarget { START, DESTINATION, WAYPOINT, ROUTE_LINE }
+
 /** A saved point drawn on the map; the selected one is enlarged and haloed. */
 class MapPlace(val id: String, val latitude: Double, val longitude: Double, val kind: PlaceKind)
 
@@ -67,6 +70,7 @@ fun MapsforgeMapSurface(
     zoomInToken: Int = 0,
     zoomOutToken: Int = 0,
     routePoints: DoubleArray? = null,
+    viaPoints: List<LatLong> = emptyList(),
     routeColor: Int = 0xFF2F6FED.toInt(),
     followUser: Boolean = false,
     fitToken: Int = 0,
@@ -78,11 +82,15 @@ fun MapsforgeMapSurface(
     originColor: Int = 0xFF1FB89A.toInt(),
     focusToken: Int = 0,
     onPlaceTap: ((String?) -> Unit)? = null,
-    onLongPress: ((LatLong) -> Unit)? = null
+    onLongPress: ((LatLong) -> Unit)? = null,
+    onRouteDrag: ((RouteDragTarget, Int, LatLong) -> Unit)? = null
 ) {
     val currentLongPress by rememberUpdatedState(onLongPress)
     val currentPlaces by rememberUpdatedState(places)
     val currentPlaceTap by rememberUpdatedState(onPlaceTap)
+    val currentRoutePoints by rememberUpdatedState(routePoints)
+    val currentViaPoints by rememberUpdatedState(viaPoints)
+    val currentRouteDrag by rememberUpdatedState(onRouteDrag)
     key(mapFile.absolutePath, mapFile.lastModified(), preferredLanguage, mapTheme, accentColor, routeColor) {
         val overlays = remember { MapOverlays(accentColor, destinationColor, routeColor, savedColor, carColor, originColor) }
         var mapViewRef by remember { mutableStateOf<MapView?>(null) }
@@ -135,6 +143,47 @@ fun MapsforgeMapSurface(
                     }
                     // Long press sets a navigation target. The listener returns false, so Mapsforge
                     // still handles every gesture itself.
+                    var activeDrag: Pair<RouteDragTarget, Int>? = null
+                    var dragPreview: Marker? = null
+                    fun screenDistance(x1: Double, y1: Double, x2: Double, y2: Double): Double {
+                        val dx = x1 - x2
+                        val dy = y1 - y2
+                        return kotlin.math.sqrt(dx * dx + dy * dy)
+                    }
+                    fun distanceToSegment(px: Double, py: Double, ax: Double, ay: Double, bx: Double, by: Double): Double {
+                        val dx = bx - ax
+                        val dy = by - ay
+                        val denom = dx * dx + dy * dy
+                        val t = if (denom == 0.0) 0.0 else (((px - ax) * dx + (py - ay) * dy) / denom).coerceIn(0.0, 1.0)
+                        return screenDistance(px, py, ax + dx * t, ay + dy * t)
+                    }
+                    fun hitRouteElement(x: Float, y: Float): Pair<RouteDragTarget, Int>? {
+                        val route = currentRoutePoints ?: return null
+                        if (route.size < 4) return null
+                        val density = viewContext.resources.displayMetrics.density
+                        val markerReach = 34.0 * density
+                        val startPixel = mapViewProjection.toPixels(LatLong(route[0], route[1]))
+                        val endPixel = mapViewProjection.toPixels(LatLong(route[route.size - 2], route[route.size - 1]))
+                        if (startPixel != null && screenDistance(x.toDouble(), y.toDouble(), startPixel.x, startPixel.y) <= markerReach) {
+                            return RouteDragTarget.START to -1
+                        }
+                        if (endPixel != null && screenDistance(x.toDouble(), y.toDouble(), endPixel.x, endPixel.y) <= markerReach) {
+                            return RouteDragTarget.DESTINATION to -1
+                        }
+                        currentViaPoints.forEachIndexed { index, point ->
+                            val pixel = mapViewProjection.toPixels(point) ?: return@forEachIndexed
+                            if (screenDistance(x.toDouble(), y.toDouble(), pixel.x, pixel.y) <= markerReach) {
+                                return RouteDragTarget.WAYPOINT to index
+                            }
+                        }
+                        var nearest = Double.MAX_VALUE
+                        for (i in 0 until route.size / 2 - 1) {
+                            val a = mapViewProjection.toPixels(LatLong(route[2 * i], route[2 * i + 1])) ?: continue
+                            val b = mapViewProjection.toPixels(LatLong(route[2 * i + 2], route[2 * i + 3])) ?: continue
+                            nearest = minOf(nearest, distanceToSegment(x.toDouble(), y.toDouble(), a.x, a.y, b.x, b.y))
+                        }
+                        return if (nearest <= 19.0 * density) RouteDragTarget.ROUTE_LINE to -1 else null
+                    }
                     val detector = GestureDetector(viewContext, object : GestureDetector.SimpleOnGestureListener() {
                         // A tap near a saved point selects it; a tap on empty map clears the selection.
                         override fun onSingleTapConfirmed(event: MotionEvent): Boolean {
@@ -164,8 +213,66 @@ fun MapsforgeMapSurface(
                         }
                     })
                     setOnTouchListener { _, event ->
-                        detector.onTouchEvent(event)
-                        false
+                        when (event.actionMasked) {
+                            MotionEvent.ACTION_DOWN -> {
+                                activeDrag = hitRouteElement(event.x, event.y)
+                                if (activeDrag != null) {
+                                    val point = mapViewProjection.fromPixels(event.x.toDouble(), event.y.toDouble())
+                                    if (point != null) {
+                                        val (bitmap, offset) = pinBitmap(viewContext, routeColor, "•", true, viewContext.resources.displayMetrics.density)
+                                        dragPreview = Marker(point, bitmap, 0, offset).also { layerManager.layers.add(it) }
+                                    }
+                                    true
+                                } else {
+                                    detector.onTouchEvent(event)
+                                    false
+                                }
+                            }
+                            MotionEvent.ACTION_MOVE -> {
+                                if (activeDrag != null) {
+                                    val point = mapViewProjection.fromPixels(event.x.toDouble(), event.y.toDouble())
+                                    if (point != null) {
+                                        dragPreview?.setLatLong(point)
+                                        layerManager.redrawLayers()
+                                    }
+                                    true
+                                } else {
+                                    detector.onTouchEvent(event)
+                                    false
+                                }
+                            }
+                            MotionEvent.ACTION_UP -> {
+                                val drag = activeDrag
+                                if (drag != null) {
+                                    val point = mapViewProjection.fromPixels(event.x.toDouble(), event.y.toDouble())
+                                    if (point != null) currentRouteDrag?.invoke(drag.first, drag.second, point)
+                                    dragPreview?.let { layerManager.layers.remove(it) }
+                                    dragPreview = null
+                                    activeDrag = null
+                                    layerManager.redrawLayers()
+                                    true
+                                } else {
+                                    detector.onTouchEvent(event)
+                                    false
+                                }
+                            }
+                            MotionEvent.ACTION_CANCEL -> {
+                                if (activeDrag != null) {
+                                    dragPreview?.let { layerManager.layers.remove(it) }
+                                    dragPreview = null
+                                    activeDrag = null
+                                    layerManager.redrawLayers()
+                                    true
+                                } else {
+                                    detector.onTouchEvent(event)
+                                    false
+                                }
+                            }
+                            else -> {
+                                detector.onTouchEvent(event)
+                                activeDrag != null
+                            }
+                        }
                     }
                     mapViewRef = this
                 }
@@ -173,7 +280,7 @@ fun MapsforgeMapSurface(
             update = { view ->
                 overlays.sync(
                     view,
-                    OverlayState(userLocation, destination, recenterToken, zoomInToken, zoomOutToken, routePoints, followUser, fitToken, places, selectedPlaceId, origin, focusToken)
+                    OverlayState(userLocation, destination, recenterToken, zoomInToken, zoomOutToken, routePoints, viaPoints, followUser, fitToken, places, selectedPlaceId, origin, focusToken)
                 )
             }
         )
@@ -215,6 +322,7 @@ private class OverlayState(
     val zoomInToken: Int,
     val zoomOutToken: Int,
     val routePoints: DoubleArray?,
+    val viaPoints: List<LatLong>,
     val followUser: Boolean,
     val fitToken: Int,
     val places: List<MapPlace>,
@@ -241,6 +349,10 @@ private class MapOverlays(
     private var me: Marker? = null
     private var accuracy: Circle? = null
     private var destinationMarker: Marker? = null
+    private var routeStartMarker: Marker? = null
+    private var routeEndMarker: Marker? = null
+    private val waypointMarkers = ArrayList<Marker>()
+    private var waypointKey = ""
     private var line: Polyline? = null
     private var routeCasing: Polyline? = null
     private var routeLine: Polyline? = null
@@ -291,7 +403,7 @@ private class MapOverlays(
             accuracy = null
         }
 
-        if (destination != null) {
+        if (destination != null && state.routePoints == null) {
             val marker = destinationMarker
             if (marker == null) {
                 val created = Marker(destination, markerBitmap(view.context, destinationColor, true), 0, 0)
@@ -307,7 +419,7 @@ private class MapOverlays(
 
         // Route start chosen from a saved point ("route from here").
         val origin = state.origin
-        if (origin != null) {
+        if (origin != null && state.routePoints == null) {
             if (originMarker == null || originAt != origin) {
                 originMarker?.let { layers.remove(it) }
                 val (bitmap, offset) = pinBitmap(view.context, originColor, "A", false, density)
@@ -377,6 +489,40 @@ private class MapOverlays(
             routeCasing = null
             routeLine = null
             lastRoute = null
+        }
+
+        // Draggable A/B handles and numbered intermediate stops follow the snapped route geometry.
+        if (route != null && route.size >= 4) {
+            val start = LatLong(route[0], route[1])
+            val end = LatLong(route[route.size - 2], route[route.size - 1])
+            if (routeStartMarker == null) {
+                val (bitmap, offset) = pinBitmap(view.context, originColor, "A", true, density)
+                routeStartMarker = Marker(start, bitmap, 0, offset).also { layers.add(it) }
+            } else routeStartMarker?.setLatLong(start)
+            if (routeEndMarker == null) {
+                val (bitmap, offset) = pinBitmap(view.context, destinationColor, "B", true, density)
+                routeEndMarker = Marker(end, bitmap, 0, offset).also { layers.add(it) }
+            } else routeEndMarker?.setLatLong(end)
+            val key = state.viaPoints.joinToString("|") { "${it.latitude},${it.longitude}" }
+            if (key != waypointKey) {
+                waypointKey = key
+                waypointMarkers.forEach { layers.remove(it) }
+                waypointMarkers.clear()
+                state.viaPoints.forEachIndexed { index, point ->
+                    val (bitmap, offset) = pinBitmap(view.context, routeColor, (index + 1).toString(), true, density)
+                    waypointMarkers.add(Marker(point, bitmap, 0, offset).also { layers.add(it) })
+                }
+            }
+        } else {
+            routeStartMarker?.let { layers.remove(it) }
+            routeEndMarker?.let { layers.remove(it) }
+            routeStartMarker = null
+            routeEndMarker = null
+            if (waypointMarkers.isNotEmpty()) {
+                waypointMarkers.forEach { layers.remove(it) }
+                waypointMarkers.clear()
+                waypointKey = ""
+            }
         }
 
         // Dashed straight guide line only while there is no road route.
