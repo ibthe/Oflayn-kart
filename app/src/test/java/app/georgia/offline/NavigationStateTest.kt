@@ -149,6 +149,22 @@ class NavigationStateTest {
     }
 
     @Test
+    fun clearingRouteRemovesAllEndpointsAndIntermediateStops() {
+        val state = NavigationState()
+        state.target = app.georgia.offline.ui.NavigationTarget("End", 41.8, 44.9)
+        state.origin = app.georgia.offline.ui.NavigationTarget("Start", 41.6, 44.7)
+        state.addWaypoint(app.georgia.offline.ui.NavigationTarget("Via", 41.7, 44.8))
+        state.routeMenuVisible = true
+
+        state.clearRoute()
+
+        assertNull(state.target)
+        assertNull(state.origin)
+        assertEquals(0, state.viaPoints.size)
+        assertEquals(false, state.routeMenuVisible)
+    }
+
+    @Test
     fun myLocationClearsExplicitStartAndPendingSelection() {
         val state = NavigationState()
         state.origin = app.georgia.offline.ui.NavigationTarget("Start", 41.6, 44.7)
