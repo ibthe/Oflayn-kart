@@ -306,6 +306,7 @@ fun MapsforgeMapSurface(
 
 
 private fun resolveMapTheme(value: String, context: Context): XmlRenderTheme {
+    // Both Natural variants are bundled assets and are refreshed in the app-private copy on update.
     val bundledThemeName = when (value) {
         "oflayn_natural" -> "oflayn-natural.xml"
         "oflayn_natural_dark" -> "oflayn-natural-dark.xml"
