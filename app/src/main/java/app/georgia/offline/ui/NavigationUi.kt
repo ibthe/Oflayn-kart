@@ -241,6 +241,9 @@ private fun profileChipColors() = FilterChipDefaults.filterChipColors(
 fun RoutePlannerCard(
     target: NavigationTarget,
     origin: NavigationTarget?,
+    viaPoints: List<NavigationTarget>,
+    onMoveWaypoint: (Int, Int) -> Unit,
+    onRemoveWaypoint: (Int) -> Unit,
     onSave: (() -> Unit)?,
     location: android.location.Location?,
     session: RouteSession,
@@ -328,6 +331,24 @@ fun RoutePlannerCard(
                     Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
                         TextButton(onClick = onSwap, contentPadding = PaddingValues(horizontal = Space.s)) {
                             Text("Поменять местами", maxLines = 1, softWrap = false)
+                        }
+                    }
+                }
+                if (viaPoints.isNotEmpty()) {
+                    Column(Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(Space.xxs)) {
+                        Text("ПРОМЕЖУТОЧНЫЕ ТОЧКИ", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                        viaPoints.forEachIndexed { index, point ->
+                            Row(
+                                Modifier.fillMaxWidth(),
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(Space.xxs)
+                            ) {
+                                Text("${index + 1}.", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.primary)
+                                Text(point.name, modifier = Modifier.weight(1f), style = MaterialTheme.typography.bodyMedium, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                                TextButton(onClick = { onMoveWaypoint(index, index - 1) }, enabled = index > 0, contentPadding = PaddingValues(horizontal = Space.xxs)) { Text("↑") }
+                                TextButton(onClick = { onMoveWaypoint(index, index + 1) }, enabled = index < viaPoints.lastIndex, contentPadding = PaddingValues(horizontal = Space.xxs)) { Text("↓") }
+                                TextButton(onClick = { onRemoveWaypoint(index) }, contentPadding = PaddingValues(horizontal = Space.xxs)) { Text("×") }
+                            }
                         }
                     }
                 }
