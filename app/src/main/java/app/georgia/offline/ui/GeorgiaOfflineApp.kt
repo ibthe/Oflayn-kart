@@ -1,5 +1,6 @@
 package app.georgia.offline.ui
 
+import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.AnimatedVisibility
@@ -179,6 +180,9 @@ fun GeorgiaOfflineApp(settings: LocalSettings) {
 
     // A tab name saved by an older version (for example the removed ROUTE tab) falls back to the map.
     val currentTab = AppTab.entries.firstOrNull { it.name == selectedTab } ?: AppTab.MAP
+    BackHandler(enabled = currentTab != AppTab.MAP) {
+        selectedTab = AppTab.MAP.name
+    }
     val mode = resolveThemeMode(settings.themeMode, isSystemInDarkTheme())
     GeorgiaTheme(paletteId = settings.palette, mode = mode) {
         CompositionLocalProvider(LocalLayerAlpha provides settings.layerOpacity) {
@@ -534,6 +538,18 @@ private fun MapScreen(modifier: Modifier, settings: LocalSettings, navigation: N
         savedPlaces.map { MapPlace(it.id, it.latitude, it.longitude, if (it.id == LocalSettings.CAR_PLACE_ID) PlaceKind.CAR else PlaceKind.SAVED) }
     }
     val selectedPlace = savedPlaces.firstOrNull { it.id == navigation.selectedPlaceId }
+    BackHandler(
+        enabled = navigation.routeMenuVisible || navigation.pointSelection != null ||
+            selectedMapPoi != null || navigation.selectedPlaceId != null ||
+            (navigation.origin != null && target == null)
+    ) {
+        when {
+            navigation.routeMenuVisible || navigation.pointSelection != null -> navigation.closeRouteMenu()
+            selectedMapPoi != null -> selectedMapPoi = null
+            navigation.selectedPlaceId != null -> navigation.selectedPlaceId = null
+            navigation.origin != null && target == null -> navigation.origin = null
+        }
+    }
     // Keep contextual cards mutually exclusive with the search panel so they do not stack over the map.
     val showMapSearch = !session.navigating &&
         navigation.pointSelection == null &&
