@@ -278,6 +278,7 @@ private fun MapChip(
 private fun MapStylePicker(settings: LocalSettings) {
     val choices = listOf(
         "classic" to "Классика",
+        "oflayn_natural" to "Oflayn Natural",
         "outdoor" to "Природа",
         "motorider" to "Авто",
         "biker" to "Велосипед"
