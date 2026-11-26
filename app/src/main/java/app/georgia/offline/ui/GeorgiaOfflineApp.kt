@@ -651,7 +651,7 @@ private fun MapScreen(modifier: Modifier, settings: LocalSettings, navigation: N
                     results = mapSearchResults,
                     loading = mapSearchLoading,
                     topOffset = (if (tracker.error != null || (tracker.active && tracker.location == null)) 104.dp else 64.dp) +
-                        if (mapStyleExpanded) 140.dp else 0.dp,
+                        if (mapStyleExpanded) 160.dp else 0.dp,
                     language = settings.language,
                     onSelect = { poi ->
                         selectedMapPoi = poi
