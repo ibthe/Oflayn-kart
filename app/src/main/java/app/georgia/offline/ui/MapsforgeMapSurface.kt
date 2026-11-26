@@ -306,10 +306,15 @@ fun MapsforgeMapSurface(
 
 
 private fun resolveMapTheme(value: String, context: Context): XmlRenderTheme {
-    if (value == "oflayn_natural") {
-        val themeFile = File(context.filesDir, "oflayn-natural.xml")
+    val bundledThemeName = when (value) {
+        "oflayn_natural" -> "oflayn-natural.xml"
+        "oflayn_natural_dark" -> "oflayn-natural-dark.xml"
+        else -> null
+    }
+    if (bundledThemeName != null) {
+        val themeFile = File(context.filesDir, bundledThemeName)
         // Keep the private copy in sync with the bundled asset after app updates.
-        val bundledTheme = context.assets.open("themes/oflayn-natural.xml").use { it.readBytes() }
+        val bundledTheme = context.assets.open("themes/$bundledThemeName").use { it.readBytes() }
         val needsUpdate = !themeFile.isFile || !themeFile.readBytes().contentEquals(bundledTheme)
         if (needsUpdate) {
             themeFile.writeBytes(bundledTheme)
