@@ -898,7 +898,7 @@ private fun MapScreen(modifier: Modifier, settings: LocalSettings, navigation: N
                             session = session,
                             onProfile = { option ->
                                 session.profile = option
-                                if (session.route != null) planFrom(tracker.location, rerouting = true)
+                                if (session.route != null) planFrom(tracker.location, rerouting = session.navigating)
                             },
                             selectionMode = navigation.pointSelection,
                             onChooseOrigin = { session.reset(); navigation.pointSelection = RoutePointRole.START },
