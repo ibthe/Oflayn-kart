@@ -210,6 +210,10 @@ class Speaker(context: Context) {
         if (ready) engine?.speak(text, TextToSpeech.QUEUE_FLUSH, null, "guidance")
     }
 
+    fun stop() {
+        engine?.stop()
+    }
+
     fun shutdown() {
         engine?.stop()
         engine?.shutdown()
