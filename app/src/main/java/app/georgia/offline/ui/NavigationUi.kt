@@ -496,7 +496,7 @@ fun NavigationBanner(route: Route, along: Double, modifier: Modifier = Modifier)
 
 /** Compact navigation controls; the map stays dominant while the essential actions remain reachable. */
 @Composable
-fun NavigationFooter(route: Route, session: RouteSession, onStop: () -> Unit) {
+fun NavigationFooter(route: Route, session: RouteSession, speaker: Speaker, onStop: () -> Unit) {
     val remaining = (route.distanceMeters - session.along).coerceAtLeast(0.0)
     val seconds = if (route.distanceMeters > 0) route.durationSeconds * remaining / route.distanceMeters else 0.0
     Surface(
@@ -532,7 +532,14 @@ fun NavigationFooter(route: Route, session: RouteSession, onStop: () -> Unit) {
                 )
             }
             TextButton(
-                onClick = { session.voice = !session.voice },
+                onClick = {
+                    if (session.voice) {
+                        session.voice = false
+                        speaker.stop()
+                    } else {
+                        session.voice = true
+                    }
+                },
                 contentPadding = PaddingValues(horizontal = Space.xs)
             ) {
                 Text(if (session.voice) "Звук вкл." else "Звук выкл.", maxLines = 1, softWrap = false)
