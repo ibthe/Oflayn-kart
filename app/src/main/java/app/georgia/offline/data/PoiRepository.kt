@@ -279,6 +279,61 @@ object PoiRepository {
     }
 
 
+
+    /** Search only inside the visible map rectangle; the coordinate index bounds the offline query. */
+    suspend fun searchInBounds(
+        database: File,
+        query: String,
+        north: Double,
+        south: Double,
+        east: Double,
+        west: Double,
+        limit: Int = 60
+    ): List<PoiRecord> = withContext(Dispatchers.IO) {
+        val conditions = mutableListOf(
+            "latitude BETWEEN ? AND ?",
+            "longitude BETWEEN ? AND ?"
+        )
+        val arguments = mutableListOf(
+            south.toString(), north.toString(), west.toString(), east.toString()
+        )
+        val terms = query.trim().lowercase(Locale.ROOT)
+            .split(Regex("\\s+")).filter { it.isNotBlank() }.take(5)
+        terms.forEach { term ->
+            conditions += "instr(search_text, ?) > 0"
+            arguments += term
+        }
+        val sql = """
+            SELECT poi_id, category, subcategory, name, name_en, name_ru, name_ka,
+                   latitude, longitude, tags_json
+            FROM poi
+            WHERE ${conditions.joinToString(" AND ")}
+            ORDER BY CASE category
+                WHEN 'tourism' THEN 1 WHEN 'historic' THEN 2 WHEN 'nature' THEN 3
+                WHEN 'food' THEN 4 WHEN 'lodging' THEN 5 WHEN 'medical' THEN 6
+                WHEN 'transport' THEN 7 WHEN 'services' THEN 8 WHEN 'shops' THEN 9
+                ELSE 10 END, name COLLATE NOCASE
+            LIMIT ?
+        """.trimIndent()
+        arguments += limit.coerceIn(1, 120).toString()
+        val db = SQLiteDatabase.openDatabase(database.absolutePath, null, SQLiteDatabase.OPEN_READONLY)
+        try {
+            db.rawQuery(sql, arguments.toTypedArray()).use { cursor ->
+                buildList {
+                    while (cursor.moveToNext()) add(PoiRecord(
+                        poiId = cursor.getString(0), category = cursor.getString(1),
+                        subcategory = cursor.getString(2), name = cursor.getString(3),
+                        nameEn = cursor.getString(4), nameRu = cursor.getString(5),
+                        nameKa = cursor.getString(6), latitude = cursor.getDouble(7),
+                        longitude = cursor.getDouble(8), tagsJson = cursor.getString(9)
+                    ))
+                }
+            }
+        } finally {
+            db.close()
+        }
+    }
+
     /** Bounded offline lookup for a POI nearest to a tapped map coordinate. */
     suspend fun nearestPoi(
         database: File,
