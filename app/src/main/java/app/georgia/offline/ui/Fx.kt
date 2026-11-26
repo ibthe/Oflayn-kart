@@ -45,6 +45,7 @@ import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Path
+import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.luminance
@@ -203,7 +204,7 @@ internal fun GlassPill(
         shadowElevation = 8.dp
     ) {
         Row(
-            Modifier.padding(horizontal = Space.m, vertical = Space.s),
+            modifier = if (centered) Modifier else Modifier.padding(horizontal = Space.m, vertical = Space.s),
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = if (centered) {
                 androidx.compose.foundation.layout.Arrangement.Center
@@ -212,6 +213,33 @@ internal fun GlassPill(
             },
             content = content
         )
+    }
+}
+
+/** Plus/minus drawn from the exact center instead of font glyph metrics. */
+@Composable
+internal fun ZoomGlyph(color: Color, zoomIn: Boolean, modifier: Modifier = Modifier) {
+    Canvas(modifier.size(20.dp)) {
+        val center = Offset(size.width / 2f, size.height / 2f)
+        val halfLength = size.minDimension * 0.34f
+        val strokeWidth = 2.dp.toPx()
+
+        drawLine(
+            color = color,
+            start = Offset(center.x - halfLength, center.y),
+            end = Offset(center.x + halfLength, center.y),
+            strokeWidth = strokeWidth,
+            cap = StrokeCap.Round
+        )
+        if (zoomIn) {
+            drawLine(
+                color = color,
+                start = Offset(center.x, center.y - halfLength),
+                end = Offset(center.x, center.y + halfLength),
+                strokeWidth = strokeWidth,
+                cap = StrokeCap.Round
+            )
+        }
     }
 }
 
