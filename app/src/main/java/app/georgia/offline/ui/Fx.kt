@@ -16,6 +16,7 @@ import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.gestures.detectVerticalDragGestures
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.foundation.layout.Box
@@ -47,6 +48,8 @@ import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.luminance
+import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
@@ -71,6 +74,26 @@ internal fun Modifier.bounceClick(enabled: Boolean = true, onClick: () -> Unit):
             scaleY = scale
         }
         .clickable(interactionSource = source, indication = null, enabled = enabled, onClick = onClick)
+} 
+
+/** Dismiss a floating map panel when the user swipes it down. */
+internal fun Modifier.dismissOnSwipeDown(onDismiss: () -> Unit): Modifier = composed {
+    val density = LocalDensity.current
+    val thresholdPx = with(density) { 72.dp.toPx() }
+    this.pointerInput(thresholdPx, onDismiss) {
+        var downwardDistance = 0f
+        detectVerticalDragGestures(
+            onVerticalDrag = { change, dragAmount ->
+                if (dragAmount > 0f) downwardDistance += dragAmount
+                change.consume()
+            },
+            onDragEnd = {
+                if (downwardDistance >= thresholdPx) onDismiss()
+                downwardDistance = 0f
+            },
+            onDragCancel = { downwardDistance = 0f }
+        )
+    }
 }
 
 /** Hands out a growing entrance delay so blocks of one screen appear one after another. */
@@ -220,10 +243,16 @@ internal fun GradientButton(
 
 /** Selectable pill whose colours animate between states. Replaces the stock filter chip. */
 @Composable
-internal fun SelectPill(label: String, selected: Boolean, onClick: () -> Unit, modifier: Modifier = Modifier) {
+internal fun SelectPill(
+    label: String,
+    selected: Boolean,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier,
+    transparentWhenUnselected: Boolean = false
+) {
     val scheme = MaterialTheme.colorScheme
     val background by animateColorAsState(
-        if (selected) scheme.primary else scheme.surfaceContainerHigh,
+        if (selected) scheme.primary else if (transparentWhenUnselected) Color.Transparent else scheme.surfaceContainerHigh,
         animationSpec = tween(260),
         label = "pillBackground"
     )
