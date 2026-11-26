@@ -32,6 +32,7 @@ import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableDoubleStateOf
@@ -270,6 +271,7 @@ fun RoutePlannerCard(
     onCancel: () -> Unit
 ) {
     val plannerScrollState = rememberScrollState()
+    LaunchedEffect(target, origin, viaPoints) { plannerScrollState.scrollTo(0) }
     Surface(
         modifier = Modifier.fillMaxWidth().appear()
             .dismissOnSwipeDown(onCancel, canDismiss = { plannerScrollState.value == 0 }),
