@@ -550,6 +550,7 @@ private fun MapScreen(modifier: Modifier, settings: LocalSettings, navigation: N
                 places = mapPlaces,
                 selectedPlaceId = navigation.selectedPlaceId,
                 selectedPoi = selectedMapPoi?.let { LatLong(it.latitude, it.longitude) },
+                searchResultPoints = mapSearchResults.take(6).map { LatLong(it.latitude, it.longitude) },
                 origin = navigation.origin?.let { LatLong(it.latitude, it.longitude) },
                 savedColor = MaterialTheme.colorScheme.primary.toArgb(),
                 carColor = MaterialTheme.colorScheme.tertiary.toArgb(),
@@ -562,6 +563,14 @@ private fun MapScreen(modifier: Modifier, settings: LocalSettings, navigation: N
                     }
                 },
                 onViewportChanged = { bounds -> mapSearchViewport = bounds },
+                onSearchResultTap = { index ->
+                    mapSearchResults.getOrNull(index)?.let { poi ->
+                        selectedMapPoi = poi
+                        navigation.selectedPlaceId = null
+                        mapSearchQuery = ""
+                        mapSearchResults = emptyList()
+                    }
+                },
                 onMapTap = { point ->
                     if (!session.navigating) {
                         navigation.selectedPlaceId = null
