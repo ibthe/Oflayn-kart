@@ -200,7 +200,7 @@ object PoiRepository {
             return SearchResult(null, 0, "База объектов не найдена во встроенных ресурсах APK.")
         }
         val temporary = File(directory, "georgia-poi.sqlite.part")
-        try {
+        return try {
             val digest = MessageDigest.getInstance("SHA-256")
             input.use { source ->
                 temporary.outputStream().buffered().use { target ->
