@@ -342,7 +342,9 @@ private fun MapStylePicker(
             Text(
                 "Стиль: $selectedLabel",
                 style = MaterialTheme.typography.labelLarge,
-                fontWeight = FontWeight.SemiBold
+                fontWeight = FontWeight.SemiBold,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis
             )
             Text(
                 if (expanded) "⌃" else "⌄",
@@ -718,7 +720,15 @@ private fun MapScreen(modifier: Modifier, settings: LocalSettings, navigation: N
                     ) {
                         val trackerError = tracker.error
                         if (trackerError != null) {
-                            MapChip { Text(trackerError, style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.error) }
+                            MapChip {
+                                Text(
+                                    trackerError,
+                                    style = MaterialTheme.typography.labelMedium,
+                                    color = MaterialTheme.colorScheme.error,
+                                    maxLines = 1,
+                                    overflow = TextOverflow.Ellipsis
+                                )
+                            }
                         } else if (tracker.active && tracker.location == null) {
                             MapChip { Text("Ищу сигнал GPS…", style = MaterialTheme.typography.labelMedium) }
                         }
