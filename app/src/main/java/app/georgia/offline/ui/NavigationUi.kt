@@ -93,7 +93,15 @@ class RouteSession {
     }
 
     /** Computes a route from the given position. When [rerouting] the current route stays on screen until the new one is ready. */
-    suspend fun plan(context: Context, fromLat: Double, fromLon: Double, toLat: Double, toLon: Double, rerouting: Boolean) {
+    suspend fun plan(
+        context: Context,
+        fromLat: Double,
+        fromLon: Double,
+        toLat: Double,
+        toLon: Double,
+        rerouting: Boolean,
+        waypoints: List<Pair<Double, Double>> = emptyList()
+    ) {
         val id = ++requestId
         busy = true
         if (!rerouting) message = null
@@ -105,7 +113,12 @@ class RouteSession {
             busy = false
             return
         }
-        val result = withContext(Dispatchers.Default) { router.route(profile, fromLat, fromLon, toLat, toLon) }
+        val orderedPoints = buildList {
+            add(fromLat to fromLon)
+            addAll(waypoints)
+            add(toLat to toLon)
+        }
+        val result = withContext(Dispatchers.Default) { router.route(profile, orderedPoints) }
         if (id != requestId) return
         busy = false
         val found = result.route
@@ -199,9 +212,14 @@ fun formatDuration(seconds: Double): String {
     return if (minutes < 60) "$minutes мин" else "${minutes / 60} ч ${minutes % 60} мин"
 }
 
-private fun maneuverGlyph(maneuver: Maneuver): String = if (maneuver == Maneuver.ARRIVE) "●" else "↑"
+private fun maneuverGlyph(maneuver: Maneuver): String = when (maneuver) {
+    Maneuver.ARRIVE -> "●"
+    Maneuver.WAYPOINT -> "◆"
+    else -> "↑"
+}
 
 private fun maneuverRotation(maneuver: Maneuver): Float = when (maneuver) {
+    Maneuver.WAYPOINT -> 0f
     Maneuver.SLIGHT_LEFT -> -45f
     Maneuver.LEFT -> -90f
     Maneuver.SHARP_LEFT -> -135f
