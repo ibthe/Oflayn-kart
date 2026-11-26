@@ -839,8 +839,6 @@ private fun MapScreen(modifier: Modifier, settings: LocalSettings, navigation: N
 }
 
 @Composable
-
-@Composable
 private fun MapViewportSearchBox(
     query: String,
     onQueryChange: (String) -> Unit,
@@ -928,6 +926,7 @@ private fun MapViewportSearchBox(
     }
 }
 
+@Composable
 private fun MapPoiCard(
     poi: PoiRepository.PoiRecord,
     name: String,
