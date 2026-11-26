@@ -288,6 +288,7 @@ object PoiRepository {
         south: Double,
         east: Double,
         west: Double,
+        category: String = "all",
         limit: Int = 60
     ): List<PoiRecord> = withContext(Dispatchers.IO) {
         val conditions = mutableListOf(
@@ -297,6 +298,10 @@ object PoiRepository {
         val arguments = mutableListOf(
             south.toString(), north.toString(), west.toString(), east.toString()
         )
+        if (category != "all") {
+            conditions += "category = ?"
+            arguments += category
+        }
         val terms = query.trim().lowercase(Locale.ROOT)
             .split(Regex("\\s+")).filter { it.isNotBlank() }.take(5)
         terms.forEach { term ->
