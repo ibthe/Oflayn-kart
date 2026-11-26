@@ -706,6 +706,12 @@ private fun MapScreen(modifier: Modifier, settings: LocalSettings, navigation: N
                             onChooseOrigin = { navigation.pointSelection = RoutePointRole.START },
                             onChooseDestination = { navigation.pointSelection = RoutePointRole.DESTINATION },
                             onUseMyLocation = { navigation.useMyLocation() },
+                            onDestinationMyLocation = {
+                                tracker.location?.let { fix ->
+                                    navigation.target = NavigationTarget("Моё местоположение", fix.latitude, fix.longitude)
+                                    navigation.pointSelection = null
+                                }
+                            },
                             onSwap = { navigation.swapEndpoints() },
                             onPlan = { planFrom(tracker.location, rerouting = false) },
                             onStart = {
