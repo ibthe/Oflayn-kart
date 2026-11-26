@@ -1,7 +1,6 @@
 package app.georgia.offline.data
 
 import android.content.Context
-import android.net.Uri
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableStateOf
@@ -99,13 +98,6 @@ class LocalSettings(context: Context) {
         mapTheme = value
         preferences.edit().putString("map_theme", value).apply()
     }
-
-    fun setStorageTree(uri: Uri?) {
-        storageTreeUri = uri?.toString()
-        preferences.edit().putString("storage_tree_uri", storageTreeUri).apply()
-    }
-
-    fun storageUri(): Uri? = storageTreeUri?.let(Uri::parse)
 
     /** Stores the active Mapsforge map path and whether it came from the APK bundle. */
     fun setMapFilePath(path: String?, bundled: Boolean = false) {
