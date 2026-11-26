@@ -150,6 +150,7 @@ fun GeorgiaOfflineApp(settings: LocalSettings) {
                             AppTab.MAP -> MapScreen(Modifier.padding(padding), settings, navigation, tracker, routeSession)
                             AppTab.DISCOVER -> DiscoverScreen(Modifier.padding(padding), settings, tracker) { name, latitude, longitude ->
                                 navigation.target = NavigationTarget(name, latitude, longitude)
+                                navigation.routeMenuVisible = true
                                 navigation.selectedPlaceId = null
                                 selectedTab = AppTab.MAP.name
                             }
@@ -515,6 +516,17 @@ private fun MapScreen(modifier: Modifier, settings: LocalSettings, navigation: N
                     navigation.chooseMapPoint("Точка на карте", point.latitude, point.longitude)
                 }
             )
+            if (target != null && !navigation.routeMenuVisible && !session.navigating && navigation.pointSelection == null) {
+                MapChip(
+                    modifier = Modifier.align(Alignment.TopCenter).padding(Space.s),
+                    onClick = { navigation.openRouteMenu() }
+                ) {
+                    Text("Маршрут", style = MaterialTheme.typography.labelLarge, fontWeight = FontWeight.SemiBold)
+                    if (session.route != null) {
+                        Text(GeoMath.formatDistance(session.route!!.distanceMeters), style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.primary)
+                    }
+                }
+            }
             if (navigation.pointSelection != null) {
                 MapChip(
                     modifier = Modifier.align(Alignment.TopCenter).padding(Space.s),
@@ -617,11 +629,13 @@ private fun MapScreen(modifier: Modifier, settings: LocalSettings, navigation: N
                             isCar = isCar,
                             onRouteHere = {
                                 navigation.target = NavigationTarget(selectedPlace.name, selectedPlace.latitude, selectedPlace.longitude)
+                                navigation.routeMenuVisible = true
                                 navigation.pointSelection = null
                                 navigation.selectedPlaceId = null
                             },
                             onRouteFrom = {
                                 navigation.origin = NavigationTarget(selectedPlace.name, selectedPlace.latitude, selectedPlace.longitude)
+                                navigation.routeMenuVisible = true
                                 navigation.pointSelection = null
                                 navigation.selectedPlaceId = null
                             },
@@ -632,7 +646,7 @@ private fun MapScreen(modifier: Modifier, settings: LocalSettings, navigation: N
                             },
                             onClose = { navigation.selectedPlaceId = null }
                         )
-                    } else if (target != null && navigation.pointSelection == null) {
+                    } else if (target != null && navigation.routeMenuVisible && navigation.pointSelection == null) {
                         val alreadySaved = settings.allPlaces().any {
                             kotlin.math.abs(it.latitude - target.latitude) < 1e-5 && kotlin.math.abs(it.longitude - target.longitude) < 1e-5
                         }
@@ -655,6 +669,7 @@ private fun MapScreen(modifier: Modifier, settings: LocalSettings, navigation: N
                             onDestinationMyLocation = {
                                 tracker.location?.let { fix ->
                                     navigation.target = NavigationTarget("Моё местоположение", fix.latitude, fix.longitude)
+                                    navigation.routeMenuVisible = true
                                     navigation.pointSelection = null
                                 }
                             },
@@ -665,7 +680,7 @@ private fun MapScreen(modifier: Modifier, settings: LocalSettings, navigation: N
                                 if (session.voice) activeRoute?.steps?.firstOrNull()?.let { speaker.speak(it.text) }
                             },
                             onExternal = { openExternalNavigator(context, target) },
-                            onCancel = { navigation.clearRoute() }
+                            onCancel = { navigation.closeRouteMenu() }
                         )
                     } else if (navigation.origin != null) {
                         OriginHintCard(navigation.origin!!, onCancel = { navigation.origin = null })
