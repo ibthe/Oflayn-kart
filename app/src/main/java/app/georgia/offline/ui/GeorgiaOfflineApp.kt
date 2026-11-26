@@ -1103,6 +1103,7 @@ private fun MapPoiCard(
     val context = LocalContext.current
     val details = poi.detailLines()
     val detailScrollState = rememberScrollState()
+    LaunchedEffect(poi.poiId) { detailScrollState.scrollTo(0) }
     val settlement = poi.taggedSettlement()
     Card(
         modifier = Modifier.fillMaxWidth()
