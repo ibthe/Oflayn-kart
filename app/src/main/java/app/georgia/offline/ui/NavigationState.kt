@@ -72,8 +72,11 @@ class NavigationState {
 
     /** Starts a fresh route to a destination from the current GPS position. */
     fun startRouteTo(point: NavigationTarget) {
+        // If "Route from here" was chosen, keep that explicit origin while the person
+        // selects a destination from the map, Places catalogue, or saved places.
+        val awaitingDestination = origin != null && target == null
         target = point
-        origin = null
+        if (!awaitingDestination) origin = null
         viaPoints.clear()
         pointSelection = null
         selectedPlaceId = null
