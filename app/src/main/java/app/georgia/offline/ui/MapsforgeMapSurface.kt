@@ -93,14 +93,16 @@ fun MapsforgeMapSurface(
     originColor: Int = 0xFF1FB89A.toInt(),
     focusToken: Int = 0,
     onPlaceTap: ((String?) -> Unit)? = null,
-    onMapTap: ((LatLong) -> Unit)? = null,\n    onViewportChanged: ((MapViewportBounds) -> Unit)? = null,
+    onMapTap: ((LatLong) -> Unit)? = null,
+    onViewportChanged: ((MapViewportBounds) -> Unit)? = null,
     onLongPress: ((LatLong) -> Unit)? = null,
     onRouteDrag: ((RouteDragTarget, Int, LatLong) -> Unit)? = null
 ) {
     val currentLongPress by rememberUpdatedState(onLongPress)
     val currentPlaces by rememberUpdatedState(places)
     val currentPlaceTap by rememberUpdatedState(onPlaceTap)
-    val currentMapTap by rememberUpdatedState(onMapTap)\n    val currentViewportChanged by rememberUpdatedState(onViewportChanged)
+    val currentMapTap by rememberUpdatedState(onMapTap)
+    val currentViewportChanged by rememberUpdatedState(onViewportChanged)
     val currentRoutePoints by rememberUpdatedState(routePoints)
     val currentViaPoints by rememberUpdatedState(viaPoints)
     val currentRouteDrag by rememberUpdatedState(onRouteDrag)
