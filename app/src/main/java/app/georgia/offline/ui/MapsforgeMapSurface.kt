@@ -84,12 +84,14 @@ fun MapsforgeMapSurface(
     originColor: Int = 0xFF1FB89A.toInt(),
     focusToken: Int = 0,
     onPlaceTap: ((String?) -> Unit)? = null,
+    onMapTap: ((LatLong) -> Unit)? = null,
     onLongPress: ((LatLong) -> Unit)? = null,
     onRouteDrag: ((RouteDragTarget, Int, LatLong) -> Unit)? = null
 ) {
     val currentLongPress by rememberUpdatedState(onLongPress)
     val currentPlaces by rememberUpdatedState(places)
     val currentPlaceTap by rememberUpdatedState(onPlaceTap)
+    val currentMapTap by rememberUpdatedState(onMapTap)
     val currentRoutePoints by rememberUpdatedState(routePoints)
     val currentViaPoints by rememberUpdatedState(viaPoints)
     val currentRouteDrag by rememberUpdatedState(onRouteDrag)
@@ -189,7 +191,9 @@ fun MapsforgeMapSurface(
                     val detector = GestureDetector(viewContext, object : GestureDetector.SimpleOnGestureListener() {
                         // A tap near a saved point selects it; a tap on empty map clears the selection.
                         override fun onSingleTapConfirmed(event: MotionEvent): Boolean {
-                            val callback = currentPlaceTap ?: return false
+                            val callback = currentPlaceTap
+                            val mapTap = currentMapTap
+                            if (callback == null && mapTap == null) return false
                             val density = viewContext.resources.displayMetrics.density
                             val reach = 30f * density
                             var best: String? = null
@@ -205,7 +209,10 @@ fun MapsforgeMapSurface(
                                     best = place.id
                                 }
                             }
-                            callback(best)
+                            callback?.invoke(best)
+                            if (best == null) {
+                                mapViewProjection.fromPixels(event.x.toDouble(), event.y.toDouble())?.let { mapTap?.invoke(it) }
+                            }
                             return false
                         }
 
