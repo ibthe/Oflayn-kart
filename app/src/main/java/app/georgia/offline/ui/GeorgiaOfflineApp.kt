@@ -431,6 +431,9 @@ private fun MapScreen(modifier: Modifier, settings: LocalSettings, navigation: N
         }
     }
     val mapFile = settings.mapFilePath?.let(::File)?.takeIf { it.isFile && it.length() > 0L }
+    var poiDatabase by remember { mutableStateOf<File?>(null) }
+    var selectedMapPoi by remember { mutableStateOf<PoiRepository.PoiRecord?>(null) }
+    LaunchedEffect(Unit) { poiDatabase = PoiRepository.ensureInstalled(context).database }
     val preferredLanguage = MapLanguageResolver.preferredLanguage(settings.enabledLanguages)
     var recenterToken by remember { mutableIntStateOf(0) }
     var zoomInToken by remember { mutableIntStateOf(0) }
@@ -525,7 +528,22 @@ private fun MapScreen(modifier: Modifier, settings: LocalSettings, navigation: N
                 carColor = MaterialTheme.colorScheme.tertiary.toArgb(),
                 originColor = MaterialTheme.colorScheme.tertiary.toArgb(),
                 focusToken = navigation.focusToken,
-                onPlaceTap = { id -> if (!session.navigating) navigation.selectedPlaceId = id },
+                onPlaceTap = { id ->
+                    if (!session.navigating) {
+                        selectedMapPoi = null
+                        navigation.selectedPlaceId = id
+                    }
+                },
+                onMapTap = { point ->
+                    if (!session.navigating) {
+                        navigation.selectedPlaceId = null
+                        coroutineScope.launch {
+                            selectedMapPoi = poiDatabase?.let {
+                                PoiRepository.nearestPoi(it, point.latitude, point.longitude)
+                            }
+                        }
+                    }
+                },
                 onLongPress = { point ->
                     if (!session.navigating) session.reset()
                     navigation.chooseMapPoint("Точка на карте", point.latitude, point.longitude)
@@ -660,6 +678,30 @@ private fun MapScreen(modifier: Modifier, settings: LocalSettings, navigation: N
                             session.reset()
                             navigation.clearRoute()
                         }
+                    } else if (selectedMapPoi != null) {
+                        val poi = selectedMapPoi!!
+                        val poiName = poi.nameIn(settings.language).ifBlank { "Без названия" }
+                        val alreadySaved = settings.allPlaces().any {
+                            kotlin.math.abs(it.latitude - poi.latitude) < 1e-5 &&
+                                kotlin.math.abs(it.longitude - poi.longitude) < 1e-5
+                        }
+                        MapPoiCard(
+                            poi = poi,
+                            name = poiName,
+                            distanceText = tracker.location?.let {
+                                GeoMath.formatDistance(GeoMath.distanceMeters(it.latitude, it.longitude, poi.latitude, poi.longitude)) + " от вас"
+                            },
+                            saved = alreadySaved,
+                            onRoute = {
+                                navigation.target = NavigationTarget(poiName, poi.latitude, poi.longitude)
+                                navigation.routeMenuVisible = true
+                                navigation.pointSelection = null
+                                navigation.selectedPlaceId = null
+                                selectedMapPoi = null
+                            },
+                            onSave = { settings.addPlace(poiName, poi.latitude, poi.longitude) },
+                            onClose = { selectedMapPoi = null }
+                        )
                     } else if (selectedPlace != null) {
                         val isCar = selectedPlace.id == LocalSettings.CAR_PLACE_ID
                         SavedPlaceCard(
@@ -755,6 +797,49 @@ private fun MapScreen(modifier: Modifier, settings: LocalSettings, navigation: N
 }
 
 @Composable
+
+@Composable
+private fun MapPoiCard(
+    poi: PoiRepository.PoiRecord,
+    name: String,
+    distanceText: String?,
+    saved: Boolean,
+    onRoute: () -> Unit,
+    onSave: () -> Unit,
+    onClose: () -> Unit
+) {
+    Card(
+        modifier = Modifier.fillMaxWidth(),
+        shape = RoundedCornerShape(Radius.card),
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+        elevation = CardDefaults.cardElevation(defaultElevation = 8.dp)
+    ) {
+        Column(Modifier.fillMaxWidth().padding(Space.m), verticalArrangement = Arrangement.spacedBy(Space.xs)) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                    Text(name, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold, maxLines = 2, overflow = TextOverflow.Ellipsis)
+                    Text(
+                        listOfNotNull(PoiLabels.subcategoryLabel(poi.subcategory).ifBlank { poiCategoryLabel(poi.category) }, distanceText).joinToString(" · "),
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        maxLines = 2
+                    )
+                }
+                TextButton(onClick = onClose) { Text("Закрыть") }
+            }
+            poi.detailLines().take(3).forEach { (label, value) ->
+                Text("$label: $value", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 1, overflow = TextOverflow.Ellipsis)
+            }
+            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(Space.xs), verticalAlignment = Alignment.CenterVertically) {
+                Button(onClick = onRoute, modifier = Modifier.weight(1f)) { Text("Маршрут") }
+                OutlinedButton(onClick = onSave, modifier = Modifier.weight(1f), enabled = !saved) {
+                    Text(if (saved) "В избранном" else "В избранное", maxLines = 1, softWrap = false)
+                }
+            }
+        }
+    }
+}
+
 private fun SettingsScreen(modifier: Modifier, settings: LocalSettings, onShowOnMap: (String) -> Unit) {
     val context = LocalContext.current
     val coroutineScope = rememberCoroutineScope()
