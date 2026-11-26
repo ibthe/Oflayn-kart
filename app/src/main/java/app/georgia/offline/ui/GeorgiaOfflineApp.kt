@@ -748,19 +748,6 @@ private fun SettingsScreen(modifier: Modifier, settings: LocalSettings, onShowOn
     PageColumn(modifier) {
         PageTitle("Ещё")
 
-        SectionLabel("О карте")
-        Panel {
-            MapDetails(
-                settings = settings,
-                hasMap = hasMap,
-                preferredLanguage = preferredLanguage,
-                isImporting = isImportingMap,
-                importMessage = mapImportMessage,
-                importError = mapImportError,
-                onPickFile = openMapPicker
-            )
-        }
-
         SectionLabel("Оформление")
         Panel {
             val mode = resolveThemeMode(settings.themeMode, isSystemInDarkTheme())
@@ -816,6 +803,11 @@ private fun SettingsScreen(modifier: Modifier, settings: LocalSettings, onShowOn
 
         }
 
+        SectionLabel("Мои места")
+        Panel {
+            SavedPlacesList(settings, onShowOnMap)
+        }
+
         SectionLabel("Хранение")
         Panel {
             Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.SpaceBetween) {
@@ -841,9 +833,17 @@ private fun SettingsScreen(modifier: Modifier, settings: LocalSettings, onShowOn
             }
         }
 
-        SectionLabel("Мои места")
+        SectionLabel("О карте")
         Panel {
-            SavedPlacesList(settings, onShowOnMap)
+            MapDetails(
+                settings = settings,
+                hasMap = hasMap,
+                preferredLanguage = preferredLanguage,
+                isImporting = isImportingMap,
+                importMessage = mapImportMessage,
+                importError = mapImportError,
+                onPickFile = openMapPicker
+            )
         }
 
         Text(
