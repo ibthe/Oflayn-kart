@@ -304,25 +304,31 @@ fun CompassDial(
                 drawLabel(labelPaint, degree.toString(), center, card * 0.70f, degree.toFloat(), card * 0.085f, faint)
             }
 
-            // Qibla: a dashed line from the hub and the Kaaba on the rim.
-            if (qiblaBearing != null) {
-                val angle = Math.toRadians(qiblaBearing.toDouble())
-                val dx = sin(angle).toFloat()
-                val dy = -cos(angle).toFloat()
-                val lineColor = if (aligned) glow else accent
-                drawLine(
-                    color = lineColor,
-                    start = Offset(center.x + dx * card * 0.12f, center.y + dy * card * 0.12f),
-                    end = Offset(center.x + dx * card * 0.50f, center.y + dy * card * 0.50f),
-                    strokeWidth = 3 * dp,
-                    pathEffect = PathEffect.dashPathEffect(floatArrayOf(10 * dp, 8 * dp))
-                )
-                val marker = Offset(center.x + dx * outer * 0.935f, center.y + dy * outer * 0.935f)
-                // Keep the Kaaba upright on screen while the card turns under it.
-                rotate(degrees = unwrappedHeading, pivot = marker) {
-                    drawKaaba(marker, outer * if (aligned) 0.105f else 0.085f, surface, glow.takeIf { aligned } ?: accent)
-                }
-            }
+        }
+
+        // Draw the Qibla direction in screen coordinates, independently from the animated
+        // compass-card rotation. This keeps the indicator locked to the same heading used by
+        // the numeric turn instruction, even when the dial's unwrapped animation crosses 360°.
+        if (qiblaBearing != null) {
+            val relativeBearing = Qibla.angleDifference(heading.toDouble(), qiblaBearing.toDouble())
+            val angle = Math.toRadians(relativeBearing)
+            val dx = sin(angle).toFloat()
+            val dy = -cos(angle).toFloat()
+            val lineColor = if (aligned) glow else accent
+            drawLine(
+                color = lineColor,
+                start = Offset(center.x + dx * card * 0.12f, center.y + dy * card * 0.12f),
+                end = Offset(center.x + dx * card * 0.50f, center.y + dy * card * 0.50f),
+                strokeWidth = 3 * dp,
+                pathEffect = PathEffect.dashPathEffect(floatArrayOf(10 * dp, 8 * dp))
+            )
+            val marker = Offset(center.x + dx * outer * 0.935f, center.y + dy * outer * 0.935f)
+            drawKaaba(
+                marker,
+                outer * if (aligned) 0.105f else 0.085f,
+                surface,
+                glow.takeIf { aligned } ?: accent
+            )
         }
 
         // Fixed pointer at the top: the heading is read here.
