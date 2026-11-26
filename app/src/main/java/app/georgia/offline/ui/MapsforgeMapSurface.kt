@@ -232,7 +232,23 @@ fun MapsforgeMapSurface(
                             if (point != null) currentLongPress?.invoke(point)
                         }
                     })
-                    setOnTouchListener { _, event ->
+                    fun publishVisibleBounds() {
+                        postDelayed({
+                            val topLeft = mapViewProjection.fromPixels(0.0, 0.0)
+                            val bottomRight = mapViewProjection.fromPixels(width.toDouble(), height.toDouble())
+                            if (topLeft != null && bottomRight != null) {
+                                currentViewportChanged?.invoke(
+                                    MapViewportBounds(
+                                        north = maxOf(topLeft.latitude, bottomRight.latitude),
+                                        south = minOf(topLeft.latitude, bottomRight.latitude),
+                                        east = maxOf(topLeft.longitude, bottomRight.longitude),
+                                        west = minOf(topLeft.longitude, bottomRight.longitude)
+                                    )
+                                )
+                            }
+                        }, 260L)
+                    }
+                    setOnTouchListener { touchedView, event ->
                         when (event.actionMasked) {
                             MotionEvent.ACTION_DOWN -> {
                                 activeDrag = hitRouteElement(event.x, event.y)
@@ -273,6 +289,7 @@ fun MapsforgeMapSurface(
                                     true
                                 } else {
                                     detector.onTouchEvent(event)
+                                    touchedView.post { publishVisibleBounds() }
                                     false
                                 }
                             }
@@ -282,9 +299,11 @@ fun MapsforgeMapSurface(
                                     dragPreview = null
                                     activeDrag = null
                                     layerManager.redrawLayers()
+                                    publishVisibleBounds()
                                     true
                                 } else {
                                     detector.onTouchEvent(event)
+                                    touchedView.post { publishVisibleBounds() }
                                     false
                                 }
                             }
