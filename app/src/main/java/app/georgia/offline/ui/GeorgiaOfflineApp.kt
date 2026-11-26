@@ -474,6 +474,8 @@ private fun MapScreen(modifier: Modifier, settings: LocalSettings, navigation: N
     }
     val mapFile = settings.mapFilePath?.let(::File)?.takeIf { it.isFile && it.length() > 0L }
     var poiDatabase by remember { mutableStateOf<File?>(null) }
+    var poiDatabaseLoading by remember { mutableStateOf(true) }
+    var poiDatabaseMessage by remember { mutableStateOf<String?>(null) }
     var selectedMapPoi by remember { mutableStateOf<PoiRepository.PoiRecord?>(null) }
     var mapSearchQuery by rememberSaveable { mutableStateOf("") }
     var mapSearchCategory by rememberSaveable { mutableStateOf("all") }
@@ -481,7 +483,12 @@ private fun MapScreen(modifier: Modifier, settings: LocalSettings, navigation: N
     var mapSearchViewport by remember { mutableStateOf<MapViewportBounds?>(null) }
     var mapSearchLoading by remember { mutableStateOf(false) }
     var mapStyleExpanded by rememberSaveable { mutableStateOf(false) }
-    LaunchedEffect(Unit) { poiDatabase = PoiRepository.ensureInstalled(context).database }
+    LaunchedEffect(Unit) {
+        val installation = PoiRepository.ensureInstalled(context)
+        poiDatabase = installation.database
+        poiDatabaseMessage = installation.message
+        poiDatabaseLoading = false
+    }
     LaunchedEffect(poiDatabase, mapSearchViewport, mapSearchQuery, mapSearchCategory) {
         val db = poiDatabase ?: return@LaunchedEffect
         val bounds = mapSearchViewport ?: return@LaunchedEffect
@@ -650,6 +657,8 @@ private fun MapScreen(modifier: Modifier, settings: LocalSettings, navigation: N
                     onCategoryChange = { mapSearchCategory = it },
                     results = mapSearchResults,
                     loading = mapSearchLoading,
+                    databaseLoading = poiDatabaseLoading,
+                    databaseMessage = poiDatabaseMessage,
                     topOffset = (if (tracker.error != null || (tracker.active && tracker.location == null)) 104.dp else 64.dp) +
                         if (mapStyleExpanded) 160.dp else 0.dp,
                     language = settings.language,
@@ -900,6 +909,8 @@ private fun MapViewportSearchBox(
     onCategoryChange: (String) -> Unit,
     results: List<PoiRepository.PoiRecord>,
     loading: Boolean,
+    databaseLoading: Boolean,
+    databaseMessage: String?,
     topOffset: Dp,
     language: String,
     onSelect: (PoiRepository.PoiRecord) -> Unit
@@ -952,11 +963,22 @@ private fun MapViewportSearchBox(
                 }
             }
             if (query.isNotBlank() || selectedCategory != "all") {
-                if (loading) {
+                if (databaseLoading || loading) {
                     Row(Modifier.fillMaxWidth().padding(vertical = Space.xs), horizontalArrangement = Arrangement.Center) {
                         CircularProgressIndicator(modifier = Modifier.size(18.dp), strokeWidth = 2.dp)
-                        Text("Ищу офлайн…", modifier = Modifier.padding(start = Space.s), style = MaterialTheme.typography.bodySmall)
+                        Text(
+                            if (databaseLoading) "Подготавливаю офлайн-базу…" else "Ищу офлайн…",
+                            modifier = Modifier.padding(start = Space.s),
+                            style = MaterialTheme.typography.bodySmall
+                        )
                     }
+                } else if (databaseMessage != null || poiDatabaseMissing()) {
+                    Text(
+                        databaseMessage ?: "Локальная база мест недоступна.",
+                        modifier = Modifier.padding(horizontal = Space.xs, vertical = Space.xs),
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.error
+                    )
                 } else if (results.isEmpty()) {
                     Text(
                         "В видимой области ничего не найдено",
