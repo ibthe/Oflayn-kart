@@ -523,6 +523,7 @@ private fun MapScreen(modifier: Modifier, settings: LocalSettings, navigation: N
                 fitToken = session.fitToken,
                 places = mapPlaces,
                 selectedPlaceId = navigation.selectedPlaceId,
+                selectedPoi = selectedMapPoi?.let { LatLong(it.latitude, it.longitude) },
                 origin = navigation.origin?.let { LatLong(it.latitude, it.longitude) },
                 savedColor = MaterialTheme.colorScheme.primary.toArgb(),
                 carColor = MaterialTheme.colorScheme.tertiary.toArgb(),
@@ -807,31 +808,94 @@ private fun MapPoiCard(
     onSave: () -> Unit,
     onClose: () -> Unit
 ) {
+    var expanded by remember(poi.poiId) { mutableStateOf(false) }
+    val context = LocalContext.current
+    val details = poi.detailLines()
+    val settlement = poi.taggedSettlement()
     Card(
         modifier = Modifier.fillMaxWidth(),
         shape = RoundedCornerShape(Radius.card),
         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
         elevation = CardDefaults.cardElevation(defaultElevation = 8.dp)
     ) {
-        Column(Modifier.fillMaxWidth().padding(Space.m), verticalArrangement = Arrangement.spacedBy(Space.xs)) {
+        Column(
+            Modifier.fillMaxWidth().padding(Space.m),
+            verticalArrangement = Arrangement.spacedBy(Space.xs)
+        ) {
             Row(verticalAlignment = Alignment.CenterVertically) {
-                Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
-                    Text(name, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold, maxLines = 2, overflow = TextOverflow.Ellipsis)
+                Column(
+                    Modifier.weight(1f),
+                    verticalArrangement = Arrangement.spacedBy(2.dp)
+                ) {
                     Text(
-                        listOfNotNull(PoiLabels.subcategoryLabel(poi.subcategory).ifBlank { poiCategoryLabel(poi.category) }, distanceText).joinToString(" · "),
+                        name,
+                        style = MaterialTheme.typography.titleMedium,
+                        fontWeight = FontWeight.SemiBold,
+                        maxLines = 2,
+                        overflow = TextOverflow.Ellipsis
+                    )
+                    Text(
+                        listOfNotNull(
+                            PoiLabels.subcategoryLabel(poi.subcategory).ifBlank { poiCategoryLabel(poi.category) },
+                            settlement,
+                            distanceText
+                        ).joinToString(" · "),
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        maxLines = 2
+                        maxLines = 2,
+                        overflow = TextOverflow.Ellipsis
                     )
                 }
                 TextButton(onClick = onClose) { Text("Закрыть") }
             }
-            poi.detailLines().take(3).forEach { (label, value) ->
-                Text("$label: $value", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 1, overflow = TextOverflow.Ellipsis)
+            details.take(if (expanded) details.size else 2).forEach { (label, value) ->
+                Text(
+                    "$label: $value",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    maxLines = if (expanded) 3 else 1,
+                    overflow = TextOverflow.Ellipsis
+                )
             }
-            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(Space.xs), verticalAlignment = Alignment.CenterVertically) {
-                Button(onClick = onRoute, modifier = Modifier.weight(1f)) { Text("Маршрут") }
-                OutlinedButton(onClick = onSave, modifier = Modifier.weight(1f), enabled = !saved) {
+            Row(
+                Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                TextButton(
+                    onClick = { expanded = !expanded },
+                    enabled = details.size > 2
+                ) {
+                    Text(if (expanded) "Свернуть" else "Подробнее")
+                }
+                TextButton(
+                    onClick = {
+                        val clipboard = context.getSystemService(android.content.Context.CLIPBOARD_SERVICE) as android.content.ClipboardManager
+                        clipboard.setPrimaryClip(
+                            android.content.ClipData.newPlainText(
+                                "Координаты $name",
+                                "${poi.latitude}, ${poi.longitude}"
+                            )
+                        )
+                        android.widget.Toast.makeText(context, "Координаты скопированы", android.widget.Toast.LENGTH_SHORT).show()
+                    }
+                ) {
+                    Text("Координаты")
+                }
+            }
+            Row(
+                Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(Space.xs),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Button(onClick = onRoute, modifier = Modifier.weight(1f)) {
+                    Text("Маршрут")
+                }
+                OutlinedButton(
+                    onClick = onSave,
+                    modifier = Modifier.weight(1f),
+                    enabled = !saved
+                ) {
                     Text(if (saved) "В избранном" else "В избранное", maxLines = 1, softWrap = false)
                 }
             }
