@@ -650,7 +650,7 @@ private fun MapScreen(modifier: Modifier, settings: LocalSettings, navigation: N
                     onCategoryChange = { mapSearchCategory = it },
                     results = mapSearchResults,
                     loading = mapSearchLoading,
-                    topOffset = (if (tracker.error != null || (tracker.active && tracker.location == null)) 144.dp else 104.dp) +
+                    topOffset = (if (tracker.error != null || (tracker.active && tracker.location == null)) 104.dp else 64.dp) +
                         if (mapStyleExpanded) 140.dp else 0.dp,
                     language = settings.language,
                     onSelect = { poi ->
@@ -701,10 +701,6 @@ private fun MapScreen(modifier: Modifier, settings: LocalSettings, navigation: N
                         Modifier.align(Alignment.TopStart).padding(Space.s),
                         verticalArrangement = Arrangement.spacedBy(Space.xs)
                     ) {
-                        MapChip {
-                            PulseDot(MaterialTheme.colorScheme.tertiary)
-                            Text("Без сети", style = MaterialTheme.typography.labelLarge)
-                        }
                         val trackerError = tracker.error
                         if (trackerError != null) {
                             MapChip { Text(trackerError, style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.error) }
