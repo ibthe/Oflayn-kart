@@ -862,7 +862,7 @@ private fun MapScreen(modifier: Modifier, settings: LocalSettings, navigation: N
                         RoutePlannerCard(
                             target = target,
                             origin = navigation.origin,
-                            viaPoints = navigation.viaPoints,
+                            viaPoints = navigation.viaPoints.toList(),
                             onMoveWaypoint = { from, to ->
                                 navigation.moveWaypoint(from, to)
                                 session.reset()
