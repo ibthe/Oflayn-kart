@@ -278,7 +278,7 @@ private fun MapStylePicker(settings: LocalSettings) {
         "biker" to "Велосипед"
     )
     Surface(
-        modifier = Modifier.widthIn(max = 340.dp),
+        modifier = Modifier.widthIn(max = 260.dp),
         shape = RoundedCornerShape(20.dp),
         color = MaterialTheme.colorScheme.glass(LocalLayerAlpha.current),
         contentColor = MaterialTheme.colorScheme.onSurface,
@@ -542,13 +542,19 @@ private fun MapScreen(modifier: Modifier, settings: LocalSettings, navigation: N
             }
             if (!showDetails) {
                 if (session.navigating && session.route != null) {
-                    NavigationBanner(session.route!!, session.along, Modifier.align(Alignment.TopCenter).padding(Space.s))
-                }
-                Column(
-                    Modifier.align(Alignment.TopStart).padding(Space.s),
-                    verticalArrangement = Arrangement.spacedBy(Space.xs)
-                ) {
-                    if (!session.navigating) {
+                    Column(
+                        Modifier.align(Alignment.TopCenter).padding(Space.s),
+                        horizontalAlignment = Alignment.CenterHorizontally,
+                        verticalArrangement = Arrangement.spacedBy(Space.xs)
+                    ) {
+                        NavigationBanner(session.route!!, session.along)
+                        MapStylePicker(settings)
+                    }
+                } else {
+                    Column(
+                        Modifier.align(Alignment.TopStart).padding(Space.s),
+                        verticalArrangement = Arrangement.spacedBy(Space.xs)
+                    ) {
                         MapChip {
                             PulseDot(MaterialTheme.colorScheme.tertiary)
                             Text("Без сети", style = MaterialTheme.typography.labelLarge)
@@ -559,15 +565,15 @@ private fun MapScreen(modifier: Modifier, settings: LocalSettings, navigation: N
                         } else if (tracker.active && tracker.location == null) {
                             MapChip { Text("Ищу сигнал GPS…", style = MaterialTheme.typography.labelMedium) }
                         }
+                        MapStylePicker(settings)
                     }
-                    MapStylePicker(settings)
+                    Text(
+                        "© OpenStreetMap",
+                        modifier = Modifier.align(Alignment.TopEnd).padding(top = Space.m, end = Space.m),
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f)
+                    )
                 }
-                Text(
-                    "© OpenStreetMap",
-                    modifier = Modifier.align(Alignment.TopEnd).padding(top = Space.m, end = Space.m),
-                    style = MaterialTheme.typography.labelSmall,
-                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f)
-                )
             }
             Column(
                 Modifier.align(Alignment.BottomCenter).fillMaxWidth().padding(Space.s),
