@@ -279,6 +279,7 @@ private fun MapStylePicker(settings: LocalSettings) {
     val choices = listOf(
         "classic" to "Классика",
         "oflayn_natural" to "Oflayn Natural",
+        "oflayn_natural_dark" to "Oflayn Natural Dark",
         "outdoor" to "Природа",
         "motorider" to "Авто",
         "biker" to "Велосипед"
