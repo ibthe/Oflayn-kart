@@ -278,6 +278,66 @@ object PoiRepository {
         }
     }
 
+
+    /** Bounded offline lookup for a POI nearest to a tapped map coordinate. */
+    suspend fun nearestPoi(
+        database: File,
+        latitude: Double,
+        longitude: Double,
+        maxDistanceMeters: Double = 120.0
+    ): PoiRecord? = withContext(Dispatchers.IO) {
+        val latDelta = maxDistanceMeters / 110_540.0
+        val lonScale = (111_320.0 * kotlin.math.cos(Math.toRadians(latitude))).coerceAtLeast(1.0)
+        val lonDelta = maxDistanceMeters / lonScale
+        val sql = """
+            SELECT poi_id, category, subcategory, name, name_en, name_ru, name_ka,
+                   latitude, longitude, tags_json
+            FROM poi
+            WHERE latitude BETWEEN ? AND ? AND longitude BETWEEN ? AND ?
+            ORDER BY ABS(latitude - ?) + ABS(longitude - ?)
+            LIMIT 64
+        """.trimIndent()
+        val args = arrayOf(
+            (latitude - latDelta).toString(), (latitude + latDelta).toString(),
+            (longitude - lonDelta).toString(), (longitude + lonDelta).toString(),
+            latitude.toString(), longitude.toString()
+        )
+        val db = SQLiteDatabase.openDatabase(database.absolutePath, null, SQLiteDatabase.OPEN_READONLY)
+        try {
+            db.rawQuery(sql, args).use { cursor ->
+                var nearest: PoiRecord? = null
+                var nearestMeters = maxDistanceMeters
+                while (cursor.moveToNext()) {
+                    val candidateLat = cursor.getDouble(7)
+                    val candidateLon = cursor.getDouble(8)
+                    val dLat = Math.toRadians(candidateLat - latitude)
+                    val dLon = Math.toRadians(candidateLon - longitude)
+                    val sinLat = kotlin.math.sin(dLat / 2)
+                    val sinLon = kotlin.math.sin(dLon / 2)
+                    val a = (sinLat * sinLat +
+                        kotlin.math.cos(Math.toRadians(latitude)) *
+                        kotlin.math.cos(Math.toRadians(candidateLat)) * sinLon * sinLon).coerceIn(0.0, 1.0)
+                    val meters = 6_371_000.0 * 2.0 * kotlin.math.atan2(
+                        kotlin.math.sqrt(a), kotlin.math.sqrt((1.0 - a).coerceAtLeast(0.0))
+                    )
+                    if (meters < nearestMeters) {
+                        nearestMeters = meters
+                        nearest = PoiRecord(
+                            poiId = cursor.getString(0), category = cursor.getString(1),
+                            subcategory = cursor.getString(2), name = cursor.getString(3),
+                            nameEn = cursor.getString(4), nameRu = cursor.getString(5),
+                            nameKa = cursor.getString(6), latitude = candidateLat,
+                            longitude = candidateLon, tagsJson = cursor.getString(9)
+                        )
+                    }
+                }
+                nearest
+            }
+        } finally {
+            db.close()
+        }
+    }
+
     private fun readBuildManifest(context: Context): JSONObject? = try {
         context.assets.open(BUILD_MANIFEST).bufferedReader(Charsets.UTF_8).use { JSONObject(it.readText()) }
     } catch (_: Exception) {
