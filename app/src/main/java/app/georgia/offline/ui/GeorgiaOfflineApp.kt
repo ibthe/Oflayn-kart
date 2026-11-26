@@ -966,6 +966,8 @@ private fun MapViewportSearchBox(
         "medical" to "Аптеки и медицина", "tourism" to "Достопримечательности",
         "historic" to "История", "nature" to "Природа", "shops" to "Магазины"
     )
+    val resultsScrollState = rememberScrollState()
+    LaunchedEffect(query, selectedCategory, results) { resultsScrollState.scrollTo(0) }
     Card(
         modifier = Modifier.fillMaxWidth().padding(horizontal = Space.s).padding(top = topOffset),
         shape = RoundedCornerShape(Radius.card),
@@ -1050,7 +1052,7 @@ private fun MapViewportSearchBox(
                     )
                 } else {
                     Column(
-                        Modifier.fillMaxWidth().heightIn(max = 240.dp).verticalScroll(rememberScrollState())
+                        Modifier.fillMaxWidth().heightIn(max = 240.dp).verticalScroll(resultsScrollState)
                     ) {
                         results.take(6).forEachIndexed { index, poi ->
                             if (index > 0) HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
