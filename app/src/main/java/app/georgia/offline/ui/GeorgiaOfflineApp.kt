@@ -1027,9 +1027,11 @@ private fun MapPoiCard(
     var expanded by remember(poi.poiId) { mutableStateOf(false) }
     val context = LocalContext.current
     val details = poi.detailLines()
+    val detailScrollState = rememberScrollState()
     val settlement = poi.taggedSettlement()
     Card(
-        modifier = Modifier.fillMaxWidth(),
+        modifier = Modifier.fillMaxWidth()
+            .dismissOnSwipeDown(onClose, canDismiss = { detailScrollState.value == 0 }),
         shape = RoundedCornerShape(Radius.card),
         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
         elevation = CardDefaults.cardElevation(defaultElevation = 8.dp)
@@ -1065,7 +1067,7 @@ private fun MapPoiCard(
                 TextButton(onClick = onClose) { Text("Закрыть") }
             }
             Column(
-                Modifier.fillMaxWidth().heightIn(max = 160.dp).verticalScroll(rememberScrollState()),
+                Modifier.fillMaxWidth().heightIn(max = 160.dp).verticalScroll(detailScrollState),
                 verticalArrangement = Arrangement.spacedBy(Space.xxs)
             ) {
                 details.take(if (expanded) details.size else 2).forEach { (label, value) ->
