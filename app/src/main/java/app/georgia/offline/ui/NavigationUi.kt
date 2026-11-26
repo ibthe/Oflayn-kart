@@ -195,19 +195,22 @@ class RouteSession {
 /** Russian text-to-speech for guidance. Silent when the phone has no offline Russian voice. */
 class Speaker(context: Context) {
     private var engine: TextToSpeech? = null
-    private var ready = false
+    var available by mutableStateOf(false)
+        private set
 
     init {
         engine = TextToSpeech(context.applicationContext) { status ->
             if (status == TextToSpeech.SUCCESS) {
                 val result = engine?.setLanguage(Locale("ru"))
-                ready = result != TextToSpeech.LANG_MISSING_DATA && result != TextToSpeech.LANG_NOT_SUPPORTED
+                available = result != null &&
+                    result != TextToSpeech.LANG_MISSING_DATA &&
+                    result != TextToSpeech.LANG_NOT_SUPPORTED
             }
         }
     }
 
     fun speak(text: String) {
-        if (ready) engine?.speak(text, TextToSpeech.QUEUE_FLUSH, null, "guidance")
+        if (available) engine?.speak(text, TextToSpeech.QUEUE_FLUSH, null, "guidance")
     }
 
     fun stop() {
@@ -218,7 +221,7 @@ class Speaker(context: Context) {
         engine?.stop()
         engine?.shutdown()
         engine = null
-        ready = false
+        available = false
     }
 }
 
@@ -536,6 +539,7 @@ fun NavigationFooter(route: Route, session: RouteSession, speaker: Speaker, onSt
                 )
             }
             TextButton(
+                enabled = speaker.available,
                 onClick = {
                     if (session.voice) {
                         session.voice = false
@@ -546,7 +550,15 @@ fun NavigationFooter(route: Route, session: RouteSession, speaker: Speaker, onSt
                 },
                 contentPadding = PaddingValues(horizontal = Space.xs)
             ) {
-                Text(if (session.voice) "Звук вкл." else "Звук выкл.", maxLines = 1, softWrap = false)
+                Text(
+                    when {
+                        !speaker.available -> "Голос недоступен"
+                        session.voice -> "Звук вкл."
+                        else -> "Звук выкл."
+                    },
+                    maxLines = 1,
+                    softWrap = false
+                )
             }
             GradientButton(text = "Завершить", onClick = onStop)
         }
