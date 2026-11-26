@@ -434,23 +434,25 @@ private fun MapScreen(modifier: Modifier, settings: LocalSettings, navigation: N
     var poiDatabase by remember { mutableStateOf<File?>(null) }
     var selectedMapPoi by remember { mutableStateOf<PoiRepository.PoiRecord?>(null) }
     var mapSearchQuery by rememberSaveable { mutableStateOf("") }
+    var mapSearchCategory by rememberSaveable { mutableStateOf("all") }
     var mapSearchResults by remember { mutableStateOf<List<PoiRepository.PoiRecord>>(emptyList()) }
     var mapSearchViewport by remember { mutableStateOf<MapViewportBounds?>(null) }
     var mapSearchLoading by remember { mutableStateOf(false) }
     LaunchedEffect(Unit) { poiDatabase = PoiRepository.ensureInstalled(context).database }
-    LaunchedEffect(poiDatabase, mapSearchViewport, mapSearchQuery) {
+    LaunchedEffect(poiDatabase, mapSearchViewport, mapSearchQuery, mapSearchCategory) {
         val db = poiDatabase ?: return@LaunchedEffect
         val bounds = mapSearchViewport ?: return@LaunchedEffect
-        if (mapSearchQuery.isBlank()) {
+        if (mapSearchQuery.isBlank() && mapSearchCategory == "all") {
             mapSearchResults = emptyList()
             mapSearchLoading = false
             return@LaunchedEffect
         }
-        delay(220)
+        delay(180)
         mapSearchLoading = true
         try {
             mapSearchResults = PoiRepository.searchInBounds(
-                db, mapSearchQuery, bounds.north, bounds.south, bounds.east, bounds.west, limit = 40
+                db, mapSearchQuery, bounds.north, bounds.south, bounds.east, bounds.west,
+                category = mapSearchCategory, limit = 60
             )
         } catch (_: Exception) {
             mapSearchResults = emptyList()
@@ -603,6 +605,8 @@ private fun MapScreen(modifier: Modifier, settings: LocalSettings, navigation: N
                 MapViewportSearchBox(
                     query = mapSearchQuery,
                     onQueryChange = { mapSearchQuery = it },
+                    selectedCategory = mapSearchCategory,
+                    onCategoryChange = { mapSearchCategory = it },
                     results = mapSearchResults,
                     loading = mapSearchLoading,
                     language = settings.language,
@@ -842,11 +846,18 @@ private fun MapScreen(modifier: Modifier, settings: LocalSettings, navigation: N
 private fun MapViewportSearchBox(
     query: String,
     onQueryChange: (String) -> Unit,
+    selectedCategory: String,
+    onCategoryChange: (String) -> Unit,
     results: List<PoiRepository.PoiRecord>,
     loading: Boolean,
     language: String,
     onSelect: (PoiRepository.PoiRecord) -> Unit
 ) {
+    val categories = listOf(
+        "all" to "Все", "food" to "Еда", "transport" to "Транспорт",
+        "medical" to "Аптеки и медицина", "tourism" to "Достопримечательности",
+        "historic" to "История", "nature" to "Природа", "shops" to "Магазины"
+    )
     Card(
         modifier = Modifier.fillMaxWidth().padding(horizontal = Space.s).padding(top = 58.dp),
         shape = RoundedCornerShape(Radius.card),
@@ -876,7 +887,20 @@ private fun MapViewportSearchBox(
                     unfocusedBorderColor = MaterialTheme.colorScheme.outlineVariant
                 )
             )
-            if (query.isNotBlank()) {
+            Row(
+                Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()),
+                horizontalArrangement = Arrangement.spacedBy(Space.xs)
+            ) {
+                categories.forEach { (key, label) ->
+                    FilterChip(
+                        selected = selectedCategory == key,
+                        onClick = { onCategoryChange(key) },
+                        label = { Text(label, maxLines = 1) },
+                        shape = RoundedCornerShape(50)
+                    )
+                }
+            }
+            if (query.isNotBlank() || selectedCategory != "all") {
                 if (loading) {
                     Row(Modifier.fillMaxWidth().padding(vertical = Space.xs), horizontalArrangement = Arrangement.Center) {
                         CircularProgressIndicator(modifier = Modifier.size(18.dp), strokeWidth = 2.dp)
