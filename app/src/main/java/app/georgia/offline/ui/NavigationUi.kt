@@ -484,9 +484,9 @@ fun NavigationBanner(route: Route, along: Double, modifier: Modifier = Modifier)
             .clip(RoundedCornerShape(Radius.card))
             .background(MaterialTheme.colorScheme.accentBrush())
     ) {
-        Row(Modifier.padding(Space.m), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(Space.m)) {
+        Row(Modifier.padding(horizontal = Space.s, vertical = Space.xs), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(Space.s)) {
             Box(
-                Modifier.size(64.dp).clip(CircleShape).background(MaterialTheme.colorScheme.onPrimary.copy(alpha = 0.18f)),
+                Modifier.size(48.dp).clip(CircleShape).background(MaterialTheme.colorScheme.onPrimary.copy(alpha = 0.18f)),
                 contentAlignment = Alignment.Center
             ) {
                 Text(
@@ -514,7 +514,7 @@ fun NavigationBanner(route: Route, along: Double, modifier: Modifier = Modifier)
     }
 }
 
-/** Remaining distance and time with the voice switch and the stop button. */
+/** Compact navigation controls; the map stays dominant while the essential actions remain reachable. */
 @Composable
 fun NavigationFooter(route: Route, session: RouteSession, onStop: () -> Unit) {
     val remaining = (route.distanceMeters - session.along).coerceAtLeast(0.0)
@@ -525,33 +525,37 @@ fun NavigationFooter(route: Route, session: RouteSession, onStop: () -> Unit) {
         color = MaterialTheme.colorScheme.glass(app.georgia.offline.ui.theme.LocalLayerAlpha.current),
         contentColor = MaterialTheme.colorScheme.onSurface,
         border = BorderStroke(1.dp, MaterialTheme.colorScheme.edgeBrush()),
-        shadowElevation = 16.dp
+        shadowElevation = 12.dp
     ) {
         Row(
-            Modifier.padding(horizontal = Space.m, vertical = Space.s),
+            Modifier.padding(horizontal = Space.s, vertical = Space.xs),
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(Space.xs)
         ) {
-            Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(Space.xxs)) {
-                Text("${GeoMath.formatDistance(remaining)} · ${formatDuration(seconds)}", style = MaterialTheme.typography.titleLarge)
+            Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                Text(
+                    GeoMath.formatDistance(remaining),
+                    style = MaterialTheme.typography.titleMedium,
+                    maxLines = 1
+                )
                 Text(
                     when {
-                        session.busy -> "Пересчитываю маршрут…"
+                        session.busy -> "Перестраиваю · ${formatDuration(seconds)}"
                         session.message != null -> session.message!!
-                        else -> "Навигация активна"
+                        else -> "Осталось · ${formatDuration(seconds)}"
                     },
                     style = MaterialTheme.typography.labelSmall,
-                    color = if (session.message != null && !session.busy) {
-                        MaterialTheme.colorScheme.error
-                    } else {
-                        MaterialTheme.colorScheme.onSurfaceVariant
-                    },
+                    color = if (session.message != null && !session.busy) MaterialTheme.colorScheme.error
+                    else MaterialTheme.colorScheme.onSurfaceVariant,
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis
                 )
             }
-            TextButton(onClick = { session.voice = !session.voice }, contentPadding = PaddingValues(horizontal = Space.s)) {
-                Text(if (session.voice) "Голос: вкл" else "Голос: выкл")
+            TextButton(
+                onClick = { session.voice = !session.voice },
+                contentPadding = PaddingValues(horizontal = Space.xs)
+            ) {
+                Text(if (session.voice) "Звук вкл." else "Звук выкл.", maxLines = 1, softWrap = false)
             }
             GradientButton(text = "Завершить", onClick = onStop)
         }
