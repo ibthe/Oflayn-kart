@@ -27,6 +27,8 @@ import org.mapsforge.map.layer.overlay.Circle
 import org.mapsforge.map.layer.overlay.Marker
 import org.mapsforge.map.layer.overlay.Polyline
 import org.mapsforge.map.reader.MapFile
+import org.mapsforge.map.rendertheme.ExternalRenderTheme
+import org.mapsforge.map.rendertheme.XmlRenderTheme
 import org.mapsforge.map.rendertheme.internal.MapsforgeThemes
 import java.io.File
 
@@ -122,7 +124,7 @@ fun MapsforgeMapSurface(
                             tileCache,
                             model.mapViewPosition,
                             dataStore,
-                            resolveMapTheme(mapTheme)
+                            resolveMapTheme(mapTheme, viewContext)
                         )
                         layerManager.layers.add(renderLayer)
                         // The map can neither be shrunk to a speck nor dragged away from Georgia.
@@ -303,14 +305,24 @@ fun MapsforgeMapSurface(
 }
 
 
-private fun resolveMapTheme(value: String) = when (value) {
-    // The built-in HILLSHADING style draws only elevation shading and needs elevation (DEM) tiles; the offline
-    // data has none, so it rendered a blank white map. "outdoor" now uses the nature-oriented Osmarender style.
-    "outdoor" -> MapsforgeThemes.OSMARENDER
-    "motorider" -> MapsforgeThemes.MOTORIDER
-    "biker" -> MapsforgeThemes.BIKER
-    "osmarender" -> MapsforgeThemes.OSMARENDER
-    else -> MapsforgeThemes.DEFAULT
+private fun resolveMapTheme(value: String, context: Context): XmlRenderTheme {
+    if (value == "oflayn_natural") {
+        val themeFile = File(context.filesDir, "oflayn-natural.xml")
+        if (!themeFile.isFile || themeFile.length() == 0L) {
+            context.assets.open("themes/oflayn-natural.xml").use { input ->
+                themeFile.outputStream().use { output -> input.copyTo(output) }
+            }
+        }
+        return ExternalRenderTheme(themeFile)
+    }
+    return when (value) {
+        // The built-in HILLSHADING style needs elevation (DEM) data, which is not bundled with this map.
+        "outdoor" -> MapsforgeThemes.OSMARENDER
+        "motorider" -> MapsforgeThemes.MOTORIDER
+        "biker" -> MapsforgeThemes.BIKER
+        "osmarender" -> MapsforgeThemes.OSMARENDER
+        else -> MapsforgeThemes.DEFAULT
+    }
 }
 
 
