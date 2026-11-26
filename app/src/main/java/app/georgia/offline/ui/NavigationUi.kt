@@ -32,6 +32,7 @@ import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.remember
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableDoubleStateOf
 import androidx.compose.runtime.mutableIntStateOf
@@ -261,8 +262,10 @@ fun RoutePlannerCard(
     onExternal: () -> Unit,
     onCancel: () -> Unit
 ) {
+    val plannerScrollState = rememberScrollState()
     Surface(
-        modifier = Modifier.fillMaxWidth().appear().dismissOnSwipeDown(onCancel),
+        modifier = Modifier.fillMaxWidth().appear()
+            .dismissOnSwipeDown(onCancel, canDismiss = { plannerScrollState.value == 0 }),
         shape = RoundedCornerShape(Radius.card),
         color = MaterialTheme.colorScheme.glass(app.georgia.offline.ui.theme.LocalLayerAlpha.current),
         contentColor = MaterialTheme.colorScheme.onSurface,
@@ -270,7 +273,7 @@ fun RoutePlannerCard(
         shadowElevation = 16.dp
     ) {
         Column(
-            Modifier.padding(Space.m).heightIn(max = 520.dp).verticalScroll(rememberScrollState()),
+            Modifier.padding(Space.m).heightIn(max = 520.dp).verticalScroll(plannerScrollState),
             verticalArrangement = Arrangement.spacedBy(Space.s)
         ) {
             // A visible grab handle makes the downward swipe-to-collapse discoverable.
