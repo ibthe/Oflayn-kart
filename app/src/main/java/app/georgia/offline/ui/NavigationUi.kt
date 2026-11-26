@@ -535,9 +535,19 @@ fun NavigationFooter(route: Route, session: RouteSession, onStop: () -> Unit) {
             Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(Space.xxs)) {
                 Text("${GeoMath.formatDistance(remaining)} · ${formatDuration(seconds)}", style = MaterialTheme.typography.titleLarge)
                 Text(
-                    if (session.busy) "Пересчитываю маршрут…" else "© OpenStreetMap",
+                    when {
+                        session.busy -> "Пересчитываю маршрут…"
+                        session.message != null -> session.message!!
+                        else -> "Навигация активна"
+                    },
                     style = MaterialTheme.typography.labelSmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                    color = if (session.message != null && !session.busy) {
+                        MaterialTheme.colorScheme.error
+                    } else {
+                        MaterialTheme.colorScheme.onSurfaceVariant
+                    },
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
                 )
             }
             TextButton(onClick = { session.voice = !session.voice }, contentPadding = PaddingValues(horizontal = Space.s)) {
