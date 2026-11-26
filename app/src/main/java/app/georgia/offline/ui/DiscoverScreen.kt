@@ -83,7 +83,7 @@ internal fun DiscoverScreen(
     var loading by remember { mutableStateOf(false) }
     var statusMessage by remember { mutableStateOf("Подготавливаю локальную базу объектов…") }
     var statusIsError by remember { mutableStateOf(false) }
-    val here = tracker.location
+    val here = tracker.location?.takeIf { tracker.hasFreshFix() }
 
     LaunchedEffect(Unit) {
         loading = true
