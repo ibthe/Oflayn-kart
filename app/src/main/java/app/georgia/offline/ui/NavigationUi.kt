@@ -324,15 +324,13 @@ fun RoutePlannerCard(
                     color = MaterialTheme.colorScheme.primary
                 )
             }
-            Text(
-                when {
-                    route != null -> "${GeoMath.formatDistance(route.distanceMeters)} по дорогам · ${formatDuration(route.durationSeconds)}"
-                    distance != null -> "${GeoMath.formatDistance(distance)} по прямой"
-                    else -> "Жду сигнал GPS…"
-                },
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant
-            )
+            if (route == null) {
+                Text(
+                    distance?.let { "${GeoMath.formatDistance(it)} по прямой" } ?: "Жду сигнал GPS…",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
             Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(Space.xs)) {
                 RoutingProfile.entries.forEach { option ->
                     SelectPill(
@@ -395,6 +393,35 @@ fun RoutePlannerCard(
                 contentPadding = PaddingValues(horizontal = Space.s)
             ) {
                 Text("Закрыть")
+            }
+        }
+    }
+}
+
+/** Compact route summary anchored below the map controls on the main map screen. */
+@Composable
+fun RouteSummaryBar(route: Route, modifier: Modifier = Modifier) {
+    Surface(
+        modifier = modifier.fillMaxWidth().appear(),
+        shape = RoundedCornerShape(Radius.card),
+        color = MaterialTheme.colorScheme.glass(app.georgia.offline.ui.theme.LocalLayerAlpha.current),
+        contentColor = MaterialTheme.colorScheme.onSurface,
+        border = BorderStroke(1.dp, MaterialTheme.colorScheme.edgeBrush()),
+        shadowElevation = 12.dp
+    ) {
+        Row(
+            Modifier.padding(horizontal = Space.m, vertical = Space.s),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(Space.s)
+        ) {
+            Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(Space.xxs)) {
+                Text("МАРШРУТ ПОСТРОЕН", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                Text(
+                    "${GeoMath.formatDistance(route.distanceMeters)} · ${formatDuration(route.durationSeconds)}",
+                    style = MaterialTheme.typography.titleMedium,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
+                )
             }
         }
     }
