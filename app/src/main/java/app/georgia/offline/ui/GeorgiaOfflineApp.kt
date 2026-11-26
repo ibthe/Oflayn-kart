@@ -144,7 +144,7 @@ fun GeorgiaOfflineApp(settings: LocalSettings) {
     LaunchedEffect(navigation.target, navigation.origin, navigation.viaPoints.toList()) { routeSession.reset() }
 
     // Keep GPS progress, voice prompts, arrival detection and rerouting alive across tab changes.
-    val fix = tracker.location
+    val fix = tracker.location?.takeIf { tracker.hasFreshFix() }
     val coroutineScope = rememberCoroutineScope()
     LaunchedEffect(fix, routeSession.navigating, navigation.target) {
         val target = navigation.target
@@ -541,7 +541,7 @@ private fun MapScreen(modifier: Modifier, settings: LocalSettings, navigation: N
         val fix = tracker.location
         if (tracker.error != null) {
             recenterAfterFreshFix = false
-        } else if (recenterAfterFreshFix && fix != null && fix.elapsedRealtimeNanos > recenterFixBaseline) {
+        } else if (recenterAfterFreshFix && fix != null && tracker.hasFreshFix() && fix.elapsedRealtimeNanos > recenterFixBaseline) {
             recenterToken++
             recenterAfterFreshFix = false
         }
@@ -578,8 +578,9 @@ private fun MapScreen(modifier: Modifier, settings: LocalSettings, navigation: N
     fun planFrom(fix: android.location.Location?, rerouting: Boolean) {
         val goal = navigation.target ?: return
         // "Route from here" starts at the chosen point; otherwise at the GPS position.
-        val startLat = navigation.origin?.latitude ?: fix?.latitude ?: return
-        val startLon = navigation.origin?.longitude ?: fix?.longitude ?: return
+        val currentFix = fix?.takeIf { tracker.hasFreshFix() }
+        val startLat = navigation.origin?.latitude ?: currentFix?.latitude ?: return
+        val startLon = navigation.origin?.longitude ?: currentFix?.longitude ?: return
         coroutineScope.launch {
             session.plan(
                 context,
@@ -608,7 +609,7 @@ private fun MapScreen(modifier: Modifier, settings: LocalSettings, navigation: N
                 preferredLanguage = preferredLanguage,
                 mapTheme = settings.mapTheme,
                 modifier = Modifier.fillMaxSize(),
-                userLocation = tracker.location,
+                userLocation = tracker.location?.takeIf { tracker.hasFreshFix() },
                 destination = if (navigation.pointSelection == RoutePointRole.START) null else target?.let { LatLong(it.latitude, it.longitude) },
                 accentColor = MaterialTheme.colorScheme.tertiary.toArgb(),
                 destinationColor = MaterialTheme.colorScheme.primary.toArgb(),
@@ -707,7 +708,7 @@ private fun MapScreen(modifier: Modifier, settings: LocalSettings, navigation: N
                     databaseLoading = poiDatabaseLoading,
                     databaseMessage = poiDatabaseMessage,
                     searchError = mapSearchError,
-                    topOffset = (if (tracker.error != null || (tracker.active && tracker.location == null)) 104.dp else 64.dp) +
+                    topOffset = (if (tracker.error != null || (tracker.active && !tracker.hasFreshFix())) 104.dp else 64.dp) +
                         if (mapStyleExpanded) 160.dp else 0.dp,
                     language = settings.language,
                     onSelect = { poi ->
@@ -759,7 +760,7 @@ private fun MapScreen(modifier: Modifier, settings: LocalSettings, navigation: N
                                     overflow = TextOverflow.Ellipsis
                                 )
                             }
-                        } else if (tracker.active && tracker.location == null) {
+                        } else if (tracker.active && !tracker.hasFreshFix()) {
                             MapChip { Text("Ищу сигнал GPS…", style = MaterialTheme.typography.labelMedium) }
                         }
                         MapStylePicker(settings, expanded = mapStyleExpanded, onExpandedChange = { mapStyleExpanded = it })
@@ -799,7 +800,7 @@ private fun MapScreen(modifier: Modifier, settings: LocalSettings, navigation: N
                                     .clip(CircleShape)
                                     .background(MaterialTheme.colorScheme.accentBrush())
                                     .bounceClick {
-                                        if (!tracker.active || tracker.location == null) {
+                                        if (!tracker.active || !tracker.hasFreshFix()) {
                                             recenterFixBaseline = tracker.location?.elapsedRealtimeNanos ?: 0L
                                             recenterAfterFreshFix = true
                                             tracker.start()
@@ -813,7 +814,7 @@ private fun MapScreen(modifier: Modifier, settings: LocalSettings, navigation: N
                             ) {
                                 CrosshairGlyph(MaterialTheme.colorScheme.onPrimary)
                                 Text(
-                                    if (tracker.active && tracker.location != null) "Где я" else "Найти меня",
+                                    if (tracker.active && tracker.hasFreshFix()) "Где я" else "Найти меня",
                                     style = MaterialTheme.typography.labelLarge,
                                     fontWeight = FontWeight.SemiBold,
                                     color = MaterialTheme.colorScheme.onPrimary
@@ -838,7 +839,7 @@ private fun MapScreen(modifier: Modifier, settings: LocalSettings, navigation: N
                         MapPoiCard(
                             poi = poi,
                             name = poiName,
-                            distanceText = tracker.location?.let {
+                            distanceText = tracker.location?.takeIf { tracker.hasFreshFix() }?.let {
                                 GeoMath.formatDistance(GeoMath.distanceMeters(it.latitude, it.longitude, poi.latitude, poi.longitude)) + " от вас"
                             },
                             saved = alreadySaved,
@@ -894,7 +895,7 @@ private fun MapScreen(modifier: Modifier, settings: LocalSettings, navigation: N
                             onSave = if (alreadySaved) null else {
                                 { settings.addPlace(target.name, target.latitude, target.longitude) }
                             },
-                            location = tracker.location,
+                            location = tracker.location?.takeIf { tracker.hasFreshFix() },
                             session = session,
                             onProfile = { option ->
                                 session.profile = option
@@ -908,7 +909,7 @@ private fun MapScreen(modifier: Modifier, settings: LocalSettings, navigation: N
                                 navigation.useMyLocation()
                             },
                             onDestinationMyLocation = {
-                                tracker.location?.let { fix ->
+                                tracker.location?.takeIf { tracker.hasFreshFix() }?.let { fix ->
                                     session.reset()
                                     navigation.target = NavigationTarget("Моё местоположение", fix.latitude, fix.longitude)
                                     navigation.routeMenuVisible = true
