@@ -601,8 +601,7 @@ private fun MapScreen(modifier: Modifier, settings: LocalSettings, navigation: N
                             }
                     }
                 }
-                {
-                    val activeRoute = session.route
+                val activeRoute = session.route
                     if (target != null && session.navigating && activeRoute != null) {
                         NavigationFooter(activeRoute, session) {
                             session.reset()
@@ -671,7 +670,6 @@ private fun MapScreen(modifier: Modifier, settings: LocalSettings, navigation: N
                     } else if (navigation.origin != null) {
                         OriginHintCard(navigation.origin!!, onCancel = { navigation.origin = null })
                     }
-                }
             }
         }
     } else {
