@@ -49,6 +49,14 @@ class LocationTracker internal constructor() {
         internal set
     var location by mutableStateOf<Location?>(null)
         internal set
+
+    /** Last-known fixes are useful while acquiring GPS, but must not be used as a current position. */
+    fun hasFreshFix(maxAgeMillis: Long = 30_000L): Boolean {
+        val fix = location ?: return false
+        val ageNanos = android.os.SystemClock.elapsedRealtimeNanos() - fix.elapsedRealtimeNanos
+        return fix.elapsedRealtimeNanos > 0L && ageNanos in 0L..(maxAgeMillis * 1_000_000L)
+    }
+
     var error by mutableStateOf<String?>(null)
         internal set
 
