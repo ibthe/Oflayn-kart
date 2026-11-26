@@ -798,8 +798,6 @@ private fun MapScreen(modifier: Modifier, settings: LocalSettings, navigation: N
 }
 
 @Composable
-
-@Composable
 private fun MapPoiCard(
     poi: PoiRepository.PoiRecord,
     name: String,
@@ -841,6 +839,7 @@ private fun MapPoiCard(
     }
 }
 
+@Composable
 private fun SettingsScreen(modifier: Modifier, settings: LocalSettings, onShowOnMap: (String) -> Unit) {
     val context = LocalContext.current
     val coroutineScope = rememberCoroutineScope()
