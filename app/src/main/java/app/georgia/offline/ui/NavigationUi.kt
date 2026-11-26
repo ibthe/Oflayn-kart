@@ -452,35 +452,6 @@ fun RoutePlannerCard(
     }
 }
 
-/** Compact route summary anchored below the map controls on the main map screen. */
-@Composable
-fun RouteSummaryBar(route: Route, modifier: Modifier = Modifier) {
-    Surface(
-        modifier = modifier.fillMaxWidth().appear(),
-        shape = RoundedCornerShape(Radius.card),
-        color = MaterialTheme.colorScheme.glass(app.georgia.offline.ui.theme.LocalLayerAlpha.current),
-        contentColor = MaterialTheme.colorScheme.onSurface,
-        border = BorderStroke(1.dp, MaterialTheme.colorScheme.edgeBrush()),
-        shadowElevation = 12.dp
-    ) {
-        Row(
-            Modifier.padding(horizontal = Space.m, vertical = Space.s),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(Space.s)
-        ) {
-            Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(Space.xxs)) {
-                Text("МАРШРУТ ПОСТРОЕН", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                Text(
-                    "${GeoMath.formatDistance(route.distanceMeters)} · ${formatDuration(route.durationSeconds)}",
-                    style = MaterialTheme.typography.titleMedium,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis
-                )
-            }
-        }
-    }
-}
-
 /** Big next-turn banner shown while navigating. */
 @Composable
 fun NavigationBanner(route: Route, along: Double, modifier: Modifier = Modifier) {
