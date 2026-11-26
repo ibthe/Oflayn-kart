@@ -618,6 +618,7 @@ private fun MapScreen(modifier: Modifier, settings: LocalSettings, navigation: N
                     onCategoryChange = { mapSearchCategory = it },
                     results = mapSearchResults,
                     loading = mapSearchLoading,
+                    topOffset = if (tracker.error != null || (tracker.active && tracker.location == null)) 144.dp else 104.dp,
                     language = settings.language,
                     onSelect = { poi ->
                         selectedMapPoi = poi
@@ -862,6 +863,7 @@ private fun MapViewportSearchBox(
     onCategoryChange: (String) -> Unit,
     results: List<PoiRepository.PoiRecord>,
     loading: Boolean,
+    topOffset: Dp,
     language: String,
     onSelect: (PoiRepository.PoiRecord) -> Unit
 ) {
@@ -871,7 +873,7 @@ private fun MapViewportSearchBox(
         "historic" to "История", "nature" to "Природа", "shops" to "Магазины"
     )
     Card(
-        modifier = Modifier.fillMaxWidth().padding(horizontal = Space.s).padding(top = 58.dp),
+        modifier = Modifier.fillMaxWidth().padding(horizontal = Space.s).padding(top = topOffset),
         shape = RoundedCornerShape(Radius.card),
         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
         elevation = CardDefaults.cardElevation(defaultElevation = 8.dp)
