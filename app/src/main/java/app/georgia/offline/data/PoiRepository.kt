@@ -306,6 +306,9 @@ object PoiRepository {
             "latitude BETWEEN ? AND ?",
             "longitude BETWEEN ? AND ?"
         )
+        val centerLatitude = (north + south) / 2.0
+        val centerLongitude = (east + west) / 2.0
+        val longitudeWeight = kotlin.math.cos(Math.toRadians(centerLatitude)).let { it * it }
         val arguments = mutableListOf(
             south.toString(), north.toString(), west.toString(), east.toString()
         )
@@ -324,13 +327,17 @@ object PoiRepository {
                    latitude, longitude, tags_json
             FROM poi
             WHERE ${conditions.joinToString(" AND ")}
-            ORDER BY CASE category
-                WHEN 'tourism' THEN 1 WHEN 'historic' THEN 2 WHEN 'nature' THEN 3
-                WHEN 'food' THEN 4 WHEN 'lodging' THEN 5 WHEN 'medical' THEN 6
-                WHEN 'transport' THEN 7 WHEN 'services' THEN 8 WHEN 'shops' THEN 9
-                ELSE 10 END, name COLLATE NOCASE
+            ORDER BY
+                ((latitude - ?) * (latitude - ?) +
+                 (longitude - ?) * (longitude - ?) * ?) ASC,
+                name COLLATE NOCASE
             LIMIT ?
         """.trimIndent()
+        arguments += centerLatitude.toString()
+        arguments += centerLatitude.toString()
+        arguments += centerLongitude.toString()
+        arguments += centerLongitude.toString()
+        arguments += longitudeWeight.toString()
         arguments += limit.coerceIn(1, 120).toString()
         val db = SQLiteDatabase.openDatabase(database.absolutePath, null, SQLiteDatabase.OPEN_READONLY)
         try {
