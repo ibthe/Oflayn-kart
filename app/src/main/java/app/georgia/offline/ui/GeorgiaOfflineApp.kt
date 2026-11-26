@@ -823,7 +823,8 @@ private fun MapScreen(modifier: Modifier, settings: LocalSettings, navigation: N
                 }
                 val activeRoute = session.route
                 if (target != null && session.navigating && activeRoute != null) {
-                        NavigationFooter(activeRoute, session) {
+                        NavigationFooter(activeRoute, session, speaker) {
+                            speaker.stop()
                             session.reset()
                             navigation.clearRoute()
                         }
