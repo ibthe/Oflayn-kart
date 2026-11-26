@@ -280,9 +280,26 @@ private fun PlaceRow(
                 if (settlementName != null) InfoLine("Населённый пункт", settlementName)
                 poi.detailLines().forEach { (label, value) -> InfoLine(label, value) }
                 InfoLine("Координаты", "${"%.5f".format(java.util.Locale.US, poi.latitude)}, ${"%.5f".format(java.util.Locale.US, poi.longitude)}")
-                Row(horizontalArrangement = Arrangement.spacedBy(Space.xs), verticalAlignment = Alignment.CenterVertically) {
-                    GradientButton(text = "Маршрут сюда", onClick = onRoute)
-                    OutlinedButton(onClick = onSave, enabled = !saved) { Text(if (saved) "Сохранено" else "Сохранить") }
+                Column(
+                    Modifier.fillMaxWidth(),
+                    verticalArrangement = Arrangement.spacedBy(Space.xs)
+                ) {
+                    GradientButton(
+                        text = "Маршрут сюда",
+                        onClick = onRoute,
+                        modifier = Modifier.fillMaxWidth()
+                    )
+                    OutlinedButton(
+                        onClick = onSave,
+                        modifier = Modifier.fillMaxWidth(),
+                        enabled = !saved
+                    ) {
+                        Text(
+                            if (saved) "Сохранено" else "Сохранить",
+                            maxLines = 1,
+                            softWrap = false
+                        )
+                    }
                 }
                 TextButton(onClick = onCopy) { Text("Копировать координаты") }
             }
