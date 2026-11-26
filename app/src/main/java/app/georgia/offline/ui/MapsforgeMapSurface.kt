@@ -54,6 +54,14 @@ enum class PlaceKind { SAVED, CAR }
 /** The route element captured by a drag gesture on the map. */
 enum class RouteDragTarget { START, DESTINATION, WAYPOINT, ROUTE_LINE }
 
+/** Geographic rectangle currently visible inside the map view. */
+data class MapViewportBounds(
+    val north: Double,
+    val south: Double,
+    val east: Double,
+    val west: Double
+)
+
 /** A saved point drawn on the map; the selected one is enlarged and haloed. */
 class MapPlace(val id: String, val latitude: Double, val longitude: Double, val kind: PlaceKind)
 
@@ -85,14 +93,14 @@ fun MapsforgeMapSurface(
     originColor: Int = 0xFF1FB89A.toInt(),
     focusToken: Int = 0,
     onPlaceTap: ((String?) -> Unit)? = null,
-    onMapTap: ((LatLong) -> Unit)? = null,
+    onMapTap: ((LatLong) -> Unit)? = null,\n    onViewportChanged: ((MapViewportBounds) -> Unit)? = null,
     onLongPress: ((LatLong) -> Unit)? = null,
     onRouteDrag: ((RouteDragTarget, Int, LatLong) -> Unit)? = null
 ) {
     val currentLongPress by rememberUpdatedState(onLongPress)
     val currentPlaces by rememberUpdatedState(places)
     val currentPlaceTap by rememberUpdatedState(onPlaceTap)
-    val currentMapTap by rememberUpdatedState(onMapTap)
+    val currentMapTap by rememberUpdatedState(onMapTap)\n    val currentViewportChanged by rememberUpdatedState(onViewportChanged)
     val currentRoutePoints by rememberUpdatedState(routePoints)
     val currentViaPoints by rememberUpdatedState(viaPoints)
     val currentRouteDrag by rememberUpdatedState(onRouteDrag)
@@ -292,6 +300,22 @@ fun MapsforgeMapSurface(
                     view,
                     OverlayState(userLocation, destination, recenterToken, zoomInToken, zoomOutToken, routePoints, viaPoints, followUser, fitToken, places, selectedPlaceId, selectedPoi, origin, focusToken)
                 )
+                // Wait until Mapsforge has applied a pan/zoom before reading the visible corners.
+                view.postDelayed({
+                    val projection = view.mapViewProjection
+                    val topLeft = projection.fromPixels(0.0, 0.0)
+                    val bottomRight = projection.fromPixels(view.width.toDouble(), view.height.toDouble())
+                    if (topLeft != null && bottomRight != null) {
+                        currentViewportChanged?.invoke(
+                            MapViewportBounds(
+                                north = maxOf(topLeft.latitude, bottomRight.latitude),
+                                south = minOf(topLeft.latitude, bottomRight.latitude),
+                                east = maxOf(topLeft.longitude, bottomRight.longitude),
+                                west = minOf(topLeft.longitude, bottomRight.longitude)
+                            )
+                        )
+                    }
+                }, 320L)
             }
         )
 
