@@ -393,10 +393,6 @@ private fun openExternalNavigator(context: android.content.Context, target: Navi
 private fun MapScreen(modifier: Modifier, settings: LocalSettings, navigation: NavigationState, tracker: LocationTracker, session: RouteSession) {
     val context = LocalContext.current
     val coroutineScope = rememberCoroutineScope()
-    var isImporting by remember { mutableStateOf(false) }
-    var importMessage by remember { mutableStateOf<String?>(null) }
-    var importError by remember { mutableStateOf(false) }
-
     // A full-map CI build packages offline/georgia.map in the APK. Keep imported
     // maps untouched; refresh only the bundled copy when its embedded SHA-256 changes.
     LaunchedEffect(settings.mapDisabled, settings.mapFilePath, settings.mapFileIsBundled) {
@@ -404,55 +400,22 @@ private fun MapScreen(modifier: Modifier, settings: LocalSettings, navigation: N
         val savedFileExists = !savedPath.isNullOrBlank() && File(savedPath).isFile
         val keepUserImportedMap = savedFileExists && !settings.mapFileIsBundled
         if (!settings.mapDisabled && !keepUserImportedMap) {
-            isImporting = true
             try {
                 val bundled = withContext(Dispatchers.IO) {
                     MapFileRepository.installBundledMap(context)
                 }
-                if (bundled != null) {
-                    val wasExistingBundled = settings.mapFileIsBundled && savedPath == bundled.absolutePath
-                    settings.setMapFilePath(bundled.absolutePath, bundled = true)
-                    if (!wasExistingBundled) {
-                        importMessage = "Встроенная карта Грузии установлена (${bundled.length() / (1024 * 1024)} МБ)."
-                    } else {
-                        importMessage = "Встроенная карта Грузии проверена и актуальна."
-                    }
-                }
+                if (bundled != null) settings.setMapFilePath(bundled.absolutePath, bundled = true)
             } catch (error: Exception) {
-                importError = true
-                importMessage = error.message ?: "Не удалось установить встроенную карту."
-            } finally {
-                isImporting = false
-            }
-        }
-    }
-
-    val mapPicker = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
-        if (uri != null) {
-            coroutineScope.launch {
-                isImporting = true
-                importMessage = "Копирую и проверяю файл карты…"
-                importError = false
-                try {
-                    val file = withContext(Dispatchers.IO) {
-                        MapFileRepository.importGeorgiaMap(context, uri)
-                    }
-                    settings.setMapFilePath(file.absolutePath, bundled = false)
-                    importMessage = "Карта проверена: ${file.length() / (1024 * 1024)} МБ"
-                } catch (error: Exception) {
-                    importError = true
-                    importMessage = error.message ?: "Не удалось импортировать файл карты."
-                } finally {
-                    isImporting = false
-                }
+                android.widget.Toast.makeText(
+                    context,
+                    error.message ?: "Не удалось установить встроенную карту.",
+                    android.widget.Toast.LENGTH_LONG
+                ).show()
             }
         }
     }
     val mapFile = settings.mapFilePath?.let(::File)?.takeIf { it.isFile && it.length() > 0L }
     val preferredLanguage = MapLanguageResolver.preferredLanguage(settings.enabledLanguages)
-
-    val openPicker: () -> Unit = { mapPicker.launch(arrayOf("*/*")) }
-    var showDetails by rememberSaveable { mutableStateOf(false) }
     var recenterToken by remember { mutableIntStateOf(0) }
     var zoomInToken by remember { mutableIntStateOf(0) }
     var zoomOutToken by remember { mutableIntStateOf(0) }
@@ -539,26 +502,7 @@ private fun MapScreen(modifier: Modifier, settings: LocalSettings, navigation: N
                     navigation.chooseMapPoint("Точка на карте", point.latitude, point.longitude)
                 }
             )
-            AnimatedVisibility(
-                visible = showDetails,
-                enter = fadeIn(tween(260)) + slideInVertically(tween(360)) { it / 6 },
-                exit = fadeOut(tween(180)) + slideOutVertically(tween(240)) { it / 6 }
-            ) {
-                Surface(
-                    modifier = Modifier.fillMaxSize(),
-                    color = MaterialTheme.colorScheme.background.copy(alpha = 0.97f),
-                    contentColor = MaterialTheme.colorScheme.onBackground
-                ) {
-                    Column(
-                        Modifier.fillMaxSize().verticalScroll(rememberScrollState())
-                            .padding(start = Space.card, end = Space.card, top = Space.card, bottom = Space.xl + Space.l)
-                    ) {
-                        Text("О карте", style = MaterialTheme.typography.headlineSmall, modifier = Modifier.padding(bottom = Space.m))
-                        MapDetails(settings, true, preferredLanguage, isImporting, importMessage, importError, openPicker)
-                    }
-                }
-            }
-            if (!showDetails && navigation.pointSelection != null) {
+            if (navigation.pointSelection != null) {
                 MapChip(
                     modifier = Modifier.align(Alignment.TopCenter).padding(Space.s),
                     onClick = { navigation.pointSelection = null }
@@ -572,7 +516,7 @@ private fun MapScreen(modifier: Modifier, settings: LocalSettings, navigation: N
                     )
                 }
             }
-            if (!showDetails && navigation.pointSelection == null) {
+            if (navigation.pointSelection == null) {
                 if (session.navigating && session.route != null) {
                     Column(
                         Modifier.align(Alignment.TopCenter).padding(Space.s),
@@ -612,21 +556,16 @@ private fun MapScreen(modifier: Modifier, settings: LocalSettings, navigation: N
                 verticalArrangement = Arrangement.spacedBy(Space.xs)
             ) {
                 Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.Bottom) {
-                    if (!showDetails) {
-                        Column(verticalArrangement = Arrangement.spacedBy(Space.xs)) {
-                            MapChip(modifier = Modifier.size(48.dp), onClick = { zoomInToken++ }, centered = true) {
-                                ZoomGlyph(color = MaterialTheme.colorScheme.onSurface, zoomIn = true)
-                            }
-                            MapChip(modifier = Modifier.size(48.dp), onClick = { zoomOutToken++ }, centered = true) {
-                                ZoomGlyph(color = MaterialTheme.colorScheme.onSurface, zoomIn = false)
-                            }
+                    Column(verticalArrangement = Arrangement.spacedBy(Space.xs)) {
+                        MapChip(modifier = Modifier.size(48.dp), onClick = { zoomInToken++ }, centered = true) {
+                            ZoomGlyph(color = MaterialTheme.colorScheme.onSurface, zoomIn = true)
                         }
-                    } else {
-                        Box {}
+                        MapChip(modifier = Modifier.size(48.dp), onClick = { zoomOutToken++ }, centered = true) {
+                            ZoomGlyph(color = MaterialTheme.colorScheme.onSurface, zoomIn = false)
+                        }
                     }
                     Column(horizontalAlignment = Alignment.End, verticalArrangement = Arrangement.spacedBy(Space.xs)) {
-                        if (!showDetails) {
-                            Row(
+                        Row(
                                 Modifier.height(48.dp)
                                     .shadow(12.dp, CircleShape)
                                     .clip(CircleShape)
@@ -647,15 +586,9 @@ private fun MapScreen(modifier: Modifier, settings: LocalSettings, navigation: N
                                     color = MaterialTheme.colorScheme.onPrimary
                                 )
                             }
-                        }
-                        if (!session.navigating || showDetails) {
-                            MapChip(onClick = { showDetails = !showDetails }) {
-                                Text(if (showDetails) "Закрыть" else "О карте", style = MaterialTheme.typography.labelLarge)
-                            }
-                        }
                     }
                 }
-                if (!showDetails) {
+                {
                     val activeRoute = session.route
                     if (target != null && session.navigating && activeRoute != null) {
                         NavigationFooter(activeRoute, session) {
@@ -739,7 +672,6 @@ private fun MapScreen(modifier: Modifier, settings: LocalSettings, navigation: N
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
             }
-            MapDetails(settings, false, preferredLanguage, isImporting, importMessage, importError, openPicker)
         }
     }
 }
@@ -747,6 +679,34 @@ private fun MapScreen(modifier: Modifier, settings: LocalSettings, navigation: N
 @Composable
 private fun SettingsScreen(modifier: Modifier, settings: LocalSettings, onShowOnMap: (String) -> Unit) {
     val context = LocalContext.current
+    val coroutineScope = rememberCoroutineScope()
+    var isImportingMap by remember { mutableStateOf(false) }
+    var mapImportMessage by remember { mutableStateOf<String?>(null) }
+    var mapImportError by remember { mutableStateOf(false) }
+    val mapPicker = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
+        if (uri != null) {
+            coroutineScope.launch {
+                isImportingMap = true
+                mapImportMessage = "Копирую и проверяю файл карты…"
+                mapImportError = false
+                try {
+                    val file = withContext(Dispatchers.IO) {
+                        MapFileRepository.importGeorgiaMap(context, uri)
+                    }
+                    settings.setMapFilePath(file.absolutePath, bundled = false)
+                    mapImportMessage = "Карта проверена: ${file.length() / (1024 * 1024)} МБ"
+                } catch (error: Exception) {
+                    mapImportError = true
+                    mapImportMessage = error.message ?: "Не удалось импортировать файл карты."
+                } finally {
+                    isImportingMap = false
+                }
+            }
+        }
+    }
+    val preferredLanguage = MapLanguageResolver.preferredLanguage(settings.enabledLanguages)
+    val hasMap = settings.mapFilePath?.let(::File)?.let { it.isFile && it.length() > 0L } == true
+    val openMapPicker: () -> Unit = { mapPicker.launch(arrayOf("*/*")) }
     val folderPicker = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocumentTree()) { uri ->
         if (uri != null) {
             runCatching {
@@ -761,6 +721,19 @@ private fun SettingsScreen(modifier: Modifier, settings: LocalSettings, onShowOn
 
     PageColumn(modifier) {
         PageTitle("Ещё")
+
+        SectionLabel("О карте")
+        Panel {
+            MapDetails(
+                settings = settings,
+                hasMap = hasMap,
+                preferredLanguage = preferredLanguage,
+                isImporting = isImportingMap,
+                importMessage = mapImportMessage,
+                importError = mapImportError,
+                onPickFile = openMapPicker
+            )
+        }
 
         SectionLabel("Оформление")
         Panel {
