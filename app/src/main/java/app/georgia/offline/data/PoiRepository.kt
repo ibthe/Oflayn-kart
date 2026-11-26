@@ -157,18 +157,28 @@ object PoiRepository {
 
     data class SearchResult(val database: File?, val poiCount: Int, val message: String?)
 
+    /**
+     * Installation is serialized because Map and Places screens can briefly coexist during a tab
+     * transition and both request the same bundled database.
+     */
+    private val installationLock = Any()
+
     suspend fun ensureInstalled(context: Context): SearchResult = withContext(Dispatchers.IO) {
+        synchronized(installationLock) { installBlocking(context) }
+    }
+
+    private fun installBlocking(context: Context): SearchResult {
         val manifest = readBuildManifest(context)
         val expectedHash = manifest?.optString("poiFileSha256")
             ?.takeIf { it.matches(Regex("[0-9a-fA-F]{64}")) }
         val expectedSize = manifest?.optLong("poiFileSizeBytes", -1L)?.takeIf { it > 0L }
         if (expectedHash == null || expectedSize == null) {
-            return@withContext SearchResult(null, 0, "Офлайн-база POI ещё не включена в эту сборку приложения.")
+            return SearchResult(null, 0, "Офлайн-база POI ещё не включена в эту сборку приложения.")
         }
 
         val directory = File(context.filesDir, "poi")
         if (!directory.exists() && !directory.mkdirs()) {
-            return@withContext SearchResult(null, 0, "Не удалось создать локальную папку базы объектов.")
+            return SearchResult(null, 0, "Не удалось создать локальную папку базы объектов.")
         }
         val database = File(directory, "georgia-poi.sqlite")
         val marker = File(directory, HASH_MARKER)
@@ -176,18 +186,18 @@ object PoiRepository {
             marker.readText(Charsets.UTF_8).trim().equals(expectedHash, ignoreCase = true) &&
             runCatching { validateDatabase(database) }.getOrDefault(false)
         ) {
-            return@withContext SearchResult(database, readCount(database), null)
+            return SearchResult(database, readCount(database), null)
         }
 
         val requiredSpace = expectedSize + 8L * 1024L * 1024L
         if (directory.usableSpace < requiredSpace) {
-            return@withContext SearchResult(null, 0, "Недостаточно свободного места для локального справочника объектов.")
+            return SearchResult(null, 0, "Недостаточно свободного места для локального справочника объектов.")
         }
 
         val input = try {
             context.assets.open(ASSET_DB)
         } catch (_: FileNotFoundException) {
-            return@withContext SearchResult(null, 0, "База объектов не найдена во встроенных ресурсах APK.")
+            return SearchResult(null, 0, "База объектов не найдена во встроенных ресурсах APK.")
         }
         val temporary = File(directory, "georgia-poi.sqlite.part")
         try {
@@ -222,6 +232,7 @@ object PoiRepository {
             temporary.delete()
             SearchResult(null, 0, error.message ?: "Не удалось установить базу объектов.")
         }
+    
     }
 
     suspend fun search(
