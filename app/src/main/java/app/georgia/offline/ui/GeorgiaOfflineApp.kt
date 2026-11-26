@@ -278,32 +278,44 @@ private fun MapStylePicker(settings: LocalSettings) {
         "motorider" to "Авто",
         "biker" to "Велосипед"
     )
-    Surface(
-        modifier = Modifier.widthIn(max = 260.dp),
-        shape = RoundedCornerShape(20.dp),
-        color = MaterialTheme.colorScheme.glass(LocalLayerAlpha.current),
-        contentColor = MaterialTheme.colorScheme.onSurface,
-        border = BorderStroke(1.dp, MaterialTheme.colorScheme.edgeBrush()),
-        shadowElevation = 6.dp
-    ) {
-        Row(
-            Modifier.horizontalScroll(rememberScrollState()).padding(horizontal = Space.xs, vertical = 4.dp),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(4.dp)
+    var expanded by rememberSaveable { mutableStateOf(false) }
+    val selectedLabel = choices.firstOrNull { it.first == settings.mapTheme }?.second ?: "Классика"
+
+    Column(verticalArrangement = Arrangement.spacedBy(Space.xs)) {
+        MapChip(onClick = { expanded = !expanded }) {
+            Text("Стиль карты", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            Text(selectedLabel, style = MaterialTheme.typography.labelLarge, fontWeight = FontWeight.SemiBold)
+            Text(if (expanded) "Скрыть" else "Выбрать", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.primary)
+        }
+        AnimatedVisibility(
+            visible = expanded,
+            enter = fadeIn(tween(180)) + slideInVertically(tween(220)) { -it / 5 },
+            exit = fadeOut(tween(140)) + slideOutVertically(tween(180)) { -it / 5 }
         ) {
-            Text(
-                "Стиль",
-                modifier = Modifier.padding(start = Space.xs),
-                style = MaterialTheme.typography.labelMedium,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                maxLines = 1
-            )
-            choices.forEach { (value, label) ->
-                SelectPill(
-                    label = label,
-                    selected = settings.mapTheme == value,
-                    onClick = { settings.updateMapTheme(value) }
-                )
+            Surface(
+                modifier = Modifier.widthIn(max = 260.dp),
+                shape = RoundedCornerShape(20.dp),
+                color = MaterialTheme.colorScheme.glass(LocalLayerAlpha.current),
+                contentColor = MaterialTheme.colorScheme.onSurface,
+                border = BorderStroke(1.dp, MaterialTheme.colorScheme.edgeBrush()),
+                shadowElevation = 6.dp
+            ) {
+                Row(
+                    Modifier.horizontalScroll(rememberScrollState()).padding(horizontal = Space.xs, vertical = 4.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(4.dp)
+                ) {
+                    choices.forEach { (value, label) ->
+                        SelectPill(
+                            label = label,
+                            selected = settings.mapTheme == value,
+                            onClick = {
+                                settings.updateMapTheme(value)
+                                expanded = false
+                            }
+                        )
+                    }
+                }
             }
         }
     }
