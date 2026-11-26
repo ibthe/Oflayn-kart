@@ -524,6 +524,12 @@ private fun MapScreen(modifier: Modifier, settings: LocalSettings, navigation: N
         savedPlaces.map { MapPlace(it.id, it.latitude, it.longitude, if (it.id == LocalSettings.CAR_PLACE_ID) PlaceKind.CAR else PlaceKind.SAVED) }
     }
     val selectedPlace = savedPlaces.firstOrNull { it.id == navigation.selectedPlaceId }
+    // Keep contextual cards mutually exclusive with the search panel so they do not stack over the map.
+    val showMapSearch = !session.navigating &&
+        navigation.pointSelection == null &&
+        !navigation.routeMenuVisible &&
+        selectedMapPoi == null &&
+        selectedPlace == null
 
     // Route tracking, speech and keep-screen-on are owned by GeorgiaOfflineApp so they
     // continue while another tab is temporarily visible.
@@ -579,7 +585,7 @@ private fun MapScreen(modifier: Modifier, settings: LocalSettings, navigation: N
                 places = mapPlaces,
                 selectedPlaceId = navigation.selectedPlaceId,
                 selectedPoi = selectedMapPoi?.let { LatLong(it.latitude, it.longitude) },
-                searchResultPoints = mapSearchResults.take(6).map { LatLong(it.latitude, it.longitude) },
+                searchResultPoints = if (showMapSearch) mapSearchResults.take(6).map { LatLong(it.latitude, it.longitude) } else emptyList(),
                 origin = navigation.origin?.let { LatLong(it.latitude, it.longitude) },
                 savedColor = MaterialTheme.colorScheme.primary.toArgb(),
                 carColor = MaterialTheme.colorScheme.tertiary.toArgb(),
@@ -639,7 +645,7 @@ private fun MapScreen(modifier: Modifier, settings: LocalSettings, navigation: N
                     }
                 }
             )
-            if (!session.navigating && navigation.pointSelection == null) {
+            if (showMapSearch) {
                 MapViewportSearchBox(
                     query = mapSearchQuery,
                     onQueryChange = { mapSearchQuery = it },
