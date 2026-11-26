@@ -124,12 +124,57 @@ private enum class AppTab(val label: String) {
 
 @Composable
 fun GeorgiaOfflineApp(settings: LocalSettings) {
+    val context = LocalContext.current
     var selectedTab by rememberSaveable { mutableStateOf(AppTab.MAP.name) }
     val navigation = remember { NavigationState() }
     val tracker = rememberLocationTracker()
-    // Keep route data above AnimatedContent so switching tabs does not discard it.
+    // Route state and its lifecycle belong to the app, not to the currently selected tab.
     val routeSession = remember { RouteSession() }
+    val speaker = remember { Speaker(context) }
+    DisposableEffect(Unit) { onDispose { speaker.shutdown() } }
+    val hostView = LocalView.current
+    DisposableEffect(routeSession.navigating) {
+        hostView.keepScreenOn = routeSession.navigating
+        onDispose { hostView.keepScreenOn = false }
+    }
     LaunchedEffect(navigation.target, navigation.origin, navigation.viaPoints.toList()) { routeSession.reset() }
+
+    // Keep GPS progress, voice prompts, arrival detection and rerouting alive across tab changes.
+    val fix = tracker.location
+    val coroutineScope = rememberCoroutineScope()
+    LaunchedEffect(fix, routeSession.navigating, navigation.target) {
+        val target = navigation.target
+        if (!routeSession.navigating || fix == null || target == null) return@LaunchedEffect
+        when (routeSession.update(fix.latitude, fix.longitude, System.currentTimeMillis())) {
+            TrackingEvent.ARRIVED -> {
+                if (routeSession.voice) speaker.speak("Вы прибыли в пункт назначения")
+                android.widget.Toast.makeText(context, "Вы прибыли в пункт назначения", android.widget.Toast.LENGTH_LONG).show()
+                navigation.target = null
+            }
+            TrackingEvent.REROUTE -> {
+                val origin = navigation.origin
+                val via = navigation.viaPoints.map { it.latitude to it.longitude }
+                coroutineScope.launch {
+                    routeSession.plan(
+                        context,
+                        origin?.latitude ?: fix.latitude,
+                        origin?.longitude ?: fix.longitude,
+                        target.latitude,
+                        target.longitude,
+                        rerouting = true,
+                        waypoints = via
+                    )
+                    if (routeSession.navigating && routeSession.voice && routeSession.message == null) {
+                        speaker.speak("Маршрут перестроен")
+                    }
+                }
+            }
+            TrackingEvent.NONE -> routeSession.pendingAnnouncement()?.let {
+                if (routeSession.voice) speaker.speak(it)
+            }
+        }
+    }
+
     // A tab name saved by an older version (for example the removed ROUTE tab) falls back to the map.
     val currentTab = AppTab.entries.firstOrNull { it.name == selectedTab } ?: AppTab.MAP
     val mode = resolveThemeMode(settings.themeMode, isSystemInDarkTheme())
@@ -147,7 +192,7 @@ fun GeorgiaOfflineApp(settings: LocalSettings) {
                         label = "tabs"
                     ) { tab ->
                         when (tab) {
-                            AppTab.MAP -> MapScreen(Modifier.padding(padding), settings, navigation, tracker, routeSession)
+                            AppTab.MAP -> MapScreen(Modifier.padding(padding), settings, navigation, tracker, routeSession, speaker)
                             AppTab.DISCOVER -> DiscoverScreen(Modifier.padding(padding), settings, tracker) { name, latitude, longitude ->
                                 navigation.target = NavigationTarget(name, latitude, longitude)
                                 navigation.routeMenuVisible = true
@@ -406,7 +451,7 @@ private fun openExternalNavigator(context: android.content.Context, target: Navi
 }
 
 @Composable
-private fun MapScreen(modifier: Modifier, settings: LocalSettings, navigation: NavigationState, tracker: LocationTracker, session: RouteSession) {
+private fun MapScreen(modifier: Modifier, settings: LocalSettings, navigation: NavigationState, tracker: LocationTracker, session: RouteSession, speaker: Speaker) {
     val context = LocalContext.current
     val coroutineScope = rememberCoroutineScope()
     // A full-map CI build packages offline/georgia.map in the APK. Keep imported
@@ -475,14 +520,8 @@ private fun MapScreen(modifier: Modifier, settings: LocalSettings, navigation: N
     }
     val selectedPlace = savedPlaces.firstOrNull { it.id == navigation.selectedPlaceId }
 
-    val speaker = remember { Speaker(context) }
-    DisposableEffect(Unit) { onDispose { speaker.shutdown() } }
-    val hostView = LocalView.current
-    DisposableEffect(session.navigating) {
-        hostView.keepScreenOn = session.navigating
-        onDispose { hostView.keepScreenOn = false }
-    }
-    // Route state is owned by GeorgiaOfflineApp and survives MapScreen leaving composition.
+    // Route tracking, speech and keep-screen-on are owned by GeorgiaOfflineApp so they
+    // continue while another tab is temporarily visible.
 
     fun planFrom(fix: android.location.Location?, rerouting: Boolean) {
         val goal = navigation.target ?: return
@@ -504,21 +543,6 @@ private fun MapScreen(modifier: Modifier, settings: LocalSettings, navigation: N
                 if (!session.navigating && session.route != null) session.fitToken++
             }
             if (rerouting && session.navigating && session.voice && session.message == null) speaker.speak("Маршрут перестроен")
-        }
-    }
-
-    // Follow GPS fixes while navigating: progress, off-route detection and spoken guidance.
-    val fix = tracker.location
-    LaunchedEffect(fix, session.navigating) {
-        if (!session.navigating || fix == null || navigation.target == null) return@LaunchedEffect
-        when (session.update(fix.latitude, fix.longitude, System.currentTimeMillis())) {
-            TrackingEvent.ARRIVED -> {
-                if (session.voice) speaker.speak("Вы прибыли в пункт назначения")
-                android.widget.Toast.makeText(context, "Вы прибыли в пункт назначения", android.widget.Toast.LENGTH_LONG).show()
-                navigation.target = null
-            }
-            TrackingEvent.REROUTE -> planFrom(fix, rerouting = true)
-            TrackingEvent.NONE -> session.pendingAnnouncement()?.let { if (session.voice) speaker.speak(it) }
         }
     }
 
