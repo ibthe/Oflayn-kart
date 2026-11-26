@@ -270,6 +270,45 @@ private fun MapChip(
 ) = GlassPill(modifier = modifier, onClick = onClick, centered = centered, content = content)
 
 @Composable
+private fun MapStylePicker(settings: LocalSettings) {
+    val choices = listOf(
+        "classic" to "Классика",
+        "outdoor" to "Природа",
+        "motorider" to "Авто",
+        "biker" to "Велосипед"
+    )
+    Surface(
+        modifier = Modifier.widthIn(max = 340.dp),
+        shape = RoundedCornerShape(20.dp),
+        color = MaterialTheme.colorScheme.glass(LocalLayerAlpha.current),
+        contentColor = MaterialTheme.colorScheme.onSurface,
+        border = BorderStroke(1.dp, MaterialTheme.colorScheme.edgeBrush()),
+        shadowElevation = 6.dp
+    ) {
+        Row(
+            Modifier.horizontalScroll(rememberScrollState()).padding(horizontal = Space.xs, vertical = 4.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(4.dp)
+        ) {
+            Text(
+                "Стиль",
+                modifier = Modifier.padding(start = Space.xs),
+                style = MaterialTheme.typography.labelMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                maxLines = 1
+            )
+            choices.forEach { (value, label) ->
+                SelectPill(
+                    label = label,
+                    selected = settings.mapTheme == value,
+                    onClick = { settings.updateMapTheme(value) }
+                )
+            }
+        }
+    }
+}
+
+@Composable
 private fun MapDetails(
     settings: LocalSettings,
     hasMap: Boolean,
@@ -501,22 +540,27 @@ private fun MapScreen(modifier: Modifier, settings: LocalSettings, navigation: N
                     }
                 }
             }
-            if (showDetails) {
-                // The details overlay above is drawn by AnimatedVisibility; no other top chrome while it is open.
-            } else if (session.navigating && session.route != null) {
-                NavigationBanner(session.route!!, session.along, Modifier.align(Alignment.TopCenter).padding(Space.s))
-            } else {
-                Column(Modifier.align(Alignment.TopStart).padding(Space.s), verticalArrangement = Arrangement.spacedBy(Space.xs)) {
-                    MapChip {
-                        PulseDot(MaterialTheme.colorScheme.tertiary)
-                        Text("Без сети", style = MaterialTheme.typography.labelLarge)
+            if (!showDetails) {
+                if (session.navigating && session.route != null) {
+                    NavigationBanner(session.route!!, session.along, Modifier.align(Alignment.TopCenter).padding(Space.s))
+                }
+                Column(
+                    Modifier.align(Alignment.TopStart).padding(Space.s),
+                    verticalArrangement = Arrangement.spacedBy(Space.xs)
+                ) {
+                    if (!session.navigating) {
+                        MapChip {
+                            PulseDot(MaterialTheme.colorScheme.tertiary)
+                            Text("Без сети", style = MaterialTheme.typography.labelLarge)
+                        }
+                        val trackerError = tracker.error
+                        if (trackerError != null) {
+                            MapChip { Text(trackerError, style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.error) }
+                        } else if (tracker.active && tracker.location == null) {
+                            MapChip { Text("Ищу сигнал GPS…", style = MaterialTheme.typography.labelMedium) }
+                        }
                     }
-                    val trackerError = tracker.error
-                    if (trackerError != null) {
-                        MapChip { Text(trackerError, style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.error) }
-                    } else if (tracker.active && tracker.location == null) {
-                        MapChip { Text("Ищу сигнал GPS…", style = MaterialTheme.typography.labelMedium) }
-                    }
+                    MapStylePicker(settings)
                 }
                 Text(
                     "© OpenStreetMap",
@@ -726,13 +770,7 @@ private fun SettingsScreen(modifier: Modifier, settings: LocalSettings, onShowOn
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant
             )
-            HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
-            Text("Стиль", style = MaterialTheme.typography.titleSmall)
-            Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(Space.xs)) {
-                listOf("classic" to "Классика", "outdoor" to "Природа", "motorider" to "Авто", "biker" to "Велосипед").forEach { (value, label) ->
-                    SelectPill(label = label, selected = settings.mapTheme == value, onClick = { settings.updateMapTheme(value) })
-                }
-            }
+
         }
 
         SectionLabel("Хранение")
