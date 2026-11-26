@@ -196,9 +196,8 @@ fun GeorgiaOfflineApp(settings: LocalSettings) {
                         when (tab) {
                             AppTab.MAP -> MapScreen(Modifier.padding(padding), settings, navigation, tracker, routeSession, speaker)
                             AppTab.DISCOVER -> DiscoverScreen(Modifier.padding(padding), settings, tracker) { name, latitude, longitude ->
-                                navigation.target = NavigationTarget(name, latitude, longitude)
-                                navigation.routeMenuVisible = true
-                                navigation.selectedPlaceId = null
+                                routeSession.reset()
+                                navigation.startRouteTo(NavigationTarget(name, latitude, longitude))
                                 selectedTab = AppTab.MAP.name
                             }
                             AppTab.TOOLS -> ToolsScreen(Modifier.padding(padding), settings, tracker)
@@ -522,6 +521,7 @@ private fun MapScreen(modifier: Modifier, settings: LocalSettings, navigation: N
     val showMapSearch = !session.navigating &&
         navigation.pointSelection == null &&
         !navigation.routeMenuVisible &&
+        navigation.origin == null &&
         selectedMapPoi == null &&
         selectedPlace == null
 
@@ -771,10 +771,8 @@ private fun MapScreen(modifier: Modifier, settings: LocalSettings, navigation: N
                             },
                             saved = alreadySaved,
                             onRoute = {
-                                navigation.target = NavigationTarget(poiName, poi.latitude, poi.longitude)
-                                navigation.routeMenuVisible = true
-                                navigation.pointSelection = null
-                                navigation.selectedPlaceId = null
+                                session.reset()
+                                navigation.startRouteTo(NavigationTarget(poiName, poi.latitude, poi.longitude))
                                 selectedMapPoi = null
                             },
                             onSave = { settings.addPlace(poiName, poi.latitude, poi.longitude) },
@@ -789,16 +787,12 @@ private fun MapScreen(modifier: Modifier, settings: LocalSettings, navigation: N
                             },
                             isCar = isCar,
                             onRouteHere = {
-                                navigation.target = NavigationTarget(selectedPlace.name, selectedPlace.latitude, selectedPlace.longitude)
-                                navigation.routeMenuVisible = true
-                                navigation.pointSelection = null
-                                navigation.selectedPlaceId = null
+                                session.reset()
+                                navigation.startRouteTo(NavigationTarget(selectedPlace.name, selectedPlace.latitude, selectedPlace.longitude))
                             },
                             onRouteFrom = {
-                                navigation.origin = NavigationTarget(selectedPlace.name, selectedPlace.latitude, selectedPlace.longitude)
-                                navigation.routeMenuVisible = true
-                                navigation.pointSelection = null
-                                navigation.selectedPlaceId = null
+                                session.reset()
+                                navigation.startRouteFrom(NavigationTarget(selectedPlace.name, selectedPlace.latitude, selectedPlace.longitude))
                             },
                             onRename = { settings.renamePlace(selectedPlace.id, it) },
                             onDelete = {
@@ -837,15 +831,22 @@ private fun MapScreen(modifier: Modifier, settings: LocalSettings, navigation: N
                             selectionMode = navigation.pointSelection,
                             onChooseOrigin = { session.reset(); navigation.pointSelection = RoutePointRole.START },
                             onChooseDestination = { session.reset(); navigation.pointSelection = RoutePointRole.DESTINATION },
-                            onUseMyLocation = { navigation.useMyLocation() },
+                            onUseMyLocation = {
+                                session.reset()
+                                navigation.useMyLocation()
+                            },
                             onDestinationMyLocation = {
                                 tracker.location?.let { fix ->
+                                    session.reset()
                                     navigation.target = NavigationTarget("Моё местоположение", fix.latitude, fix.longitude)
                                     navigation.routeMenuVisible = true
                                     navigation.pointSelection = null
                                 }
                             },
-                            onSwap = { navigation.swapEndpoints() },
+                            onSwap = {
+                                session.reset()
+                                navigation.swapEndpoints()
+                            },
                             onPlan = { planFrom(tracker.location, rerouting = false) },
                             onStart = {
                                 session.beginNavigation()
