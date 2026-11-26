@@ -558,6 +558,7 @@ private fun MapScreen(modifier: Modifier, settings: LocalSettings, navigation: N
         ) {
             MapsforgeMapSurface(
                 mapFile = mapFile,
+                preferredLanguage = preferredLanguage,
                 mapTheme = settings.mapTheme,
                 modifier = Modifier.fillMaxSize(),
                 userLocation = tracker.location,
@@ -1210,7 +1211,6 @@ private fun SettingsScreen(modifier: Modifier, settings: LocalSettings, onShowOn
             MapDetails(
                 settings = settings,
                 hasMap = hasMap,
-                preferredLanguage = preferredLanguage,
                 isImporting = isImportingMap,
                 importMessage = mapImportMessage,
                 importError = mapImportError,
@@ -1282,9 +1282,4 @@ internal fun InfoCard(title: String, body: String) {
     }
 }
 
-private fun languageSummary(languages: Set<String>): String {
-    val labels = listOf("en" to "English", "ru" to "Русский", "ka" to "ქართული")
-        .filter { it.first in languages }
-        .map { it.second }
-    return if (labels.isEmpty()) "Ни один язык не включён" else labels.joinToString(" · ")
-}
+
