@@ -5,7 +5,7 @@ import kotlin.math.hypot
 import kotlin.math.max
 import kotlin.math.min
 
-enum class Maneuver { START, SLIGHT_LEFT, LEFT, SHARP_LEFT, SLIGHT_RIGHT, RIGHT, SHARP_RIGHT, UTURN, ROUNDABOUT, ARRIVE }
+enum class Maneuver { START, WAYPOINT, SLIGHT_LEFT, LEFT, SHARP_LEFT, SLIGHT_RIGHT, RIGHT, SHARP_RIGHT, UTURN, ROUNDABOUT, ARRIVE }
 
 /** One instruction, located [distanceFromStartMeters] along the route. */
 class RouteStep(
