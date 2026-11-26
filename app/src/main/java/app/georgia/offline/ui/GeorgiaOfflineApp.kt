@@ -972,7 +972,7 @@ private fun MapViewportSearchBox(
                             style = MaterialTheme.typography.bodySmall
                         )
                     }
-                } else if (databaseMessage != null || poiDatabaseMissing()) {
+                } else if (databaseMessage != null) {
                     Text(
                         databaseMessage ?: "Локальная база мест недоступна.",
                         modifier = Modifier.padding(horizontal = Space.xs, vertical = Space.xs),
