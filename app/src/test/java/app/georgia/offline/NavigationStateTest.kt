@@ -9,6 +9,35 @@ import org.junit.Test
 
 class NavigationStateTest {
     @Test
+    fun startingANewRouteToADestinationClearsThePreviousOriginAndWaypoints() {
+        val state = NavigationState()
+        state.target = app.georgia.offline.ui.NavigationTarget("Old destination", 41.7, 44.8)
+        state.origin = app.georgia.offline.ui.NavigationTarget("Old origin", 41.6, 44.7)
+        state.addWaypoint(app.georgia.offline.ui.NavigationTarget("Old via", 41.65, 44.75))
+
+        state.startRouteTo(app.georgia.offline.ui.NavigationTarget("New destination", 41.8, 44.9))
+
+        assertEquals("New destination", state.target?.name)
+        assertNull(state.origin)
+        assertEquals(0, state.viaPoints.size)
+        assertEquals(true, state.routeMenuVisible)
+    }
+
+    @Test
+    fun startingFromASavedPlaceClearsTheOldDestinationAndWaitsForANewOne() {
+        val state = NavigationState()
+        state.target = app.georgia.offline.ui.NavigationTarget("Old destination", 41.7, 44.8)
+        state.addWaypoint(app.georgia.offline.ui.NavigationTarget("Old via", 41.65, 44.75))
+
+        state.startRouteFrom(app.georgia.offline.ui.NavigationTarget("New origin", 41.6, 44.7))
+
+        assertNull(state.target)
+        assertEquals("New origin", state.origin?.name)
+        assertEquals(0, state.viaPoints.size)
+        assertEquals(false, state.routeMenuVisible)
+    }
+
+    @Test
     fun mapPointDefaultsToDestination() {
         val state = NavigationState()
 
