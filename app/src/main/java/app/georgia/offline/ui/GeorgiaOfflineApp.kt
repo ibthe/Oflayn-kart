@@ -495,7 +495,7 @@ private fun MapScreen(modifier: Modifier, settings: LocalSettings, navigation: N
     var mapSearchResults by remember { mutableStateOf<List<PoiRepository.PoiRecord>>(emptyList()) }
     var mapSearchViewport by remember { mutableStateOf<MapViewportBounds?>(null) }
     var mapSearchLoading by remember { mutableStateOf(false) }
-    var mapStyleExpanded by rememberSaveable { mutableStateOf(false) }
+    var mapStyleExpanded by remember { mutableStateOf(false) }
     LaunchedEffect(Unit) {
         val installation = PoiRepository.ensureInstalled(context)
         poiDatabase = installation.database
