@@ -70,6 +70,26 @@ class NavigationState {
         routeMenuVisible = true
     }
 
+    /** Starts a fresh route to a destination from the current GPS position. */
+    fun startRouteTo(point: NavigationTarget) {
+        target = point
+        origin = null
+        viaPoints.clear()
+        pointSelection = null
+        selectedPlaceId = null
+        routeMenuVisible = true
+    }
+
+    /** Selects a new route origin and waits for the person to choose a destination. */
+    fun startRouteFrom(point: NavigationTarget) {
+        target = null
+        origin = point
+        viaPoints.clear()
+        pointSelection = null
+        selectedPlaceId = null
+        routeMenuVisible = false
+    }
+
     fun closeRouteMenu() {
         routeMenuVisible = false
         pointSelection = null
