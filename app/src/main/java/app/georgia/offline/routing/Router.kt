@@ -20,6 +20,58 @@ class Router(private val graph: RoadGraph) {
 
     private class Piece(val edge: Int, val direction: Int, val points: DoubleArray, val endVertex: Int)
 
+    /** Snap a user-edited waypoint to the nearest road usable by the selected profile. */
+    @Synchronized
+    fun snapToRoad(profile: RoutingProfile, latitude: Double, longitude: Double): Snap? =
+        index.snap(profile, latitude, longitude, MAX_SNAP_METERS)
+
+    /**
+     * Routes through an ordered list of points. Each adjacent pair is routed independently and
+     * the resulting geometry/instructions are merged into one continuous route.
+     */
+    @Synchronized
+    fun route(profile: RoutingProfile, points: List<Pair<Double, Double>>): RouteResult {
+        if (points.size < 2) return RouteResult.failed(RouteFailure.NO_PATH)
+        val geometry = ArrayList<Double>()
+        val steps = ArrayList<RouteStep>()
+        var duration = 0.0
+        var distanceOffset = 0.0
+        for (legIndex in 0 until points.lastIndex) {
+            val from = points[legIndex]
+            val to = points[legIndex + 1]
+            val result = route(profile, from.first, from.second, to.first, to.second)
+            val leg = result.route ?: return RouteResult.failed(result.failure ?: RouteFailure.NO_PATH)
+            val firstPoint = if (legIndex == 0) 0 else 1
+            for (i in firstPoint until leg.pointCount) {
+                geometry.add(leg.lat(i))
+                geometry.add(leg.lon(i))
+            }
+            for (step in leg.steps) {
+                if (legIndex > 0 && step.maneuver == Maneuver.START) continue
+                if (legIndex < points.lastIndex - 1 && step.maneuver == Maneuver.ARRIVE) continue
+                steps.add(RouteStep(
+                    step.maneuver,
+                    step.text,
+                    distanceOffset + step.distanceFromStartMeters,
+                    step.lat,
+                    step.lon
+                ))
+            }
+            distanceOffset += leg.distanceMeters
+            duration += leg.durationSeconds
+            if (legIndex < points.lastIndex - 1) {
+                steps.add(RouteStep(
+                    Maneuver.WAYPOINT,
+                    "Промежуточная точка",
+                    distanceOffset,
+                    leg.lat(leg.pointCount - 1),
+                    leg.lon(leg.pointCount - 1)
+                ))
+            }
+        }
+        return RouteResult.found(Route(profile, geometry.toDoubleArray(), duration, steps))
+    }
+
     @Synchronized
     fun route(profile: RoutingProfile, lat1: Double, lon1: Double, lat2: Double, lon2: Double): RouteResult {
         val a = index.snap(profile, lat1, lon1, MAX_SNAP_METERS) ?: return RouteResult.failed(RouteFailure.NO_ROAD_NEAR_START)

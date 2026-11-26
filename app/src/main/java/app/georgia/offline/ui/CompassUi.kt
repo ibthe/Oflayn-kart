@@ -7,6 +7,8 @@ import android.hardware.SensorEvent
 import android.hardware.SensorEventListener
 import android.hardware.SensorManager
 import android.location.Location
+import android.view.Surface
+import android.view.WindowManager
 import android.graphics.Paint
 import android.graphics.Typeface
 import androidx.compose.foundation.Canvas
@@ -90,55 +92,135 @@ fun rememberCompass(location: Location?): CompassState {
 
     DisposableEffect(context, declination) {
         val manager = context.getSystemService(Context.SENSOR_SERVICE) as SensorManager
-        val sensor = manager.getDefaultSensor(Sensor.TYPE_ROTATION_VECTOR)
-        if (sensor == null) {
+        val windowManager = context.getSystemService(Context.WINDOW_SERVICE) as WindowManager
+        val rotationSensor = manager.getDefaultSensor(Sensor.TYPE_ROTATION_VECTOR)
+        val accelerometer = manager.getDefaultSensor(Sensor.TYPE_ACCELEROMETER)
+        val magnetometer = manager.getDefaultSensor(Sensor.TYPE_MAGNETIC_FIELD)
+        val useRotationVector = rotationSensor != null
+
+        if (!useRotationVector && (accelerometer == null || magnetometer == null)) {
             state.heading = null
+            state.accuracy = SensorManager.SENSOR_STATUS_UNRELIABLE
             onDispose { }
         } else {
             val listener = object : SensorEventListener {
                 private val matrix = FloatArray(9)
-                private val remapped = FloatArray(9)
+                private val displayMatrix = FloatArray(9)
+                private val uprightMatrix = FloatArray(9)
                 private val orientation = FloatArray(3)
+                private val gravity = FloatArray(3)
+                private val geomagnetic = FloatArray(3)
+                private var hasGravity = false
+                private var hasGeomagnetic = false
                 private var smoothed: Float? = null
                 private var lastNormalized = 0f
 
                 override fun onSensorChanged(event: SensorEvent) {
-                    SensorManager.getRotationMatrixFromVector(matrix, event.values)
-                    SensorManager.getOrientation(matrix, orientation)
+                    if (useRotationVector) {
+                        if (event.sensor.type != Sensor.TYPE_ROTATION_VECTOR) return
+                        SensorManager.getRotationMatrixFromVector(matrix, event.values)
+                        state.accuracy = event.accuracy
+                    } else {
+                        when (event.sensor.type) {
+                            Sensor.TYPE_ACCELEROMETER -> {
+                                System.arraycopy(event.values, 0, gravity, 0, 3)
+                                hasGravity = true
+                            }
+                            Sensor.TYPE_MAGNETIC_FIELD -> {
+                                System.arraycopy(event.values, 0, geomagnetic, 0, 3)
+                                hasGeomagnetic = true
+                                state.accuracy = event.accuracy
+                            }
+                            else -> return
+                        }
+                        if (!hasGravity || !hasGeomagnetic) return
+                        if (!SensorManager.getRotationMatrix(matrix, null, gravity, geomagnetic)) return
+                    }
+
+                    // Sensor axes follow the device's natural orientation, not necessarily the
+                    // current screen orientation. Re-map before reading azimuth so landscape,
+                    // reverse portrait and naturally-landscape tablets use the visible top edge.
+                    val axes = CompassMath.screenAxes(windowManager.defaultDisplay.rotation)
+                    if (!SensorManager.remapCoordinateSystem(matrix, axes.first, axes.second, displayMatrix)) return
+                    SensorManager.getOrientation(displayMatrix, orientation)
                     val pitch = Math.toDegrees(orientation[1].toDouble())
-                    // Held upright (the natural way to read a compass) the flat-phone azimuth gets unstable,
-                    // so look along the back of the phone instead.
+
+                    // When held upright, the screen's top edge points almost vertically. Use the
+                    // screen normal (the direction the front of the phone faces) instead.
                     val azimuth = if (abs(pitch) > 50.0) {
-                        SensorManager.remapCoordinateSystem(matrix, SensorManager.AXIS_X, SensorManager.AXIS_Z, remapped)
-                        SensorManager.getOrientation(remapped, orientation)
+                        if (!SensorManager.remapCoordinateSystem(
+                                displayMatrix,
+                                SensorManager.AXIS_X,
+                                SensorManager.AXIS_Z,
+                                uprightMatrix
+                            )
+                        ) return
+                        SensorManager.getOrientation(uprightMatrix, orientation)
                         orientation[0]
                     } else {
                         orientation[0]
                     }
-                    val raw = GeoFormatting.normalizeHeading(Math.toDegrees(azimuth.toDouble()).toFloat() + (declination ?: 0f))
+
+                    val raw = GeoFormatting.normalizeHeading(
+                        Math.toDegrees(azimuth.toDouble()).toFloat() + (declination ?: 0f)
+                    )
                     val previous = smoothed
-                    val next = if (previous == null) {
+                    val value = if (previous == null) {
                         raw
                     } else {
-                        GeoFormatting.normalizeHeading(previous + Qibla.angleDifference(previous.toDouble(), raw.toDouble()).toFloat() * SMOOTHING)
+                        GeoFormatting.normalizeHeading(
+                            previous + Qibla.angleDifference(previous.toDouble(), raw.toDouble()).toFloat() * SMOOTHING
+                        )
                     }
-                    smoothed = next
-                    val step = Qibla.angleDifference(lastNormalized.toDouble(), next.toDouble()).toFloat()
+                    smoothed = value
+                    val step = Qibla.angleDifference(lastNormalized.toDouble(), value.toDouble()).toFloat()
                     state.unwrapped += step
-                    lastNormalized = next
-                    state.heading = next
+                    lastNormalized = value
+                    state.heading = value
                     state.trueNorth = declination != null
                 }
 
                 override fun onAccuracyChanged(sensor: Sensor?, accuracy: Int) {
-                    state.accuracy = accuracy
+                    if (sensor?.type == Sensor.TYPE_ROTATION_VECTOR || sensor?.type == Sensor.TYPE_MAGNETIC_FIELD) {
+                        state.accuracy = accuracy
+                    }
                 }
             }
-            manager.registerListener(listener, sensor, SensorManager.SENSOR_DELAY_GAME)
+
+            val registered = if (useRotationVector) {
+                manager.registerListener(listener, rotationSensor, SensorManager.SENSOR_DELAY_GAME)
+            } else {
+                val accelerationRegistered = manager.registerListener(
+                    listener, accelerometer, SensorManager.SENSOR_DELAY_GAME
+                )
+                val magneticRegistered = manager.registerListener(
+                    listener, magnetometer, SensorManager.SENSOR_DELAY_GAME
+                )
+                accelerationRegistered && magneticRegistered
+            }
+
+            if (!registered) {
+                manager.unregisterListener(listener)
+                state.heading = null
+                state.accuracy = SensorManager.SENSOR_STATUS_UNRELIABLE
+            }
             onDispose { manager.unregisterListener(listener) }
         }
     }
     return state
+}
+
+/**
+ * Maps the sensor's natural coordinate system to the current display orientation before azimuth
+ * is read. The sensor coordinate system is independent of screen rotation.
+ */
+internal object CompassMath {
+    fun screenAxes(rotation: Int): Pair<Int, Int> = when (rotation) {
+        Surface.ROTATION_90 -> SensorManager.AXIS_Y to SensorManager.AXIS_MINUS_X
+        Surface.ROTATION_180 -> SensorManager.AXIS_MINUS_X to SensorManager.AXIS_MINUS_Y
+        Surface.ROTATION_270 -> SensorManager.AXIS_MINUS_Y to SensorManager.AXIS_X
+        else -> SensorManager.AXIS_X to SensorManager.AXIS_Y
+    }
 }
 
 private const val SMOOTHING = 0.18f
@@ -222,25 +304,31 @@ fun CompassDial(
                 drawLabel(labelPaint, degree.toString(), center, card * 0.70f, degree.toFloat(), card * 0.085f, faint)
             }
 
-            // Qibla: a dashed line from the hub and the Kaaba on the rim.
-            if (qiblaBearing != null) {
-                val angle = Math.toRadians(qiblaBearing.toDouble())
-                val dx = sin(angle).toFloat()
-                val dy = -cos(angle).toFloat()
-                val lineColor = if (aligned) glow else accent
-                drawLine(
-                    color = lineColor,
-                    start = Offset(center.x + dx * card * 0.12f, center.y + dy * card * 0.12f),
-                    end = Offset(center.x + dx * card * 0.50f, center.y + dy * card * 0.50f),
-                    strokeWidth = 3 * dp,
-                    pathEffect = PathEffect.dashPathEffect(floatArrayOf(10 * dp, 8 * dp))
-                )
-                val marker = Offset(center.x + dx * outer * 0.935f, center.y + dy * outer * 0.935f)
-                // Keep the Kaaba upright on screen while the card turns under it.
-                rotate(degrees = unwrappedHeading, pivot = marker) {
-                    drawKaaba(marker, outer * if (aligned) 0.105f else 0.085f, surface, glow.takeIf { aligned } ?: accent)
-                }
-            }
+        }
+
+        // Draw the Qibla direction in screen coordinates, independently from the animated
+        // compass-card rotation. This keeps the indicator locked to the same heading used by
+        // the numeric turn instruction, even when the dial's unwrapped animation crosses 360°.
+        if (qiblaBearing != null) {
+            val relativeBearing = Qibla.angleDifference(heading.toDouble(), qiblaBearing.toDouble())
+            val angle = Math.toRadians(relativeBearing)
+            val dx = sin(angle).toFloat()
+            val dy = -cos(angle).toFloat()
+            val lineColor = if (aligned) glow else accent
+            drawLine(
+                color = lineColor,
+                start = Offset(center.x + dx * card * 0.12f, center.y + dy * card * 0.12f),
+                end = Offset(center.x + dx * card * 0.50f, center.y + dy * card * 0.50f),
+                strokeWidth = 3 * dp,
+                pathEffect = PathEffect.dashPathEffect(floatArrayOf(10 * dp, 8 * dp))
+            )
+            val marker = Offset(center.x + dx * outer * 0.935f, center.y + dy * outer * 0.935f)
+            drawKaaba(
+                marker,
+                outer * if (aligned) 0.105f else 0.085f,
+                surface,
+                glow.takeIf { aligned } ?: accent
+            )
         }
 
         // Fixed pointer at the top: the heading is read here.

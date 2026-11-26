@@ -76,6 +76,26 @@ class RouterTest {
     }
 
     @Test
+    fun routeCanPassThroughAnIntermediateWaypoint() {
+        val result = router.route(
+            RoutingProfile.CAR,
+            listOf(
+                41.7001 to 44.8002,
+                41.7 to 44.81,
+                41.6999 to 44.8198
+            )
+        )
+        org.junit.Assert.assertNotNull("route failed: ${result.failure}", result.route)
+        val route = result.route!!
+        assertTrue(route.distanceMeters > 1_000.0)
+        assertTrue(route.steps.any { it.maneuver == Maneuver.WAYPOINT })
+        assertEquals(Maneuver.START, route.steps.first().maneuver)
+        assertEquals(Maneuver.ARRIVE, route.steps.last().maneuver)
+        val waypoint = route.steps.first { it.maneuver == Maneuver.WAYPOINT }
+        assertTrue(waypoint.distanceFromStartMeters in 500.0..1_500.0)
+    }
+
+    @Test
     fun projectionFollowsTheRoute() {
         val route = route(RoutingProfile.CAR, 41.7001, 44.8002, 41.6999, 44.8198)
         val onRoute = route.project(41.7, 44.81)

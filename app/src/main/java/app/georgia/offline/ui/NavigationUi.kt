@@ -93,7 +93,15 @@ class RouteSession {
     }
 
     /** Computes a route from the given position. When [rerouting] the current route stays on screen until the new one is ready. */
-    suspend fun plan(context: Context, fromLat: Double, fromLon: Double, toLat: Double, toLon: Double, rerouting: Boolean) {
+    suspend fun plan(
+        context: Context,
+        fromLat: Double,
+        fromLon: Double,
+        toLat: Double,
+        toLon: Double,
+        rerouting: Boolean,
+        waypoints: List<Pair<Double, Double>> = emptyList()
+    ) {
         val id = ++requestId
         busy = true
         if (!rerouting) message = null
@@ -105,7 +113,12 @@ class RouteSession {
             busy = false
             return
         }
-        val result = withContext(Dispatchers.Default) { router.route(profile, fromLat, fromLon, toLat, toLon) }
+        val orderedPoints = buildList {
+            add(fromLat to fromLon)
+            addAll(waypoints)
+            add(toLat to toLon)
+        }
+        val result = withContext(Dispatchers.Default) { router.route(profile, orderedPoints) }
         if (id != requestId) return
         busy = false
         val found = result.route
@@ -116,7 +129,7 @@ class RouteSession {
             segmentHint = 0
             offRouteFixes = 0
             announced.clear()
-            if (!rerouting) fitToken++
+
         } else {
             message = when (result.failure) {
                 RouteFailure.NO_ROAD_NEAR_START -> "Рядом с вами нет подходящей дороги для этого способа."
@@ -199,9 +212,14 @@ fun formatDuration(seconds: Double): String {
     return if (minutes < 60) "$minutes мин" else "${minutes / 60} ч ${minutes % 60} мин"
 }
 
-private fun maneuverGlyph(maneuver: Maneuver): String = if (maneuver == Maneuver.ARRIVE) "●" else "↑"
+private fun maneuverGlyph(maneuver: Maneuver): String = when (maneuver) {
+    Maneuver.ARRIVE -> "●"
+    Maneuver.WAYPOINT -> "◆"
+    else -> "↑"
+}
 
 private fun maneuverRotation(maneuver: Maneuver): Float = when (maneuver) {
+    Maneuver.WAYPOINT -> 0f
     Maneuver.SLIGHT_LEFT -> -45f
     Maneuver.LEFT -> -90f
     Maneuver.SHARP_LEFT -> -135f
@@ -223,17 +241,26 @@ private fun profileChipColors() = FilterChipDefaults.filterChipColors(
 fun RoutePlannerCard(
     target: NavigationTarget,
     origin: NavigationTarget?,
+    viaPoints: List<NavigationTarget>,
+    onMoveWaypoint: (Int, Int) -> Unit,
+    onRemoveWaypoint: (Int) -> Unit,
     onSave: (() -> Unit)?,
     location: android.location.Location?,
     session: RouteSession,
     onProfile: (RoutingProfile) -> Unit,
+    selectionMode: RoutePointRole?,
+    onChooseOrigin: () -> Unit,
+    onChooseDestination: () -> Unit,
+    onUseMyLocation: () -> Unit,
+    onDestinationMyLocation: () -> Unit,
+    onSwap: () -> Unit,
     onPlan: () -> Unit,
     onStart: () -> Unit,
     onExternal: () -> Unit,
     onCancel: () -> Unit
 ) {
     Surface(
-        modifier = Modifier.fillMaxWidth().appear(),
+        modifier = Modifier.fillMaxWidth().appear().dismissOnSwipeDown(onCancel),
         shape = RoundedCornerShape(Radius.card),
         color = MaterialTheme.colorScheme.glass(app.georgia.offline.ui.theme.LocalLayerAlpha.current),
         contentColor = MaterialTheme.colorScheme.onSurface,
@@ -241,6 +268,14 @@ fun RoutePlannerCard(
         shadowElevation = 16.dp
     ) {
         Column(Modifier.padding(Space.m), verticalArrangement = Arrangement.spacedBy(Space.s)) {
+            // A visible grab handle makes the downward swipe-to-collapse discoverable.
+            Box(
+                Modifier.align(Alignment.CenterHorizontally)
+                    .padding(bottom = Space.xxs)
+                    .size(width = 36.dp, height = 4.dp)
+                    .clip(CircleShape)
+                    .background(MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.38f))
+            )
             val route = session.route
             val startLat = origin?.latitude ?: location?.latitude
             val startLon = origin?.longitude ?: location?.longitude
@@ -249,33 +284,100 @@ fun RoutePlannerCard(
             } else {
                 null
             }
-            if (origin != null) {
+            Column(verticalArrangement = Arrangement.spacedBy(Space.xs)) {
+                Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                    Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(Space.xxs)) {
+                        Text("ОТКУДА", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                        Text(
+                            origin?.name ?: "Моё местоположение",
+                            style = MaterialTheme.typography.bodyLarge,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis
+                        )
+                    }
+                }
+                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(Space.xs)) {
+                    TextButton(onClick = onUseMyLocation, modifier = Modifier.weight(1f), contentPadding = PaddingValues(horizontal = Space.s)) {
+                        Text("Моё местоположение", maxLines = 1, softWrap = false)
+                    }
+                    TextButton(onClick = onChooseOrigin, modifier = Modifier.weight(1f).background(if (origin != null) MaterialTheme.colorScheme.primaryContainer else Color.Transparent, RoundedCornerShape(Space.m)), contentPadding = PaddingValues(horizontal = Space.s)) {
+                        Text("Точка на карте", maxLines = 1, softWrap = false)
+                    }
+                }
+                Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                    Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(Space.xxs)) {
+                        Text("КУДА", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                        Text(
+                            target.name,
+                            style = MaterialTheme.typography.bodyLarge,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis
+                        )
+                    }
+                }
+                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(Space.xs)) {
+                    TextButton(
+                        onClick = onDestinationMyLocation,
+                        enabled = location != null,
+                        contentPadding = PaddingValues(horizontal = Space.s)
+                    ) {
+                        Text("Моё местоположение", maxLines = 1, softWrap = false)
+                    }
+                    TextButton(onClick = onChooseDestination, modifier = Modifier.weight(1f).background(MaterialTheme.colorScheme.primaryContainer, RoundedCornerShape(Space.m)), contentPadding = PaddingValues(horizontal = Space.s)) {
+                        Text("Точка на карте", maxLines = 1, softWrap = false)
+                    }
+                }
+                if (origin != null) {
+                    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
+                        TextButton(onClick = onSwap, contentPadding = PaddingValues(horizontal = Space.s)) {
+                            Text("Поменять местами", maxLines = 1, softWrap = false)
+                        }
+                    }
+                }
+                if (viaPoints.isNotEmpty()) {
+                    Column(Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(Space.xxs)) {
+                        Text("ПРОМЕЖУТОЧНЫЕ ТОЧКИ", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                        viaPoints.forEachIndexed { index, point ->
+                            Row(
+                                Modifier.fillMaxWidth(),
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(Space.xxs)
+                            ) {
+                                Text("${index + 1}.", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.primary)
+                                Text(point.name, modifier = Modifier.weight(1f), style = MaterialTheme.typography.bodyMedium, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                                TextButton(onClick = { onMoveWaypoint(index, index - 1) }, enabled = index > 0, contentPadding = PaddingValues(horizontal = Space.xxs)) { Text("↑") }
+                                TextButton(onClick = { onMoveWaypoint(index, index + 1) }, enabled = index < viaPoints.lastIndex, contentPadding = PaddingValues(horizontal = Space.xxs)) { Text("↓") }
+                                TextButton(onClick = { onRemoveWaypoint(index) }, contentPadding = PaddingValues(horizontal = Space.xxs)) { Text("×") }
+                            }
+                        }
+                    }
+                }
+            }
+            if (selectionMode != null) {
                 Text(
-                    "От: ${origin.name}",
-                    style = MaterialTheme.typography.labelLarge,
-                    color = MaterialTheme.colorScheme.tertiary,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis
+                    if (selectionMode == RoutePointRole.START)
+                        "Удерживайте нужное место на карте, чтобы задать начало маршрута."
+                    else
+                        "Удерживайте нужное место на карте, чтобы изменить пункт назначения.",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.primary
                 )
             }
-            Text(
-                if (origin != null) "До: ${target.name}" else target.name,
-                style = MaterialTheme.typography.titleMedium,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis
-            )
-            Text(
-                when {
-                    route != null -> "${GeoMath.formatDistance(route.distanceMeters)} по дорогам · ${formatDuration(route.durationSeconds)}"
-                    distance != null -> "${GeoMath.formatDistance(distance)} по прямой"
-                    else -> "Жду сигнал GPS…"
-                },
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant
-            )
+            if (route == null) {
+                Text(
+                    distance?.let { "${GeoMath.formatDistance(it)} по прямой" } ?: "Жду сигнал GPS…",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
             Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(Space.xs)) {
                 RoutingProfile.entries.forEach { option ->
-                    SelectPill(label = option.label, selected = session.profile == option, onClick = { onProfile(option) })
+                    SelectPill(
+                        label = option.label,
+                        selected = session.profile == option,
+                        onClick = { onProfile(option) },
+                        transparentWhenUnselected = true
+                    )
                 }
             }
             session.message?.let {
@@ -288,23 +390,77 @@ fun RoutePlannerCard(
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
             }
-            Row(horizontalArrangement = Arrangement.spacedBy(Space.xxs), verticalAlignment = Alignment.CenterVertically) {
+            if (selectionMode == null) {
                 if (route == null) {
                     GradientButton(
-                        text = if (session.busy) "Считаю…" else "Маршрут",
+                        text = if (session.busy) "Считаю…" else "Построить маршрут",
                         onClick = onPlan,
+                        modifier = Modifier.fillMaxWidth(),
                         enabled = !session.busy && (origin != null || location != null)
                     )
                 } else if (origin == null) {
-                    GradientButton(text = "Начать", onClick = onStart)
+                    GradientButton(text = "Начать навигацию", onClick = onStart, modifier = Modifier.fillMaxWidth())
                 }
+            }
+            Row(
+                Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(Space.xs),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
                 if (onSave != null) {
-                    TextButton(onClick = onSave, contentPadding = PaddingValues(horizontal = Space.s)) { Text("Сохранить") }
+                    TextButton(
+                        onClick = onSave,
+                        modifier = Modifier.weight(1f),
+                        contentPadding = PaddingValues(horizontal = Space.xs)
+                    ) {
+                        Text("Сохранить", maxLines = 1, softWrap = false, overflow = TextOverflow.Ellipsis)
+                    }
                 }
-                if (origin == null) {
-                    TextButton(onClick = onExternal, contentPadding = PaddingValues(horizontal = Space.s)) { Text("В навигаторе") }
+                if (origin == null && selectionMode == null) {
+                    TextButton(
+                        onClick = onExternal,
+                        modifier = Modifier.weight(1f),
+                        contentPadding = PaddingValues(horizontal = Space.xs)
+                    ) {
+                        Text("Навигатор", maxLines = 1, softWrap = false, overflow = TextOverflow.Ellipsis)
+                    }
                 }
-                TextButton(onClick = onCancel, contentPadding = PaddingValues(horizontal = Space.s)) { Text("Отмена") }
+            }
+            TextButton(
+                onClick = onCancel,
+                modifier = Modifier.align(Alignment.End),
+                contentPadding = PaddingValues(horizontal = Space.s)
+            ) {
+                Text("Закрыть")
+            }
+        }
+    }
+}
+
+/** Compact route summary anchored below the map controls on the main map screen. */
+@Composable
+fun RouteSummaryBar(route: Route, modifier: Modifier = Modifier) {
+    Surface(
+        modifier = modifier.fillMaxWidth().appear(),
+        shape = RoundedCornerShape(Radius.card),
+        color = MaterialTheme.colorScheme.glass(app.georgia.offline.ui.theme.LocalLayerAlpha.current),
+        contentColor = MaterialTheme.colorScheme.onSurface,
+        border = BorderStroke(1.dp, MaterialTheme.colorScheme.edgeBrush()),
+        shadowElevation = 12.dp
+    ) {
+        Row(
+            Modifier.padding(horizontal = Space.m, vertical = Space.s),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(Space.s)
+        ) {
+            Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(Space.xxs)) {
+                Text("МАРШРУТ ПОСТРОЕН", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                Text(
+                    "${GeoMath.formatDistance(route.distanceMeters)} · ${formatDuration(route.durationSeconds)}",
+                    style = MaterialTheme.typography.titleMedium,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
+                )
             }
         }
     }

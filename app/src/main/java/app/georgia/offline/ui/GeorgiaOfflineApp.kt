@@ -16,6 +16,7 @@ import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.Brush
@@ -126,6 +127,9 @@ fun GeorgiaOfflineApp(settings: LocalSettings) {
     var selectedTab by rememberSaveable { mutableStateOf(AppTab.MAP.name) }
     val navigation = remember { NavigationState() }
     val tracker = rememberLocationTracker()
+    // Keep route data above AnimatedContent so switching tabs does not discard it.
+    val routeSession = remember { RouteSession() }
+    LaunchedEffect(navigation.target, navigation.origin, navigation.viaPoints.toList()) { routeSession.reset() }
     // A tab name saved by an older version (for example the removed ROUTE tab) falls back to the map.
     val currentTab = AppTab.entries.firstOrNull { it.name == selectedTab } ?: AppTab.MAP
     val mode = resolveThemeMode(settings.themeMode, isSystemInDarkTheme())
@@ -143,9 +147,10 @@ fun GeorgiaOfflineApp(settings: LocalSettings) {
                         label = "tabs"
                     ) { tab ->
                         when (tab) {
-                            AppTab.MAP -> MapScreen(Modifier.padding(padding), settings, navigation, tracker)
+                            AppTab.MAP -> MapScreen(Modifier.padding(padding), settings, navigation, tracker, routeSession)
                             AppTab.DISCOVER -> DiscoverScreen(Modifier.padding(padding), settings, tracker) { name, latitude, longitude ->
                                 navigation.target = NavigationTarget(name, latitude, longitude)
+                                navigation.routeMenuVisible = true
                                 navigation.selectedPlaceId = null
                                 selectedTab = AppTab.MAP.name
                             }
@@ -270,6 +275,70 @@ private fun MapChip(
 ) = GlassPill(modifier = modifier, onClick = onClick, centered = centered, content = content)
 
 @Composable
+private fun MapStylePicker(settings: LocalSettings) {
+    val choices = listOf(
+        "classic" to "Классика",
+        "outdoor" to "Природа",
+        "motorider" to "Авто",
+        "biker" to "Велосипед"
+    )
+    var expanded by rememberSaveable { mutableStateOf(false) }
+    val selectedLabel = choices.firstOrNull { it.first == settings.mapTheme }?.second ?: "Классика"
+
+    Column(verticalArrangement = Arrangement.spacedBy(Space.xs)) {
+        MapChip(onClick = { expanded = !expanded }) {
+            Text(
+                "Стиль: $selectedLabel",
+                style = MaterialTheme.typography.labelLarge,
+                fontWeight = FontWeight.SemiBold
+            )
+            Text(
+                if (expanded) "⌃" else "⌄",
+                style = MaterialTheme.typography.labelMedium,
+                color = MaterialTheme.colorScheme.primary
+            )
+        }
+        AnimatedVisibility(
+            visible = expanded,
+            enter = fadeIn(tween(180)) + slideInVertically(tween(220)) { -it / 5 },
+            exit = fadeOut(tween(140)) + slideOutVertically(tween(180)) { -it / 5 }
+        ) {
+            Surface(
+                modifier = Modifier.widthIn(min = 208.dp, max = 260.dp),
+                shape = RoundedCornerShape(20.dp),
+                color = MaterialTheme.colorScheme.glass(LocalLayerAlpha.current),
+                contentColor = MaterialTheme.colorScheme.onSurface,
+                border = BorderStroke(1.dp, MaterialTheme.colorScheme.edgeBrush()),
+                shadowElevation = 6.dp
+            ) {
+                Column(
+                    Modifier.padding(horizontal = Space.s, vertical = Space.xs),
+                    verticalArrangement = Arrangement.spacedBy(Space.xs)
+                ) {
+                    choices.chunked(2).forEach { rowChoices ->
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(Space.xs)
+                        ) {
+                            rowChoices.forEach { (value, label) ->
+                                SelectPill(
+                                    label = label,
+                                    selected = settings.mapTheme == value,
+                                    onClick = {
+                                        settings.updateMapTheme(value)
+                                        expanded = false
+                                    }
+                                )
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+@Composable
 private fun MapDetails(
     settings: LocalSettings,
     hasMap: Boolean,
@@ -335,13 +404,9 @@ private fun openExternalNavigator(context: android.content.Context, target: Navi
 }
 
 @Composable
-private fun MapScreen(modifier: Modifier, settings: LocalSettings, navigation: NavigationState, tracker: LocationTracker) {
+private fun MapScreen(modifier: Modifier, settings: LocalSettings, navigation: NavigationState, tracker: LocationTracker, session: RouteSession) {
     val context = LocalContext.current
     val coroutineScope = rememberCoroutineScope()
-    var isImporting by remember { mutableStateOf(false) }
-    var importMessage by remember { mutableStateOf<String?>(null) }
-    var importError by remember { mutableStateOf(false) }
-
     // A full-map CI build packages offline/georgia.map in the APK. Keep imported
     // maps untouched; refresh only the bundled copy when its embedded SHA-256 changes.
     LaunchedEffect(settings.mapDisabled, settings.mapFilePath, settings.mapFileIsBundled) {
@@ -349,55 +414,22 @@ private fun MapScreen(modifier: Modifier, settings: LocalSettings, navigation: N
         val savedFileExists = !savedPath.isNullOrBlank() && File(savedPath).isFile
         val keepUserImportedMap = savedFileExists && !settings.mapFileIsBundled
         if (!settings.mapDisabled && !keepUserImportedMap) {
-            isImporting = true
             try {
                 val bundled = withContext(Dispatchers.IO) {
                     MapFileRepository.installBundledMap(context)
                 }
-                if (bundled != null) {
-                    val wasExistingBundled = settings.mapFileIsBundled && savedPath == bundled.absolutePath
-                    settings.setMapFilePath(bundled.absolutePath, bundled = true)
-                    if (!wasExistingBundled) {
-                        importMessage = "Встроенная карта Грузии установлена (${bundled.length() / (1024 * 1024)} МБ)."
-                    } else {
-                        importMessage = "Встроенная карта Грузии проверена и актуальна."
-                    }
-                }
+                if (bundled != null) settings.setMapFilePath(bundled.absolutePath, bundled = true)
             } catch (error: Exception) {
-                importError = true
-                importMessage = error.message ?: "Не удалось установить встроенную карту."
-            } finally {
-                isImporting = false
-            }
-        }
-    }
-
-    val mapPicker = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
-        if (uri != null) {
-            coroutineScope.launch {
-                isImporting = true
-                importMessage = "Копирую и проверяю файл карты…"
-                importError = false
-                try {
-                    val file = withContext(Dispatchers.IO) {
-                        MapFileRepository.importGeorgiaMap(context, uri)
-                    }
-                    settings.setMapFilePath(file.absolutePath, bundled = false)
-                    importMessage = "Карта проверена: ${file.length() / (1024 * 1024)} МБ"
-                } catch (error: Exception) {
-                    importError = true
-                    importMessage = error.message ?: "Не удалось импортировать файл карты."
-                } finally {
-                    isImporting = false
-                }
+                android.widget.Toast.makeText(
+                    context,
+                    error.message ?: "Не удалось установить встроенную карту.",
+                    android.widget.Toast.LENGTH_LONG
+                ).show()
             }
         }
     }
     val mapFile = settings.mapFilePath?.let(::File)?.takeIf { it.isFile && it.length() > 0L }
     val preferredLanguage = MapLanguageResolver.preferredLanguage(settings.enabledLanguages)
-
-    val openPicker: () -> Unit = { mapPicker.launch(arrayOf("*/*")) }
-    var showDetails by rememberSaveable { mutableStateOf(false) }
     var recenterToken by remember { mutableIntStateOf(0) }
     var zoomInToken by remember { mutableIntStateOf(0) }
     var zoomOutToken by remember { mutableIntStateOf(0) }
@@ -412,7 +444,6 @@ private fun MapScreen(modifier: Modifier, settings: LocalSettings, navigation: N
     }
     val selectedPlace = savedPlaces.firstOrNull { it.id == navigation.selectedPlaceId }
 
-    val session = remember { RouteSession() }
     val speaker = remember { Speaker(context) }
     DisposableEffect(Unit) { onDispose { speaker.shutdown() } }
     val hostView = LocalView.current
@@ -420,8 +451,7 @@ private fun MapScreen(modifier: Modifier, settings: LocalSettings, navigation: N
         hostView.keepScreenOn = session.navigating
         onDispose { hostView.keepScreenOn = false }
     }
-    // A new or cleared destination invalidates any route.
-    LaunchedEffect(target, navigation.origin) { session.reset() }
+    // Route state is owned by GeorgiaOfflineApp and survives MapScreen leaving composition.
 
     fun planFrom(fix: android.location.Location?, rerouting: Boolean) {
         val goal = navigation.target ?: return
@@ -429,7 +459,19 @@ private fun MapScreen(modifier: Modifier, settings: LocalSettings, navigation: N
         val startLat = navigation.origin?.latitude ?: fix?.latitude ?: return
         val startLon = navigation.origin?.longitude ?: fix?.longitude ?: return
         coroutineScope.launch {
-            session.plan(context, startLat, startLon, goal.latitude, goal.longitude, rerouting)
+            session.plan(
+                context,
+                startLat,
+                startLon,
+                goal.latitude,
+                goal.longitude,
+                rerouting,
+                navigation.viaPoints.map { it.latitude to it.longitude }
+            )
+            if (!rerouting && session.route != null) {
+                delay(7_000)
+                if (!session.navigating && session.route != null) session.fitToken++
+            }
             if (rerouting && session.navigating && session.voice && session.message == null) speaker.speak("Маршрут перестроен")
         }
     }
@@ -460,13 +502,17 @@ private fun MapScreen(modifier: Modifier, settings: LocalSettings, navigation: N
                 mapTheme = settings.mapTheme,
                 modifier = Modifier.fillMaxSize(),
                 userLocation = tracker.location,
-                destination = target?.let { LatLong(it.latitude, it.longitude) },
+                destination = if (navigation.pointSelection == RoutePointRole.START) null else target?.let { LatLong(it.latitude, it.longitude) },
                 accentColor = MaterialTheme.colorScheme.tertiary.toArgb(),
                 destinationColor = MaterialTheme.colorScheme.primary.toArgb(),
                 recenterToken = recenterToken,
                 zoomInToken = zoomInToken,
                 zoomOutToken = zoomOutToken,
-                routePoints = session.route?.points,
+                routePoints = if (navigation.pointSelection == null) session.route?.points else null,
+                viaPoints = session.route?.steps
+                    ?.filter { it.maneuver == app.georgia.offline.routing.Maneuver.WAYPOINT }
+                    ?.map { LatLong(it.lat, it.lon) }
+                    ?: emptyList(),
                 routeColor = MaterialTheme.colorScheme.tertiary.toArgb(),
                 followUser = session.navigating,
                 fitToken = session.fitToken,
@@ -479,73 +525,108 @@ private fun MapScreen(modifier: Modifier, settings: LocalSettings, navigation: N
                 focusToken = navigation.focusToken,
                 onPlaceTap = { id -> if (!session.navigating) navigation.selectedPlaceId = id },
                 onLongPress = { point ->
-                    navigation.target = NavigationTarget("Точка на карте", point.latitude, point.longitude)
-                    navigation.selectedPlaceId = null
+                    if (!session.navigating) session.reset()
+                    navigation.chooseMapPoint("Точка на карте", point.latitude, point.longitude)
+                },
+                onRouteDrag = { handle, index, point ->
+                    if (!session.navigating) {
+                        val moved = NavigationTarget("Точка маршрута", point.latitude, point.longitude)
+                        when (handle) {
+                            RouteDragTarget.START -> navigation.origin = moved
+                            RouteDragTarget.DESTINATION -> navigation.target = moved
+                            RouteDragTarget.WAYPOINT -> navigation.updateWaypoint(index, moved)
+                            RouteDragTarget.ROUTE_LINE -> {
+                                val currentRoute = session.route
+                                val along = currentRoute?.project(point.latitude, point.longitude)?.alongMeters ?: Double.MAX_VALUE
+                                val insertAt = navigation.viaPoints.indexOfFirst { via ->
+                                    currentRoute?.project(via.latitude, via.longitude)?.alongMeters?.let { it > along } == true
+                                }.let { if (it < 0) navigation.viaPoints.size else it }
+                                navigation.addWaypoint(moved, insertAt)
+                            }
+                        }
+                        session.reset()
+                        coroutineScope.launch {
+                            delay(120)
+                            planFrom(tracker.location, rerouting = false)
+                        }
+                    }
                 }
             )
-            AnimatedVisibility(
-                visible = showDetails,
-                enter = fadeIn(tween(260)) + slideInVertically(tween(360)) { it / 6 },
-                exit = fadeOut(tween(180)) + slideOutVertically(tween(240)) { it / 6 }
-            ) {
-                Surface(
-                    modifier = Modifier.fillMaxSize(),
-                    color = MaterialTheme.colorScheme.background.copy(alpha = 0.97f),
-                    contentColor = MaterialTheme.colorScheme.onBackground
+            if (target != null && !navigation.routeMenuVisible && !session.navigating && navigation.pointSelection == null) {
+                MapChip(
+                    modifier = Modifier.align(Alignment.TopCenter).padding(Space.s),
+                    onClick = { navigation.openRouteMenu() }
                 ) {
-                    Column(
-                        Modifier.fillMaxSize().verticalScroll(rememberScrollState())
-                            .padding(start = Space.card, end = Space.card, top = Space.card, bottom = Space.xl + Space.l)
-                    ) {
-                        Text("О карте", style = MaterialTheme.typography.headlineSmall, modifier = Modifier.padding(bottom = Space.m))
-                        MapDetails(settings, true, preferredLanguage, isImporting, importMessage, importError, openPicker)
+                    Text("Маршрут", style = MaterialTheme.typography.labelLarge, fontWeight = FontWeight.SemiBold)
+                    if (session.route != null) {
+                        Text(GeoMath.formatDistance(session.route!!.distanceMeters), style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.primary)
                     }
                 }
             }
-            if (showDetails) {
-                // The details overlay above is drawn by AnimatedVisibility; no other top chrome while it is open.
-            } else if (session.navigating && session.route != null) {
-                NavigationBanner(session.route!!, session.along, Modifier.align(Alignment.TopCenter).padding(Space.s))
-            } else {
-                Column(Modifier.align(Alignment.TopStart).padding(Space.s), verticalArrangement = Arrangement.spacedBy(Space.xs)) {
-                    MapChip {
-                        PulseDot(MaterialTheme.colorScheme.tertiary)
-                        Text("Без сети", style = MaterialTheme.typography.labelLarge)
-                    }
-                    val trackerError = tracker.error
-                    if (trackerError != null) {
-                        MapChip { Text(trackerError, style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.error) }
-                    } else if (tracker.active && tracker.location == null) {
-                        MapChip { Text("Ищу сигнал GPS…", style = MaterialTheme.typography.labelMedium) }
-                    }
+            if (navigation.pointSelection != null) {
+                MapChip(
+                    modifier = Modifier.align(Alignment.TopCenter).padding(Space.s),
+                    onClick = { navigation.pointSelection = null }
+                ) {
+                    Text(
+                        if (navigation.pointSelection == RoutePointRole.START)
+                            "Удерживайте карту: выберите начало маршрута · Отмена"
+                        else
+                            "Удерживайте карту: выберите пункт назначения · Отмена",
+                        style = MaterialTheme.typography.labelMedium
+                    )
                 }
-                Text(
-                    "© OpenStreetMap",
-                    modifier = Modifier.align(Alignment.TopEnd).padding(top = Space.m, end = Space.m),
-                    style = MaterialTheme.typography.labelSmall,
-                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f)
-                )
+            }
+            if (navigation.pointSelection == null) {
+                if (session.navigating && session.route != null) {
+                    Column(
+                        Modifier.align(Alignment.TopCenter).padding(Space.s),
+                        horizontalAlignment = Alignment.CenterHorizontally,
+                        verticalArrangement = Arrangement.spacedBy(Space.xs)
+                    ) {
+                        NavigationBanner(session.route!!, session.along)
+                        MapStylePicker(settings)
+                    }
+                } else {
+                    Column(
+                        Modifier.align(Alignment.TopStart).padding(Space.s),
+                        verticalArrangement = Arrangement.spacedBy(Space.xs)
+                    ) {
+                        MapChip {
+                            PulseDot(MaterialTheme.colorScheme.tertiary)
+                            Text("Без сети", style = MaterialTheme.typography.labelLarge)
+                        }
+                        val trackerError = tracker.error
+                        if (trackerError != null) {
+                            MapChip { Text(trackerError, style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.error) }
+                        } else if (tracker.active && tracker.location == null) {
+                            MapChip { Text("Ищу сигнал GPS…", style = MaterialTheme.typography.labelMedium) }
+                        }
+                        MapStylePicker(settings)
+                    }
+                    Text(
+                        "© OpenStreetMap",
+                        modifier = Modifier.align(Alignment.TopEnd).padding(top = Space.m, end = Space.m),
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f)
+                    )
+                }
             }
             Column(
                 Modifier.align(Alignment.BottomCenter).fillMaxWidth().padding(Space.s),
                 verticalArrangement = Arrangement.spacedBy(Space.xs)
             ) {
                 Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.Bottom) {
-                    if (!showDetails) {
-                        Column(verticalArrangement = Arrangement.spacedBy(Space.xs)) {
-                            MapChip(modifier = Modifier.size(48.dp), onClick = { zoomInToken++ }, centered = true) {
-                                Text("+", style = MaterialTheme.typography.titleLarge)
-                            }
-                            MapChip(modifier = Modifier.size(48.dp), onClick = { zoomOutToken++ }, centered = true) {
-                                Text("−", style = MaterialTheme.typography.titleLarge)
-                            }
+                    Column(verticalArrangement = Arrangement.spacedBy(Space.xs)) {
+                        MapChip(modifier = Modifier.size(48.dp), onClick = { zoomInToken++ }, centered = true) {
+                            ZoomGlyph(color = MaterialTheme.colorScheme.onSurface, zoomIn = true)
                         }
-                    } else {
-                        Box {}
+                        MapChip(modifier = Modifier.size(48.dp), onClick = { zoomOutToken++ }, centered = true) {
+                            ZoomGlyph(color = MaterialTheme.colorScheme.onSurface, zoomIn = false)
+                        }
                     }
                     Column(horizontalAlignment = Alignment.End, verticalArrangement = Arrangement.spacedBy(Space.xs)) {
-                        if (!showDetails) {
-                            Row(
+                        Row(
                                 Modifier.height(48.dp)
                                     .shadow(12.dp, CircleShape)
                                     .clip(CircleShape)
@@ -566,17 +647,13 @@ private fun MapScreen(modifier: Modifier, settings: LocalSettings, navigation: N
                                     color = MaterialTheme.colorScheme.onPrimary
                                 )
                             }
-                        }
-                        if (!session.navigating || showDetails) {
-                            MapChip(onClick = { showDetails = !showDetails }) {
-                                Text(if (showDetails) "Закрыть" else "О карте", style = MaterialTheme.typography.labelLarge)
-                            }
-                        }
                     }
                 }
-                if (!showDetails) {
-                    val activeRoute = session.route
-                    if (target != null && session.navigating && activeRoute != null) {
+                val activeRoute = session.route
+                if (target != null && activeRoute != null && !session.navigating) {
+                    RouteSummaryBar(activeRoute)
+                }
+                if (target != null && session.navigating && activeRoute != null) {
                         NavigationFooter(activeRoute, session) {
                             session.reset()
                             navigation.clearRoute()
@@ -591,10 +668,14 @@ private fun MapScreen(modifier: Modifier, settings: LocalSettings, navigation: N
                             isCar = isCar,
                             onRouteHere = {
                                 navigation.target = NavigationTarget(selectedPlace.name, selectedPlace.latitude, selectedPlace.longitude)
+                                navigation.routeMenuVisible = true
+                                navigation.pointSelection = null
                                 navigation.selectedPlaceId = null
                             },
                             onRouteFrom = {
                                 navigation.origin = NavigationTarget(selectedPlace.name, selectedPlace.latitude, selectedPlace.longitude)
+                                navigation.routeMenuVisible = true
+                                navigation.pointSelection = null
                                 navigation.selectedPlaceId = null
                             },
                             onRename = { settings.renamePlace(selectedPlace.id, it) },
@@ -604,13 +685,24 @@ private fun MapScreen(modifier: Modifier, settings: LocalSettings, navigation: N
                             },
                             onClose = { navigation.selectedPlaceId = null }
                         )
-                    } else if (target != null) {
+                    } else if (target != null && navigation.routeMenuVisible && navigation.pointSelection == null) {
                         val alreadySaved = settings.allPlaces().any {
                             kotlin.math.abs(it.latitude - target.latitude) < 1e-5 && kotlin.math.abs(it.longitude - target.longitude) < 1e-5
                         }
                         RoutePlannerCard(
                             target = target,
                             origin = navigation.origin,
+                            viaPoints = navigation.viaPoints,
+                            onMoveWaypoint = { from, to ->
+                                navigation.moveWaypoint(from, to)
+                                session.reset()
+                                coroutineScope.launch { delay(120); planFrom(tracker.location, rerouting = false) }
+                            },
+                            onRemoveWaypoint = { index ->
+                                navigation.removeWaypoint(index)
+                                session.reset()
+                                coroutineScope.launch { delay(120); planFrom(tracker.location, rerouting = false) }
+                            },
                             onSave = if (alreadySaved) null else {
                                 { settings.addPlace(target.name, target.latitude, target.longitude) }
                             },
@@ -620,18 +712,29 @@ private fun MapScreen(modifier: Modifier, settings: LocalSettings, navigation: N
                                 session.profile = option
                                 if (session.route != null) planFrom(tracker.location, rerouting = true)
                             },
+                            selectionMode = navigation.pointSelection,
+                            onChooseOrigin = { session.reset(); navigation.pointSelection = RoutePointRole.START },
+                            onChooseDestination = { session.reset(); navigation.pointSelection = RoutePointRole.DESTINATION },
+                            onUseMyLocation = { navigation.useMyLocation() },
+                            onDestinationMyLocation = {
+                                tracker.location?.let { fix ->
+                                    navigation.target = NavigationTarget("Моё местоположение", fix.latitude, fix.longitude)
+                                    navigation.routeMenuVisible = true
+                                    navigation.pointSelection = null
+                                }
+                            },
+                            onSwap = { navigation.swapEndpoints() },
                             onPlan = { planFrom(tracker.location, rerouting = false) },
                             onStart = {
                                 session.beginNavigation()
                                 if (session.voice) activeRoute?.steps?.firstOrNull()?.let { speaker.speak(it.text) }
                             },
                             onExternal = { openExternalNavigator(context, target) },
-                            onCancel = { navigation.clearRoute() }
+                            onCancel = { navigation.closeRouteMenu() }
                         )
                     } else if (navigation.origin != null) {
                         OriginHintCard(navigation.origin!!, onCancel = { navigation.origin = null })
                     }
-                }
             }
         }
     } else {
@@ -645,7 +748,6 @@ private fun MapScreen(modifier: Modifier, settings: LocalSettings, navigation: N
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
             }
-            MapDetails(settings, false, preferredLanguage, isImporting, importMessage, importError, openPicker)
         }
     }
 }
@@ -653,6 +755,34 @@ private fun MapScreen(modifier: Modifier, settings: LocalSettings, navigation: N
 @Composable
 private fun SettingsScreen(modifier: Modifier, settings: LocalSettings, onShowOnMap: (String) -> Unit) {
     val context = LocalContext.current
+    val coroutineScope = rememberCoroutineScope()
+    var isImportingMap by remember { mutableStateOf(false) }
+    var mapImportMessage by remember { mutableStateOf<String?>(null) }
+    var mapImportError by remember { mutableStateOf(false) }
+    val mapPicker = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
+        if (uri != null) {
+            coroutineScope.launch {
+                isImportingMap = true
+                mapImportMessage = "Копирую и проверяю файл карты…"
+                mapImportError = false
+                try {
+                    val file = withContext(Dispatchers.IO) {
+                        MapFileRepository.importGeorgiaMap(context, uri)
+                    }
+                    settings.setMapFilePath(file.absolutePath, bundled = false)
+                    mapImportMessage = "Карта проверена: ${file.length() / (1024 * 1024)} МБ"
+                } catch (error: Exception) {
+                    mapImportError = true
+                    mapImportMessage = error.message ?: "Не удалось импортировать файл карты."
+                } finally {
+                    isImportingMap = false
+                }
+            }
+        }
+    }
+    val preferredLanguage = MapLanguageResolver.preferredLanguage(settings.enabledLanguages)
+    val hasMap = settings.mapFilePath?.let(::File)?.let { it.isFile && it.length() > 0L } == true
+    val openMapPicker: () -> Unit = { mapPicker.launch(arrayOf("*/*")) }
     val folderPicker = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocumentTree()) { uri ->
         if (uri != null) {
             runCatching {
@@ -720,13 +850,12 @@ private fun SettingsScreen(modifier: Modifier, settings: LocalSettings, onShowOn
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant
             )
-            HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
-            Text("Стиль", style = MaterialTheme.typography.titleSmall)
-            Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(Space.xs)) {
-                listOf("classic" to "Классика", "outdoor" to "Природа", "motorider" to "Авто", "biker" to "Велосипед").forEach { (value, label) ->
-                    SelectPill(label = label, selected = settings.mapTheme == value, onClick = { settings.updateMapTheme(value) })
-                }
-            }
+
+        }
+
+        SectionLabel("Мои места")
+        Panel {
+            SavedPlacesList(settings, onShowOnMap)
         }
 
         SectionLabel("Хранение")
@@ -754,9 +883,17 @@ private fun SettingsScreen(modifier: Modifier, settings: LocalSettings, onShowOn
             }
         }
 
-        SectionLabel("Мои места")
+        SectionLabel("О карте")
         Panel {
-            SavedPlacesList(settings, onShowOnMap)
+            MapDetails(
+                settings = settings,
+                hasMap = hasMap,
+                preferredLanguage = preferredLanguage,
+                isImporting = isImportingMap,
+                importMessage = mapImportMessage,
+                importError = mapImportError,
+                onPickFile = openMapPicker
+            )
         }
 
         Text(
