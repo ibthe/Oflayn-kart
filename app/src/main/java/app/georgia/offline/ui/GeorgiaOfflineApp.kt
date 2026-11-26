@@ -494,13 +494,13 @@ private fun MapScreen(modifier: Modifier, settings: LocalSettings, navigation: N
                 mapTheme = settings.mapTheme,
                 modifier = Modifier.fillMaxSize(),
                 userLocation = tracker.location,
-                destination = target?.let { LatLong(it.latitude, it.longitude) },
+                destination = if (navigation.pointSelection == RoutePointRole.START) null else target?.let { LatLong(it.latitude, it.longitude) },
                 accentColor = MaterialTheme.colorScheme.tertiary.toArgb(),
                 destinationColor = MaterialTheme.colorScheme.primary.toArgb(),
                 recenterToken = recenterToken,
                 zoomInToken = zoomInToken,
                 zoomOutToken = zoomOutToken,
-                routePoints = session.route?.points,
+                routePoints = if (navigation.pointSelection == null) session.route?.points else null,
                 routeColor = MaterialTheme.colorScheme.tertiary.toArgb(),
                 followUser = session.navigating,
                 fitToken = session.fitToken,
@@ -513,6 +513,7 @@ private fun MapScreen(modifier: Modifier, settings: LocalSettings, navigation: N
                 focusToken = navigation.focusToken,
                 onPlaceTap = { id -> if (!session.navigating) navigation.selectedPlaceId = id },
                 onLongPress = { point ->
+                    if (!session.navigating) session.reset()
                     navigation.chooseMapPoint("Точка на карте", point.latitude, point.longitude)
                 }
             )
@@ -663,8 +664,8 @@ private fun MapScreen(modifier: Modifier, settings: LocalSettings, navigation: N
                                 if (session.route != null) planFrom(tracker.location, rerouting = true)
                             },
                             selectionMode = navigation.pointSelection,
-                            onChooseOrigin = { navigation.pointSelection = RoutePointRole.START },
-                            onChooseDestination = { navigation.pointSelection = RoutePointRole.DESTINATION },
+                            onChooseOrigin = { session.reset(); navigation.pointSelection = RoutePointRole.START },
+                            onChooseDestination = { session.reset(); navigation.pointSelection = RoutePointRole.DESTINATION },
                             onUseMyLocation = { navigation.useMyLocation() },
                             onDestinationMyLocation = {
                                 tracker.location?.let { fix ->
