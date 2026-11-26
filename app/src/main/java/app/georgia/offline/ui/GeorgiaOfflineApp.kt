@@ -962,23 +962,32 @@ private fun MapViewportSearchBox(
                     )
                 }
             }
-            if (query.isNotBlank() || selectedCategory != "all") {
-                if (databaseLoading || loading) {
+            if (databaseLoading) {
+                Row(Modifier.fillMaxWidth().padding(vertical = Space.xs), horizontalArrangement = Arrangement.Center) {
+                    CircularProgressIndicator(modifier = Modifier.size(18.dp), strokeWidth = 2.dp)
+                    Text(
+                        "Подготавливаю офлайн-базу…",
+                        modifier = Modifier.padding(start = Space.s),
+                        style = MaterialTheme.typography.bodySmall
+                    )
+                }
+            } else if (databaseMessage != null) {
+                Text(
+                    databaseMessage,
+                    modifier = Modifier.padding(horizontal = Space.xs, vertical = Space.xs),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.error
+                )
+            } else if (query.isNotBlank() || selectedCategory != "all") {
+                if (loading) {
                     Row(Modifier.fillMaxWidth().padding(vertical = Space.xs), horizontalArrangement = Arrangement.Center) {
                         CircularProgressIndicator(modifier = Modifier.size(18.dp), strokeWidth = 2.dp)
                         Text(
-                            if (databaseLoading) "Подготавливаю офлайн-базу…" else "Ищу офлайн…",
+                            "Ищу офлайн…",
                             modifier = Modifier.padding(start = Space.s),
                             style = MaterialTheme.typography.bodySmall
                         )
                     }
-                } else if (databaseMessage != null) {
-                    Text(
-                        databaseMessage ?: "Локальная база мест недоступна.",
-                        modifier = Modifier.padding(horizontal = Space.xs, vertical = Space.xs),
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.error
-                    )
                 } else if (results.isEmpty()) {
                     Text(
                         "В видимой области ничего не найдено",
@@ -1022,8 +1031,7 @@ private fun MapViewportSearchBox(
                         )
                     }
                 }
-            }
-        }
+            }        }
     }
 }
 
