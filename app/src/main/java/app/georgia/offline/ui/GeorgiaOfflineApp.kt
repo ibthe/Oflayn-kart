@@ -50,6 +50,7 @@ import org.mapsforge.core.model.LatLong
 import androidx.compose.ui.draw.rotate
 import androidx.compose.ui.graphics.toArgb
 import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.foundation.layout.RowScope
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.text.style.TextOverflow
@@ -528,12 +529,23 @@ private fun MapScreen(modifier: Modifier, settings: LocalSettings, navigation: N
     }
     val preferredLanguage = MapLanguageResolver.preferredLanguage(settings.enabledLanguages)
     var recenterToken by remember { mutableIntStateOf(0) }
+    var recenterAfterFreshFix by remember { mutableStateOf(false) }
+    var recenterFixBaseline by remember { mutableLongStateOf(0L) }
     var zoomInToken by remember { mutableIntStateOf(0) }
     var zoomOutToken by remember { mutableIntStateOf(0) }
     val target = navigation.target
     // Choosing a destination is the person's request for guidance, so start positioning for it.
     // (A route that starts from a chosen point needs no GPS to be drawn.)
     LaunchedEffect(target, navigation.origin) { if (target != null && navigation.origin == null && !tracker.active) tracker.start() }
+    LaunchedEffect(tracker.location, tracker.error) {
+        val fix = tracker.location
+        if (tracker.error != null) {
+            recenterAfterFreshFix = false
+        } else if (recenterAfterFreshFix && fix != null && fix.elapsedRealtimeNanos > recenterFixBaseline) {
+            recenterToken++
+            recenterAfterFreshFix = false
+        }
+    }
 
     val savedPlaces = settings.allPlaces()
     val mapPlaces = remember(savedPlaces) {
@@ -787,8 +799,13 @@ private fun MapScreen(modifier: Modifier, settings: LocalSettings, navigation: N
                                     .clip(CircleShape)
                                     .background(MaterialTheme.colorScheme.accentBrush())
                                     .bounceClick {
-                                        tracker.start()
-                                        recenterToken++
+                                        if (!tracker.active || tracker.location == null) {
+                                            recenterFixBaseline = tracker.location?.elapsedRealtimeNanos ?: 0L
+                                            recenterAfterFreshFix = true
+                                            tracker.start()
+                                        } else {
+                                            recenterToken++
+                                        }
                                     }
                                     .padding(horizontal = Space.m),
                                 verticalAlignment = Alignment.CenterVertically,
@@ -796,7 +813,7 @@ private fun MapScreen(modifier: Modifier, settings: LocalSettings, navigation: N
                             ) {
                                 CrosshairGlyph(MaterialTheme.colorScheme.onPrimary)
                                 Text(
-                                    if (tracker.location != null) "Где я" else "Найти меня",
+                                    if (tracker.active && tracker.location != null) "Где я" else "Найти меня",
                                     style = MaterialTheme.typography.labelLarge,
                                     fontWeight = FontWeight.SemiBold,
                                     color = MaterialTheme.colorScheme.onPrimary
