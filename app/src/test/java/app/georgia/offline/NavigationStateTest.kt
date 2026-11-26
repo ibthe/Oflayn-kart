@@ -87,6 +87,22 @@ class NavigationStateTest {
     }
 
     @Test
+    fun waypointCanBeMovedAndRemovedWithoutChangingEndpoints() {
+        val state = NavigationState()
+        state.target = app.georgia.offline.ui.NavigationTarget("End", 41.8, 44.9)
+        state.addWaypoint(app.georgia.offline.ui.NavigationTarget("First", 41.6, 44.7))
+        state.addWaypoint(app.georgia.offline.ui.NavigationTarget("Second", 41.7, 44.8))
+
+        state.moveWaypoint(0, 1)
+
+        assertEquals("Second", state.viaPoints[0].name)
+        assertEquals("First", state.viaPoints[1].name)
+        state.removeWaypoint(0)
+        assertEquals(1, state.viaPoints.size)
+        assertEquals("End", state.target?.name)
+    }
+
+    @Test
     fun myLocationClearsExplicitStartAndPendingSelection() {
         val state = NavigationState()
         state.origin = app.georgia.offline.ui.NavigationTarget("Start", 41.6, 44.7)
