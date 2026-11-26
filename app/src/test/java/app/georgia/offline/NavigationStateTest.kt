@@ -24,6 +24,18 @@ class NavigationStateTest {
     }
 
     @Test
+    fun choosingADestinationAfterRouteFromHereKeepsTheSelectedOrigin() {
+        val state = NavigationState()
+        state.startRouteFrom(app.georgia.offline.ui.NavigationTarget("Selected origin", 41.6, 44.7))
+
+        state.startRouteTo(app.georgia.offline.ui.NavigationTarget("Chosen destination", 41.8, 44.9))
+
+        assertEquals("Selected origin", state.origin?.name)
+        assertEquals("Chosen destination", state.target?.name)
+        assertEquals(true, state.routeMenuVisible)
+    }
+
+    @Test
     fun startingFromASavedPlaceClearsTheOldDestinationAndWaitsForANewOne() {
         val state = NavigationState()
         state.target = app.georgia.offline.ui.NavigationTarget("Old destination", 41.7, 44.8)
