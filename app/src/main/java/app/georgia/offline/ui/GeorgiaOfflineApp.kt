@@ -433,7 +433,31 @@ private fun MapScreen(modifier: Modifier, settings: LocalSettings, navigation: N
     val mapFile = settings.mapFilePath?.let(::File)?.takeIf { it.isFile && it.length() > 0L }
     var poiDatabase by remember { mutableStateOf<File?>(null) }
     var selectedMapPoi by remember { mutableStateOf<PoiRepository.PoiRecord?>(null) }
+    var mapSearchQuery by rememberSaveable { mutableStateOf("") }
+    var mapSearchResults by remember { mutableStateOf<List<PoiRepository.PoiRecord>>(emptyList()) }
+    var mapSearchViewport by remember { mutableStateOf<MapViewportBounds?>(null) }
+    var mapSearchLoading by remember { mutableStateOf(false) }
     LaunchedEffect(Unit) { poiDatabase = PoiRepository.ensureInstalled(context).database }
+    LaunchedEffect(poiDatabase, mapSearchViewport, mapSearchQuery) {
+        val db = poiDatabase ?: return@LaunchedEffect
+        val bounds = mapSearchViewport ?: return@LaunchedEffect
+        if (mapSearchQuery.isBlank()) {
+            mapSearchResults = emptyList()
+            mapSearchLoading = false
+            return@LaunchedEffect
+        }
+        delay(220)
+        mapSearchLoading = true
+        try {
+            mapSearchResults = PoiRepository.searchInBounds(
+                db, mapSearchQuery, bounds.north, bounds.south, bounds.east, bounds.west, limit = 40
+            )
+        } catch (_: Exception) {
+            mapSearchResults = emptyList()
+        } finally {
+            mapSearchLoading = false
+        }
+    }
     val preferredLanguage = MapLanguageResolver.preferredLanguage(settings.enabledLanguages)
     var recenterToken by remember { mutableIntStateOf(0) }
     var zoomInToken by remember { mutableIntStateOf(0) }
@@ -535,6 +559,7 @@ private fun MapScreen(modifier: Modifier, settings: LocalSettings, navigation: N
                         navigation.selectedPlaceId = id
                     }
                 },
+                onViewportChanged = { bounds -> mapSearchViewport = bounds },
                 onMapTap = { point ->
                     if (!session.navigating) {
                         navigation.selectedPlaceId = null
@@ -574,6 +599,21 @@ private fun MapScreen(modifier: Modifier, settings: LocalSettings, navigation: N
                     }
                 }
             )
+            if (!session.navigating && navigation.pointSelection == null) {
+                MapViewportSearchBox(
+                    query = mapSearchQuery,
+                    onQueryChange = { mapSearchQuery = it },
+                    results = mapSearchResults,
+                    loading = mapSearchLoading,
+                    language = settings.language,
+                    onSelect = { poi ->
+                        selectedMapPoi = poi
+                        navigation.selectedPlaceId = null
+                        mapSearchQuery = ""
+                        mapSearchResults = emptyList()
+                    }
+                )
+            }
             if (target != null && !navigation.routeMenuVisible && !session.navigating && navigation.pointSelection == null) {
                 MapChip(
                     modifier = Modifier.align(Alignment.TopCenter).padding(Space.s),
@@ -799,6 +839,95 @@ private fun MapScreen(modifier: Modifier, settings: LocalSettings, navigation: N
 }
 
 @Composable
+
+@Composable
+private fun MapViewportSearchBox(
+    query: String,
+    onQueryChange: (String) -> Unit,
+    results: List<PoiRepository.PoiRecord>,
+    loading: Boolean,
+    language: String,
+    onSelect: (PoiRepository.PoiRecord) -> Unit
+) {
+    Card(
+        modifier = Modifier.fillMaxWidth().padding(horizontal = Space.s).padding(top = 58.dp),
+        shape = RoundedCornerShape(Radius.card),
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+        elevation = CardDefaults.cardElevation(defaultElevation = 8.dp)
+    ) {
+        Column(
+            Modifier.fillMaxWidth().padding(horizontal = Space.s, vertical = Space.xs),
+            verticalArrangement = Arrangement.spacedBy(Space.xs)
+        ) {
+            OutlinedTextField(
+                value = query,
+                onValueChange = onQueryChange,
+                modifier = Modifier.fillMaxWidth(),
+                singleLine = true,
+                shape = RoundedCornerShape(50),
+                placeholder = { Text("Найти место на этой области карты", maxLines = 1, overflow = TextOverflow.Ellipsis) },
+                trailingIcon = {
+                    if (query.isNotEmpty()) {
+                        TextButton(onClick = { onQueryChange("") }) { Text("Очистить") }
+                    }
+                },
+                colors = OutlinedTextFieldDefaults.colors(
+                    focusedContainerColor = MaterialTheme.colorScheme.surfaceContainerHighest,
+                    unfocusedContainerColor = MaterialTheme.colorScheme.surfaceContainerHighest,
+                    focusedBorderColor = MaterialTheme.colorScheme.primary,
+                    unfocusedBorderColor = MaterialTheme.colorScheme.outlineVariant
+                )
+            )
+            if (query.isNotBlank()) {
+                if (loading) {
+                    Row(Modifier.fillMaxWidth().padding(vertical = Space.xs), horizontalArrangement = Arrangement.Center) {
+                        CircularProgressIndicator(modifier = Modifier.size(18.dp), strokeWidth = 2.dp)
+                        Text("Ищу офлайн…", modifier = Modifier.padding(start = Space.s), style = MaterialTheme.typography.bodySmall)
+                    }
+                } else if (results.isEmpty()) {
+                    Text(
+                        "В видимой области ничего не найдено",
+                        modifier = Modifier.padding(horizontal = Space.xs, vertical = Space.xs),
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                } else {
+                    results.take(6).forEachIndexed { index, poi ->
+                        if (index > 0) HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
+                        Column(
+                            Modifier.fillMaxWidth().clickable { onSelect(poi) }.padding(horizontal = Space.xs, vertical = Space.xs),
+                            verticalArrangement = Arrangement.spacedBy(2.dp)
+                        ) {
+                            Text(
+                                poi.nameIn(language).ifBlank { "Без названия" },
+                                style = MaterialTheme.typography.bodyMedium,
+                                fontWeight = FontWeight.SemiBold,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis
+                            )
+                            Text(
+                                "${PoiLabels.subcategoryLabel(poi.subcategory).ifBlank { poiCategoryLabel(poi.category) }} · ${"%.5f".format(java.util.Locale.ROOT, poi.latitude)}, ${"%.5f".format(java.util.Locale.ROOT, poi.longitude)}",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis
+                            )
+                        }
+                    }
+                    if (results.size > 6) {
+                        Text(
+                            "Показаны первые 6 из ${results.size}. Уточните запрос.",
+                            modifier = Modifier.padding(horizontal = Space.xs),
+                            style = MaterialTheme.typography.labelSmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
+                }
+            }
+        }
+    }
+}
+
 private fun MapPoiCard(
     poi: PoiRepository.PoiRecord,
     name: String,
