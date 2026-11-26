@@ -394,7 +394,6 @@ private fun MapStylePicker(
 private fun MapDetails(
     settings: LocalSettings,
     hasMap: Boolean,
-    preferredLanguage: String?,
     isImporting: Boolean,
     importMessage: String?,
     importError: Boolean,
@@ -402,12 +401,6 @@ private fun MapDetails(
 ) {
     Column(verticalArrangement = Arrangement.spacedBy(Space.s)) {
         if (hasMap) {
-            Text("Язык подписей", style = MaterialTheme.typography.titleMedium)
-            Text(
-                "${preferredLanguage ?: "по умолчанию"} · включено: ${languageSummary(settings.enabledLanguages)}. Карта показывает один язык; одновременные подписи на нескольких языках появятся отдельным слоем.",
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant
-            )
             OutlinedButton(onClick = onPickFile, modifier = Modifier.fillMaxWidth(), enabled = !isImporting) { Text("Заменить файл карты") }
             if (!settings.mapFileIsBundled) {
                 OutlinedButton(onClick = { settings.restoreBundledMap() }, modifier = Modifier.fillMaxWidth(), enabled = !isImporting) {
@@ -565,7 +558,6 @@ private fun MapScreen(modifier: Modifier, settings: LocalSettings, navigation: N
         ) {
             MapsforgeMapSurface(
                 mapFile = mapFile,
-                preferredLanguage = preferredLanguage,
                 mapTheme = settings.mapTheme,
                 modifier = Modifier.fillMaxSize(),
                 userLocation = tracker.location,
@@ -619,8 +611,11 @@ private fun MapScreen(modifier: Modifier, settings: LocalSettings, navigation: N
                     }
                 },
                 onLongPress = { point ->
-                    if (!session.navigating) session.reset()
-                    navigation.chooseMapPoint("Точка на карте", point.latitude, point.longitude)
+                    if (!session.navigating) {
+                        session.reset()
+                        selectedMapPoi = null
+                        navigation.chooseMapPoint("Точка на карте", point.latitude, point.longitude)
+                    }
                 },
                 onRouteDrag = { handle, index, point ->
                     if (!session.navigating) {
@@ -1145,21 +1140,8 @@ private fun SettingsScreen(modifier: Modifier, settings: LocalSettings, onShowOn
             }
         }
     }
-    val preferredLanguage = MapLanguageResolver.preferredLanguage(settings.enabledLanguages)
     val hasMap = settings.mapFilePath?.let(::File)?.let { it.isFile && it.length() > 0L } == true
     val openMapPicker: () -> Unit = { mapPicker.launch(arrayOf("*/*")) }
-    val folderPicker = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocumentTree()) { uri ->
-        if (uri != null) {
-            runCatching {
-                context.contentResolver.takePersistableUriPermission(
-                    uri,
-                    android.content.Intent.FLAG_GRANT_READ_URI_PERMISSION or android.content.Intent.FLAG_GRANT_WRITE_URI_PERMISSION
-                )
-            }
-            settings.setStorageTree(uri)
-        }
-    }
-
     PageColumn(modifier) {
         PageTitle("Ещё")
 
@@ -1221,31 +1203,6 @@ private fun SettingsScreen(modifier: Modifier, settings: LocalSettings, onShowOn
         SectionLabel("Мои места")
         Panel {
             SavedPlacesList(settings, onShowOnMap)
-        }
-
-        SectionLabel("Хранение")
-        Panel {
-            Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.SpaceBetween) {
-                Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(Space.xxs)) {
-                    Text("Папка для карт", style = MaterialTheme.typography.titleSmall)
-                    Text(
-                        if (settings.storageTreeUri == null) "Внутреннее хранилище" else "Папка выбрана",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
-                }
-                TextButton(onClick = { folderPicker.launch(settings.storageUri()) }) { Text("Выбрать") }
-                if (settings.storageTreeUri != null) {
-                    TextButton(onClick = { settings.setStorageTree(null) }) { Text("Сбросить") }
-                }
-            }
-            if (settings.storageTreeUri != null) {
-                Text(
-                    "Пока карта копируется в защищённую папку приложения; прямое хранение на SD-карте появится вместе с менеджером данных.",
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
-            }
         }
 
         SectionLabel("О карте")
