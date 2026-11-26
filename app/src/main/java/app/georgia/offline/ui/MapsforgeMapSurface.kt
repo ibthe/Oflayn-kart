@@ -249,7 +249,7 @@ private class MapOverlays(
     private var handledZoomIn = 0
     private var handledZoomOut = 0
     private var handledFit = 0
-    private var followZoomed = false
+    private var followZoomLevel: Int? = null
 
     fun sync(view: MapView, state: OverlayState) {
         if (view.layerManager.layers.size() == 0) return // renderer failed to open the map
@@ -416,12 +416,20 @@ private class MapOverlays(
         }
         if (state.followUser && here != null) {
             view.setCenter(here)
-            if (!followZoomed) {
-                followZoomed = true
-                if (view.model.mapViewPosition.zoomLevel.toInt() < 16) view.setZoomLevel(16.toByte())
+            val speedKmh = if (location?.hasSpeed() == true) location.speed * 3.6f else 0f
+            val desiredZoom = when {
+                speedKmh >= 90f -> 11
+                speedKmh >= 60f -> 12
+                speedKmh >= 35f -> 13
+                speedKmh >= 15f -> 14
+                else -> 16
+            }
+            if (followZoomLevel != desiredZoom) {
+                followZoomLevel = desiredZoom
+                view.setZoomLevel(desiredZoom.toByte())
             }
         } else if (!state.followUser) {
-            followZoomed = false
+            followZoomLevel = null
         }
         if (state.zoomInToken != handledZoomIn) {
             handledZoomIn = state.zoomInToken

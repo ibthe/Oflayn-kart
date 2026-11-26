@@ -116,7 +116,7 @@ class RouteSession {
             segmentHint = 0
             offRouteFixes = 0
             announced.clear()
-            if (!rerouting) fitToken++
+
         } else {
             message = when (result.failure) {
                 RouteFailure.NO_ROAD_NEAR_START -> "Рядом с вами нет подходящей дороги для этого способа."
@@ -266,7 +266,7 @@ fun RoutePlannerCard(
                         )
                     }
                     TextButton(onClick = onChooseOrigin, contentPadding = PaddingValues(horizontal = Space.s)) {
-                        Text(if (selectionMode == RoutePointRole.START) "Выбор…" else "Изменить")
+                        Text("Точка на карте")
                     }
                 }
                 Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
@@ -280,16 +280,16 @@ fun RoutePlannerCard(
                         )
                     }
                     TextButton(onClick = onChooseDestination, contentPadding = PaddingValues(horizontal = Space.s)) {
-                        Text(if (selectionMode == RoutePointRole.DESTINATION) "Выбор…" else "Изменить")
+                        Text("Точка на карте")
                     }
                 }
-                if (origin != null) {
-                    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
-                        TextButton(onClick = onUseMyLocation, contentPadding = PaddingValues(horizontal = Space.s)) {
-                            Text("Моё местоположение")
-                        }
+                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(Space.xs)) {
+                    TextButton(onClick = onUseMyLocation, contentPadding = PaddingValues(horizontal = Space.s)) {
+                        Text("Моё местоположение", maxLines = 1, softWrap = false)
+                    }
+                    if (origin != null) {
                         TextButton(onClick = onSwap, contentPadding = PaddingValues(horizontal = Space.s)) {
-                            Text("Поменять местами")
+                            Text("Поменять местами", maxLines = 1, softWrap = false)
                         }
                     }
                 }

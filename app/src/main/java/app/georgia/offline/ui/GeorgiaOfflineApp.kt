@@ -482,6 +482,10 @@ private fun MapScreen(modifier: Modifier, settings: LocalSettings, navigation: N
         val startLon = navigation.origin?.longitude ?: fix?.longitude ?: return
         coroutineScope.launch {
             session.plan(context, startLat, startLon, goal.latitude, goal.longitude, rerouting)
+            if (!rerouting && session.route != null) {
+                delay(7_000)
+                if (!session.navigating && session.route != null) session.fitToken++
+            }
             if (rerouting && session.navigating && session.voice && session.message == null) speaker.speak("Маршрут перестроен")
         }
     }
@@ -553,7 +557,21 @@ private fun MapScreen(modifier: Modifier, settings: LocalSettings, navigation: N
                     }
                 }
             }
-            if (!showDetails) {
+            if (!showDetails && navigation.pointSelection != null) {
+                MapChip(
+                    modifier = Modifier.align(Alignment.TopCenter).padding(Space.s),
+                    onClick = { navigation.pointSelection = null }
+                ) {
+                    Text(
+                        if (navigation.pointSelection == RoutePointRole.START)
+                            "Удерживайте карту: выберите начало маршрута · Отмена"
+                        else
+                            "Удерживайте карту: выберите пункт назначения · Отмена",
+                        style = MaterialTheme.typography.labelMedium
+                    )
+                }
+            }
+            if (!showDetails && navigation.pointSelection == null) {
                 if (session.navigating && session.route != null) {
                     Column(
                         Modifier.align(Alignment.TopCenter).padding(Space.s),
@@ -668,7 +686,7 @@ private fun MapScreen(modifier: Modifier, settings: LocalSettings, navigation: N
                             },
                             onClose = { navigation.selectedPlaceId = null }
                         )
-                    } else if (target != null) {
+                    } else if (target != null && navigation.pointSelection == null) {
                         val alreadySaved = settings.allPlaces().any {
                             kotlin.math.abs(it.latitude - target.latitude) < 1e-5 && kotlin.math.abs(it.longitude - target.longitude) < 1e-5
                         }

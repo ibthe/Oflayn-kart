@@ -10,10 +10,15 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.background
+import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
@@ -49,6 +54,12 @@ fun ToolsScreen(modifier: Modifier = Modifier, settings: LocalSettings, tracker:
                 horizontalAlignment = Alignment.CenterHorizontally
             ) {
                 Text("Компас", style = MaterialTheme.typography.titleMedium, modifier = Modifier.fillMaxWidth())
+                Text(
+                    "Перед использованием проверьте калибровку: плавно проведите телефоном несколько раз по траектории «восьмёрки». Держите его подальше от магнитов, металлических предметов и магнитных чехлов.",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    textAlign = TextAlign.Center
+                )
                 if (heading == null) {
                     Text(
                         "Не найден датчик поворота или пара акселерометр + магнитометр, необходимые для электронного компаса.",
@@ -210,13 +221,28 @@ private fun GpsPanel(settings: LocalSettings, tracker: LocationTracker, location
                 MetricRow("Высота GPS", if (location.hasAltitude()) String.format(Locale.getDefault(), "%.1f м", location.altitude) else "нет данных")
                 MetricRow("Скорость", if (location.hasSpeed()) String.format(Locale.getDefault(), "%.1f км/ч", location.speed * 3.6f) else "нет данных")
                 MetricRow("Направление движения", if (location.hasBearing()) String.format(Locale.getDefault(), "%.0f°", location.bearing) else "нет данных")
-                Row(horizontalArrangement = Arrangement.spacedBy(Space.xs)) {
-                    OutlinedButton(onClick = { copyToClipboard(context, GeoFormatting.decimalCoordinates(location.latitude, location.longitude)) }) {
-                        Text("Копировать")
-                    }
-                    OutlinedButton(onClick = { settings.addPlace("Моя позиция", location.latitude, location.longitude) }) {
-                        Text("Сохранить место")
-                    }
+                val coordinates = GeoFormatting.decimalCoordinates(location.latitude, location.longitude)
+                val alreadySaved = settings.savedPlaces.any {
+                    kotlin.math.abs(it.latitude - location.latitude) < 1e-5 &&
+                        kotlin.math.abs(it.longitude - location.longitude) < 1e-5
+                }
+                Row(
+                    Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(Space.s),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    CoordinateActionButton(
+                        label = "Копировать",
+                        successLabel = "Скопировано",
+                        modifier = Modifier.weight(1f)
+                    ) { copyToClipboard(context, coordinates) }
+                    CoordinateActionButton(
+                        label = if (alreadySaved) "Уже сохранено" else "Сохранить",
+                        successLabel = "Сохранено",
+                        initiallyDone = alreadySaved,
+                        modifier = Modifier.weight(1f),
+                        enabled = !alreadySaved
+                    ) { settings.addPlace("Моя позиция", location.latitude, location.longitude) }
                 }
                 GradientButton(text = "Отметить авто", onClick = { settings.saveCarLocation(location.latitude, location.longitude) })
             }
@@ -234,6 +260,47 @@ private fun GpsPanel(settings: LocalSettings, tracker: LocationTracker, location
                 color = MaterialTheme.colorScheme.onSurfaceVariant
             )
         }
+    }
+}
+
+@Composable
+private fun CoordinateActionButton(
+    label: String,
+    successLabel: String,
+    modifier: Modifier = Modifier,
+    initiallyDone: Boolean = false,
+    enabled: Boolean = true,
+    onClick: () -> Unit
+) {
+    var done by remember(label, initiallyDone) { mutableStateOf(initiallyDone) }
+    val container by androidx.compose.animation.animateColorAsState(
+        targetValue = if (done) MaterialTheme.colorScheme.tertiaryContainer else MaterialTheme.colorScheme.surface,
+        label = "coordinateActionContainer"
+    )
+    val content by androidx.compose.animation.animateColorAsState(
+        targetValue = if (done) MaterialTheme.colorScheme.onTertiaryContainer else MaterialTheme.colorScheme.primary,
+        label = "coordinateActionContent"
+    )
+    OutlinedButton(
+        onClick = {
+            onClick()
+            done = true
+        },
+        modifier = modifier,
+        enabled = enabled,
+        colors = ButtonDefaults.outlinedButtonColors(
+            containerColor = container,
+            contentColor = content,
+            disabledContainerColor = container,
+            disabledContentColor = content
+        )
+    ) {
+        Text(
+            if (done) "✓ $successLabel" else label,
+            maxLines = 1,
+            softWrap = false,
+            textAlign = TextAlign.Center
+        )
     }
 }
 
