@@ -126,6 +126,32 @@
         <line stroke="#6C746D" stroke-width="0.35"/>
     </rule>
 
+    <!-- POI markers: quiet category colours, revealed only at useful zoom levels. -->
+    <rule e="node" k="amenity" v="fuel" zoom-min="15">
+        <circle radius="3.0" fill="#D8B46C" stroke="#202923" stroke-width="1.0"/>
+        <caption k="name" font-size="8" fill="#BEC9BE" stroke="#202923" stroke-width="1.8" priority="3"/>
+    </rule>
+    <rule e="node" k="amenity" v="restaurant|cafe|fast_food|food_court|bar|pub" zoom-min="16">
+        <circle radius="2.7" fill="#D9A66E" stroke="#202923" stroke-width="0.9"/>
+        <caption k="name" font-size="8" fill="#BEC9BE" stroke="#202923" stroke-width="1.8" priority="4"/>
+    </rule>
+    <rule e="node" k="amenity" v="pharmacy|hospital|clinic|doctors|dentist" zoom-min="16">
+        <circle radius="2.7" fill="#D88A91" stroke="#202923" stroke-width="0.9"/>
+        <caption k="name" font-size="8" fill="#BEC9BE" stroke="#202923" stroke-width="1.8" priority="4"/>
+    </rule>
+    <rule e="node" k="shop" v="supermarket|convenience|mall|department_store" zoom-min="16">
+        <circle radius="2.7" fill="#83B7A0" stroke="#202923" stroke-width="0.9"/>
+        <caption k="name" font-size="8" fill="#BEC9BE" stroke="#202923" stroke-width="1.8" priority="4"/>
+    </rule>
+    <rule e="node" k="tourism" v="attraction|museum|viewpoint|zoo|theme_park|artwork" zoom-min="15">
+        <circle radius="2.8" fill="#8CAED2" stroke="#202923" stroke-width="0.9"/>
+        <caption k="name" font-size="8" fill="#BEC9BE" stroke="#202923" stroke-width="1.8" priority="3"/>
+    </rule>
+    <rule e="node" k="historic" v="monument|memorial|castle|ruins|archaeological_site" zoom-min="15">
+        <circle radius="2.8" fill="#B39ACB" stroke="#202923" stroke-width="0.9"/>
+        <caption k="name" font-size="8" fill="#BEC9BE" stroke="#202923" stroke-width="1.8" priority="3"/>
+    </rule>
+
     <!-- Labels: restrained ink and a light halo for legibility. -->
     <rule e="node" k="place" v="city|town|village|hamlet|suburb|neighbourhood">
         <caption k="name" font-size="12" fill="#D5E0D5" stroke="#202923" stroke-width="2.2" />
