@@ -51,7 +51,7 @@ fun SavedPlaceCard(
 ) {
     var renaming by remember(place.id) { mutableStateOf(false) }
     Surface(
-        modifier = modifier.fillMaxWidth().appear(),
+        modifier = modifier.fillMaxWidth().appear().dismissOnSwipeDown(onClose),
         shape = RoundedCornerShape(Radius.card),
         color = MaterialTheme.colorScheme.glass(LocalLayerAlpha.current),
         contentColor = MaterialTheme.colorScheme.onSurface,
@@ -116,7 +116,7 @@ fun SavedPlaceCard(
 @Composable
 fun OriginHintCard(origin: NavigationTarget, onCancel: () -> Unit, modifier: Modifier = Modifier) {
     Surface(
-        modifier = modifier.fillMaxWidth().appear(),
+        modifier = modifier.fillMaxWidth().appear().dismissOnSwipeDown(onCancel),
         shape = RoundedCornerShape(Radius.card),
         color = MaterialTheme.colorScheme.glass(LocalLayerAlpha.current),
         contentColor = MaterialTheme.colorScheme.onSurface,
