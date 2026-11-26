@@ -183,6 +183,12 @@ fun GeorgiaOfflineApp(settings: LocalSettings) {
 
     // A tab name saved by an older version (for example the removed ROUTE tab) falls back to the map.
     val currentTab = AppTab.entries.firstOrNull { it.name == selectedTab } ?: AppTab.MAP
+    LaunchedEffect(currentTab) {
+        if (currentTab != AppTab.MAP) {
+            navigation.closeRouteMenu()
+            navigation.selectedPlaceId = null
+        }
+    }
     BackHandler(enabled = currentTab != AppTab.MAP) {
         selectedTab = AppTab.MAP.name
     }
