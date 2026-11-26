@@ -66,12 +66,17 @@ class NavigationStateTest {
     fun closingRouteMenuKeepsDestinationAndPlannedRouteContext() {
         val state = NavigationState()
         state.chooseMapPoint("Destination", 41.7, 44.8)
+        state.origin = app.georgia.offline.ui.NavigationTarget("Start", 41.6, 44.7)
+        state.addWaypoint(app.georgia.offline.ui.NavigationTarget("Via", 41.65, 44.75))
         val destination = state.target
+        val origin = state.origin
 
         state.closeRouteMenu()
 
         assertEquals(false, state.routeMenuVisible)
         assertSame(destination, state.target)
+        assertSame(origin, state.origin)
+        assertEquals("Via", state.viaPoints.single().name)
     }
 
     @Test
