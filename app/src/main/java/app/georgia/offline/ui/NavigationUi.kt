@@ -231,6 +231,7 @@ fun RoutePlannerCard(
     onChooseOrigin: () -> Unit,
     onChooseDestination: () -> Unit,
     onUseMyLocation: () -> Unit,
+    onDestinationMyLocation: () -> Unit,
     onSwap: () -> Unit,
     onPlan: () -> Unit,
     onStart: () -> Unit,
@@ -265,8 +266,13 @@ fun RoutePlannerCard(
                             overflow = TextOverflow.Ellipsis
                         )
                     }
+                }
+                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(Space.xs)) {
+                    TextButton(onClick = onUseMyLocation, contentPadding = PaddingValues(horizontal = Space.s)) {
+                        Text("Моё местоположение", maxLines = 1, softWrap = false)
+                    }
                     TextButton(onClick = onChooseOrigin, contentPadding = PaddingValues(horizontal = Space.s)) {
-                        Text("Точка на карте")
+                        Text("Точка на карте", maxLines = 1, softWrap = false)
                     }
                 }
                 Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
@@ -279,15 +285,21 @@ fun RoutePlannerCard(
                             overflow = TextOverflow.Ellipsis
                         )
                     }
-                    TextButton(onClick = onChooseDestination, contentPadding = PaddingValues(horizontal = Space.s)) {
-                        Text("Точка на карте")
-                    }
                 }
                 Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(Space.xs)) {
-                    TextButton(onClick = onUseMyLocation, contentPadding = PaddingValues(horizontal = Space.s)) {
+                    TextButton(
+                        onClick = onDestinationMyLocation,
+                        enabled = location != null,
+                        contentPadding = PaddingValues(horizontal = Space.s)
+                    ) {
                         Text("Моё местоположение", maxLines = 1, softWrap = false)
                     }
-                    if (origin != null) {
+                    TextButton(onClick = onChooseDestination, contentPadding = PaddingValues(horizontal = Space.s)) {
+                        Text("Точка на карте", maxLines = 1, softWrap = false)
+                    }
+                }
+                if (origin != null) {
+                    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
                         TextButton(onClick = onSwap, contentPadding = PaddingValues(horizontal = Space.s)) {
                             Text("Поменять местами", maxLines = 1, softWrap = false)
                         }
