@@ -78,18 +78,26 @@ internal fun Modifier.bounceClick(enabled: Boolean = true, onClick: () -> Unit):
 } 
 
 /** Dismiss a floating map panel when the user swipes it down. */
-internal fun Modifier.dismissOnSwipeDown(onDismiss: () -> Unit): Modifier = composed {
+internal fun Modifier.dismissOnSwipeDown(
+    onDismiss: () -> Unit,
+    canDismiss: () -> Boolean = { true }
+): Modifier = composed {
     val density = LocalDensity.current
     val thresholdPx = with(density) { 72.dp.toPx() }
-    this.pointerInput(thresholdPx, onDismiss) {
+    this.pointerInput(thresholdPx, onDismiss, canDismiss) {
         var downwardDistance = 0f
         detectVerticalDragGestures(
             onVerticalDrag = { change, dragAmount ->
-                if (dragAmount > 0f) downwardDistance += dragAmount
-                change.consume()
+                // Let an expanded, scrollable card consume gestures until it reaches the top.
+                if (dragAmount > 0f && canDismiss() && !change.isConsumed) {
+                    downwardDistance += dragAmount
+                    change.consume()
+                } else if (dragAmount < 0f) {
+                    downwardDistance = 0f
+                }
             },
             onDragEnd = {
-                if (downwardDistance >= thresholdPx) onDismiss()
+                if (downwardDistance >= thresholdPx && canDismiss()) onDismiss()
                 downwardDistance = 0f
             },
             onDragCancel = { downwardDistance = 0f }
