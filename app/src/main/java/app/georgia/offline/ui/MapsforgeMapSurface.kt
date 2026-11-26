@@ -87,6 +87,7 @@ fun MapsforgeMapSurface(
     places: List<MapPlace> = emptyList(),
     selectedPlaceId: String? = null,
     selectedPoi: LatLong? = null,
+    searchResultPoints: List<LatLong> = emptyList(),
     origin: LatLong? = null,
     savedColor: Int = 0xFF7B5CFF.toInt(),
     carColor: Int = 0xFF1FB89A.toInt(),
@@ -94,6 +95,7 @@ fun MapsforgeMapSurface(
     focusToken: Int = 0,
     onPlaceTap: ((String?) -> Unit)? = null,
     onMapTap: ((LatLong) -> Unit)? = null,
+    onSearchResultTap: ((Int) -> Unit)? = null,
     onViewportChanged: ((MapViewportBounds) -> Unit)? = null,
     onLongPress: ((LatLong) -> Unit)? = null,
     onRouteDrag: ((RouteDragTarget, Int, LatLong) -> Unit)? = null
@@ -102,6 +104,8 @@ fun MapsforgeMapSurface(
     val currentPlaces by rememberUpdatedState(places)
     val currentPlaceTap by rememberUpdatedState(onPlaceTap)
     val currentMapTap by rememberUpdatedState(onMapTap)
+    val currentSearchResultTap by rememberUpdatedState(onSearchResultTap)
+    val currentSearchResults by rememberUpdatedState(searchResultPoints)
     val currentViewportChanged by rememberUpdatedState(onViewportChanged)
     val currentRoutePoints by rememberUpdatedState(routePoints)
     val currentViaPoints by rememberUpdatedState(viaPoints)
@@ -204,9 +208,26 @@ fun MapsforgeMapSurface(
                         override fun onSingleTapConfirmed(event: MotionEvent): Boolean {
                             val callback = currentPlaceTap
                             val mapTap = currentMapTap
-                            if (callback == null && mapTap == null) return false
+                            val searchTap = currentSearchResultTap
+                            if (callback == null && mapTap == null && searchTap == null) return false
                             val density = viewContext.resources.displayMetrics.density
                             val reach = 30f * density
+                            var searchHit: Int? = null
+                            var searchDistance = (reach * reach).toDouble()
+                            currentSearchResults.take(6).forEachIndexed { index, point ->
+                                val pixel = mapViewProjection.toPixels(point) ?: return@forEachIndexed
+                                val dx = pixel.x - event.x
+                                val dy = pixel.y - 18f * density - event.y
+                                val squared = dx * dx + dy * dy
+                                if (squared < searchDistance) {
+                                    searchDistance = squared
+                                    searchHit = index
+                                }
+                            }
+                            if (searchHit != null) {
+                                searchTap?.invoke(searchHit!!)
+                                return false
+                            }
                             var best: String? = null
                             var bestSquared = (reach * reach).toDouble()
                             for (place in currentPlaces) {
@@ -319,7 +340,7 @@ fun MapsforgeMapSurface(
             update = { view ->
                 overlays.sync(
                     view,
-                    OverlayState(userLocation, destination, recenterToken, zoomInToken, zoomOutToken, routePoints, viaPoints, followUser, fitToken, places, selectedPlaceId, selectedPoi, origin, focusToken)
+                    OverlayState(userLocation, destination, recenterToken, zoomInToken, zoomOutToken, routePoints, viaPoints, followUser, fitToken, places, selectedPlaceId, selectedPoi, searchResultPoints, origin, focusToken)
                 )
                 // Wait until Mapsforge has applied a pan/zoom before reading the visible corners.
                 view.postDelayed({
@@ -400,6 +421,7 @@ private class OverlayState(
     val places: List<MapPlace>,
     val selectedPlaceId: String?,
     val selectedPoi: LatLong?,
+    val searchResultPoints: List<LatLong>,
     val origin: LatLong?,
     val focusToken: Int
 )
@@ -421,6 +443,8 @@ private class MapOverlays(
     private var focusedPlace: String? = null
     private var selectedPoiMarker: Marker? = null
     private var selectedPoiAt: LatLong? = null
+    private val searchResultMarkers = ArrayList<Marker>()
+    private var searchResultKey = ""
     private var me: Marker? = null
     private var accuracy: Circle? = null
     private var destinationMarker: Marker? = null
@@ -528,6 +552,20 @@ private class MapOverlays(
                 layers.add(marker)
             }
         }
+        // Numbered pins identify the first six current offline search results on the map.
+        val searchKey = state.searchResultPoints.take(6).joinToString("|") { "${it.latitude}:${it.longitude}" }
+        if (searchKey != searchResultKey) {
+            searchResultKey = searchKey
+            searchResultMarkers.forEach { layers.remove(it) }
+            searchResultMarkers.clear()
+            state.searchResultPoints.take(6).forEachIndexed { index, point ->
+                val (bitmap, offset) = pinBitmap(view.context, accentColor, (index + 1).toString(), false, density)
+                val marker = Marker(point, bitmap, 0, offset)
+                searchResultMarkers.add(marker)
+                layers.add(marker)
+            }
+        }
+
         // A tapped POI remains visibly anchored to its geographic coordinate while the map pans or zooms.
         val selectedPoi = state.selectedPoi
         if (selectedPoi != null) {
