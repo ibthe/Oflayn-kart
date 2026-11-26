@@ -661,23 +661,6 @@ private fun MapScreen(modifier: Modifier, settings: LocalSettings, navigation: N
                     }
                 )
             }
-            if (target != null && !navigation.routeMenuVisible && !session.navigating &&
-                navigation.pointSelection == null && selectedMapPoi == null && selectedPlace == null
-            ) {
-                MapChip(
-                    modifier = Modifier.align(Alignment.TopCenter).padding(Space.s),
-                    onClick = { navigation.openRouteMenu() }
-                ) {
-                    Text(
-                        session.route?.let { "Маршрут · ${GeoMath.formatDistance(it.distanceMeters)} · ${formatDuration(it.durationSeconds)}" }
-                            ?: "Маршрут",
-                        style = MaterialTheme.typography.labelLarge,
-                        fontWeight = FontWeight.SemiBold,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis
-                    )
-                }
-            }
             if (navigation.pointSelection != null) {
                 MapChip(
                     modifier = Modifier.align(Alignment.TopCenter).padding(Space.s),
@@ -734,6 +717,13 @@ private fun MapScreen(modifier: Modifier, settings: LocalSettings, navigation: N
                         }
                         MapChip(modifier = Modifier.size(48.dp), onClick = { zoomOutToken++ }, centered = true) {
                             ZoomGlyph(color = MaterialTheme.colorScheme.onSurface, zoomIn = false)
+                        }
+                    }
+                    if (target != null && !navigation.routeMenuVisible && !session.navigating &&
+                        navigation.pointSelection == null && selectedMapPoi == null && selectedPlace == null
+                    ) {
+                        MapChip(onClick = { navigation.openRouteMenu() }) {
+                            Text("Маршрут", style = MaterialTheme.typography.labelLarge, fontWeight = FontWeight.SemiBold)
                         }
                     }
                     Column(horizontalAlignment = Alignment.End, verticalArrangement = Arrangement.spacedBy(Space.xs)) {
