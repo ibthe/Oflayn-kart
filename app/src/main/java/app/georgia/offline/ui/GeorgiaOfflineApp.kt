@@ -855,7 +855,7 @@ private fun MapScreen(modifier: Modifier, settings: LocalSettings, navigation: N
                         val isCar = selectedPlace.id == LocalSettings.CAR_PLACE_ID
                         SavedPlaceCard(
                             place = selectedPlace,
-                            distanceText = tracker.location?.let {
+                            distanceText = tracker.location?.takeIf { tracker.hasFreshFix() }?.let {
                                 GeoMath.formatDistance(GeoMath.distanceMeters(it.latitude, it.longitude, selectedPlace.latitude, selectedPlace.longitude)) + " от вас"
                             },
                             isCar = isCar,
