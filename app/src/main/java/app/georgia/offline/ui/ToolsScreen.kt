@@ -36,7 +36,7 @@ import kotlin.math.roundToInt
 @Composable
 fun ToolsScreen(modifier: Modifier = Modifier, settings: LocalSettings, tracker: LocationTracker) {
     val context = LocalContext.current
-    val currentLocation = tracker.location
+    val currentLocation = tracker.location?.takeIf { tracker.hasFreshFix() }
     val compass = rememberCompass(currentLocation)
     val heading = compass.heading
     val qiblaBearing = currentLocation?.let { Qibla.bearing(it.latitude, it.longitude).toFloat() }
