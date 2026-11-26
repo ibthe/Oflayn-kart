@@ -762,7 +762,9 @@ private fun MapScreen(modifier: Modifier, settings: LocalSettings, navigation: N
                     }
                 }
                 val activeRoute = session.route
-                if (target != null && activeRoute != null && !session.navigating && !navigation.routeMenuVisible) {
+                if (target != null && activeRoute != null && !session.navigating &&
+                    !navigation.routeMenuVisible && selectedMapPoi == null && selectedPlace == null
+                ) {
                     RouteSummaryBar(activeRoute)
                 }
                 if (target != null && session.navigating && activeRoute != null) {
