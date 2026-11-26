@@ -879,12 +879,26 @@ private fun MapScreen(modifier: Modifier, settings: LocalSettings, navigation: N
         PageColumn(modifier) {
             PageTitle("Карта")
             Panel {
-                Text("Карта не подключена", style = MaterialTheme.typography.titleMedium)
                 Text(
-                    "В этой сборке нет встроенного файла карты. Полная сборка GitHub Actions добавляет его в APK; можно также выбрать Mapsforge .map-файл Грузии вручную.",
+                    if (settings.mapDisabled) "Карта отключена" else "Карта недоступна",
+                    style = MaterialTheme.typography.titleMedium
+                )
+                Text(
+                    if (settings.mapDisabled) {
+                        "Карта была отключена в настройках. Включите встроенную карту, чтобы продолжить работу."
+                    } else {
+                        "Не удалось найти встроенную карту в этой сборке. Откройте «Ещё» → «О карте», чтобы выбрать Mapsforge .map-файл Грузии."
+                    },
                     style = MaterialTheme.typography.bodyMedium,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
+                if (settings.mapDisabled) {
+                    GradientButton(
+                        text = "Включить встроенную карту",
+                        onClick = settings::enableBundledMap,
+                        modifier = Modifier.fillMaxWidth()
+                    )
+                }
             }
         }
     }
