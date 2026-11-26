@@ -59,6 +59,7 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
@@ -1038,14 +1039,19 @@ private fun MapPoiCard(
                 }
                 TextButton(onClick = onClose) { Text("Закрыть") }
             }
-            details.take(if (expanded) details.size else 2).forEach { (label, value) ->
-                Text(
-                    "$label: $value",
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    maxLines = if (expanded) 3 else 1,
-                    overflow = TextOverflow.Ellipsis
-                )
+            Column(
+                Modifier.fillMaxWidth().heightIn(max = 160.dp).verticalScroll(rememberScrollState()),
+                verticalArrangement = Arrangement.spacedBy(Space.xxs)
+            ) {
+                details.take(if (expanded) details.size else 2).forEach { (label, value) ->
+                    Text(
+                        "$label: $value",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        maxLines = if (expanded) 3 else 1,
+                        overflow = TextOverflow.Ellipsis
+                    )
+                }
             }
             Row(
                 Modifier.fillMaxWidth(),
