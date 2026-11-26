@@ -131,6 +131,14 @@
         <circle radius="3.0" fill="#D8B46C" stroke="#202923" stroke-width="1.0"/>
         <caption k="name" font-size="8" fill="#BEC9BE" stroke="#202923" stroke-width="1.8" priority="3"/>
     </rule>
+    <rule e="node" k="amenity" v="parking|bicycle_parking|motorcycle_parking" zoom-min="16">
+        <circle radius="2.7" fill="#9AA9A0" stroke="#202923" stroke-width="0.9"/>
+        <caption k="name" font-size="8" fill="#BEC9BE" stroke="#202923" stroke-width="1.8" priority="4"/>
+    </rule>
+    <rule e="node" k="amenity" v="atm|bank" zoom-min="16">
+        <circle radius="2.7" fill="#B39ACB" stroke="#202923" stroke-width="0.9"/>
+        <caption k="name" font-size="8" fill="#BEC9BE" stroke="#202923" stroke-width="1.8" priority="4"/>
+    </rule>
     <rule e="node" k="amenity" v="restaurant|cafe|fast_food|food_court|bar|pub" zoom-min="16">
         <circle radius="2.7" fill="#D9A66E" stroke="#202923" stroke-width="0.9"/>
         <caption k="name" font-size="8" fill="#BEC9BE" stroke="#202923" stroke-width="1.8" priority="4"/>
