@@ -380,13 +380,14 @@ private class MapOverlays(
         }
 
         // Dashed straight guide line only while there is no road route.
-        if (here != null && destination != null && lastRoute == null) {
+        val guideStart = origin ?: here
+        if (guideStart != null && destination != null && lastRoute == null) {
             val polyline = line ?: Polyline(paint(accentColor, Style.STROKE, 3f * density, dashed = true), AndroidGraphicFactory.INSTANCE).also {
                 line = it
                 layers.add(it)
             }
             polyline.latLongs.clear()
-            polyline.latLongs.add(here)
+            polyline.latLongs.add(guideStart)
             polyline.latLongs.add(destination)
         } else {
             line?.let { layers.remove(it) }
