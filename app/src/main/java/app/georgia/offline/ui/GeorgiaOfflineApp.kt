@@ -489,6 +489,7 @@ private fun MapScreen(modifier: Modifier, settings: LocalSettings, navigation: N
     var mapSearchError by remember { mutableStateOf<String?>(null) }
     var poiLookupJob by remember { mutableStateOf<Job?>(null) }
     var selectedMapPoi by remember { mutableStateOf<PoiRepository.PoiRecord?>(null) }
+    DisposableEffect(Unit) { onDispose { poiLookupJob?.cancel() } }
     var mapSearchQuery by rememberSaveable { mutableStateOf("") }
     var mapSearchCategory by rememberSaveable { mutableStateOf("all") }
     var mapSearchResults by remember { mutableStateOf<List<PoiRepository.PoiRecord>>(emptyList()) }
