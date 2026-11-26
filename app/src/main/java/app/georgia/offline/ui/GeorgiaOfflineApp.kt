@@ -189,7 +189,8 @@ fun GeorgiaOfflineApp(settings: LocalSettings) {
                 ) { padding ->
                     AnimatedContent(
                         targetState = currentTab,
-                        transitionSpec = { fadeIn(tween(280)) togetherWith fadeOut(tween(160)) },
+                        // Finish fading the previous tab before revealing the next one; avoid blended screens.
+                        transitionSpec = { fadeIn(tween(180, delayMillis = 160)) togetherWith fadeOut(tween(160)) },
                         label = "tabs"
                     ) { tab ->
                         when (tab) {
