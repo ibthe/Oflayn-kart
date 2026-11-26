@@ -247,6 +247,14 @@ fun RoutePlannerCard(
         shadowElevation = 16.dp
     ) {
         Column(Modifier.padding(Space.m), verticalArrangement = Arrangement.spacedBy(Space.s)) {
+            // A visible grab handle makes the downward swipe-to-collapse discoverable.
+            Box(
+                Modifier.align(Alignment.CenterHorizontally)
+                    .padding(bottom = Space.xxs)
+                    .size(width = 36.dp, height = 4.dp)
+                    .clip(CircleShape)
+                    .background(MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.38f))
+            )
             val route = session.route
             val startLat = origin?.latitude ?: location?.latitude
             val startLon = origin?.longitude ?: location?.longitude
