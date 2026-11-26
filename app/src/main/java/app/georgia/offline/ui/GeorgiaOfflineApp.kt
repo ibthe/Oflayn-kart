@@ -661,15 +661,21 @@ private fun MapScreen(modifier: Modifier, settings: LocalSettings, navigation: N
                     }
                 )
             }
-            if (target != null && !navigation.routeMenuVisible && !session.navigating && navigation.pointSelection == null) {
+            if (target != null && !navigation.routeMenuVisible && !session.navigating &&
+                navigation.pointSelection == null && selectedMapPoi == null && selectedPlace == null
+            ) {
                 MapChip(
                     modifier = Modifier.align(Alignment.TopCenter).padding(Space.s),
                     onClick = { navigation.openRouteMenu() }
                 ) {
-                    Text("Маршрут", style = MaterialTheme.typography.labelLarge, fontWeight = FontWeight.SemiBold)
-                    if (session.route != null) {
-                        Text(GeoMath.formatDistance(session.route!!.distanceMeters), style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.primary)
-                    }
+                    Text(
+                        session.route?.let { "Маршрут · ${GeoMath.formatDistance(it.distanceMeters)} · ${formatDuration(it.durationSeconds)}" }
+                            ?: "Маршрут",
+                        style = MaterialTheme.typography.labelLarge,
+                        fontWeight = FontWeight.SemiBold,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
+                    )
                 }
             }
             if (navigation.pointSelection != null) {
@@ -755,11 +761,6 @@ private fun MapScreen(modifier: Modifier, settings: LocalSettings, navigation: N
                     }
                 }
                 val activeRoute = session.route
-                if (target != null && activeRoute != null && !session.navigating &&
-                    !navigation.routeMenuVisible && selectedMapPoi == null && selectedPlace == null
-                ) {
-                    RouteSummaryBar(activeRoute)
-                }
                 if (target != null && session.navigating && activeRoute != null) {
                         NavigationFooter(activeRoute, session) {
                             session.reset()
