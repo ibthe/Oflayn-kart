@@ -497,8 +497,10 @@ private fun MapScreen(modifier: Modifier, settings: LocalSettings, navigation: N
             mapSearchLoading = false
             return@LaunchedEffect
         }
-        delay(180)
+        // Never leave old results tappable while a new query or viewport is being resolved.
+        mapSearchResults = emptyList()
         mapSearchLoading = true
+        delay(180)
         try {
             mapSearchResults = PoiRepository.searchInBounds(
                 db, mapSearchQuery, bounds.north, bounds.south, bounds.east, bounds.west,
@@ -1031,7 +1033,8 @@ private fun MapViewportSearchBox(
                         )
                     }
                 }
-            }        }
+            }
+        }
     }
 }
 
