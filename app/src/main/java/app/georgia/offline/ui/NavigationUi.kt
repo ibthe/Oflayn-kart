@@ -279,7 +279,7 @@ fun RoutePlannerCard(
                     TextButton(onClick = onUseMyLocation, modifier = Modifier.weight(1f), contentPadding = PaddingValues(horizontal = Space.s)) {
                         Text("Моё местоположение", maxLines = 1, softWrap = false)
                     }
-                    TextButton(onClick = onChooseOrigin, modifier = Modifier.weight(1f), contentPadding = PaddingValues(horizontal = Space.s)) {
+                    TextButton(onClick = onChooseOrigin, modifier = Modifier.weight(1f).background(if (origin != null) MaterialTheme.colorScheme.primaryContainer else Color.Transparent, RoundedCornerShape(Space.m)), contentPadding = PaddingValues(horizontal = Space.s)) {
                         Text("Точка на карте", maxLines = 1, softWrap = false)
                     }
                 }
@@ -302,7 +302,7 @@ fun RoutePlannerCard(
                     ) {
                         Text("Моё местоположение", maxLines = 1, softWrap = false)
                     }
-                    TextButton(onClick = onChooseDestination, modifier = Modifier.weight(1f), contentPadding = PaddingValues(horizontal = Space.s)) {
+                    TextButton(onClick = onChooseDestination, modifier = Modifier.weight(1f).background(MaterialTheme.colorScheme.primaryContainer, RoundedCornerShape(Space.m)), contentPadding = PaddingValues(horizontal = Space.s)) {
                         Text("Точка на карте", maxLines = 1, softWrap = false)
                     }
                 }
