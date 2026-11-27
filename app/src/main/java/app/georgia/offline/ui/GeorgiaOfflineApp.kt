@@ -1021,7 +1021,8 @@ private fun MapScreen(modifier: Modifier, settings: LocalSettings, navigation: N
                             session,
                             speaker,
                             gpsStatus = if (tracker.hasFreshFix()) null else tracker.error ?: "Жду сигнал GPS…",
-                            gpsError = tracker.error != null
+                            gpsError = tracker.error != null,
+                            location = tracker.location?.takeIf { tracker.hasFreshFix() }
                         ) {
                             speaker.stop()
                             session.reset()
