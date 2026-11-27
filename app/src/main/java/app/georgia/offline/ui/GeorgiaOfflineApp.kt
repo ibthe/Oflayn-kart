@@ -660,7 +660,7 @@ private fun MapScreen(modifier: Modifier, settings: LocalSettings, navigation: N
     LaunchedEffect(session.route) {
         if (session.route == null) mapSearchAlongRoute = false
     }
-    LaunchedEffect(poiDatabase, mapSearchViewport, mapSearchQuery, mapSearchCategory, mapSearchAlongRoute, session.route) {
+    LaunchedEffect(poiDatabase, if (mapSearchAlongRoute) null else mapSearchViewport, mapSearchQuery, mapSearchCategory, mapSearchAlongRoute, session.route) {
         val db = poiDatabase ?: return@LaunchedEffect
         val route = session.route
         val searchRoute = mapSearchAlongRoute && route != null
