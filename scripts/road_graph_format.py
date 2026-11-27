@@ -35,8 +35,8 @@ EDGE_STRUCT = struct.Struct("<iiiiHBBBBHi")
 EDGE_SIZE = EDGE_STRUCT.size  # 28
 assert EDGE_SIZE == 28
 
-PROFILE_CAR, PROFILE_OFFROAD, PROFILE_BIKE, PROFILE_FOOT = 1, 2, 4, 8
-PROFILES = {"car": PROFILE_CAR, "offroad": PROFILE_OFFROAD, "bike": PROFILE_BIKE, "foot": PROFILE_FOOT}
+PROFILE_CAR, PROFILE_OFFROAD, PROFILE_BIKE, PROFILE_FOOT, PROFILE_MOTORCYCLE = 1, 2, 4, 8, 16
+PROFILES = {"car": PROFILE_CAR, "offroad": PROFILE_OFFROAD, "bike": PROFILE_BIKE, "foot": PROFILE_FOOT, "motorcycle": PROFILE_MOTORCYCLE}
 
 HIGHWAY_CLASS = {
     "motorway": 1, "motorway_link": 2, "trunk": 3, "trunk_link": 4, "primary": 5, "primary_link": 6,
@@ -55,9 +55,10 @@ _OFFROAD = {**_CAR, 15: 20}
 _BIKE = {3: 14, 4: 14, 5: 15, 6: 15, 7: 16, 8: 16, 9: 17, 10: 17, 11: 16, 12: 17, 13: 15, 14: 15, 15: 12, 16: 10, 17: 12, 18: 18, 21: 15}
 _FOOT = {c: 5 for c in range(3, 22)}
 _FOOT.update({16: 4, 19: 3})
-SPEED_KMH = {PROFILE_CAR: _CAR, PROFILE_OFFROAD: _OFFROAD, PROFILE_BIKE: _BIKE, PROFILE_FOOT: _FOOT}
-UNPAVED_FACTOR = {PROFILE_CAR: 0.6, PROFILE_OFFROAD: 0.85, PROFILE_BIKE: 0.7, PROFILE_FOOT: 0.9}
-MAX_SPEED_MPS = {PROFILE_CAR: 25.0, PROFILE_OFFROAD: 25.0, PROFILE_BIKE: 5.0, PROFILE_FOOT: 1.5}
+_MOTORCYCLE = {1: 90, 2: 50, 3: 75, 4: 45, 5: 60, 6: 40, 7: 50, 8: 35, 9: 40, 10: 30, 11: 35, 12: 30, 13: 15, 14: 20, 15: 20, 21: 30}
+SPEED_KMH = {PROFILE_CAR: _CAR, PROFILE_OFFROAD: _OFFROAD, PROFILE_BIKE: _BIKE, PROFILE_FOOT: _FOOT, PROFILE_MOTORCYCLE: _MOTORCYCLE}
+UNPAVED_FACTOR = {PROFILE_CAR: 0.6, PROFILE_OFFROAD: 0.85, PROFILE_BIKE: 0.7, PROFILE_FOOT: 0.9, PROFILE_MOTORCYCLE: 0.75}
+MAX_SPEED_MPS = {PROFILE_CAR: 25.0, PROFILE_OFFROAD: 25.0, PROFILE_BIKE: 5.0, PROFILE_FOOT: 1.5, PROFILE_MOTORCYCLE: 38.9}
 
 
 def speed_mps(profile: int, cls: int, flags: int) -> float:
@@ -65,9 +66,9 @@ def speed_mps(profile: int, cls: int, flags: int) -> float:
     if flags & FLAG_UNPAVED:
         kmh = max(kmh * UNPAVED_FACTOR[profile], 3.0)
     if flags & FLAG_SEVERE:
-        kmh *= {PROFILE_CAR: 0.30, PROFILE_OFFROAD: 0.55, PROFILE_BIKE: 0.20, PROFILE_FOOT: 0.65}[profile]
+        kmh *= {PROFILE_CAR: 0.30, PROFILE_OFFROAD: 0.55, PROFILE_BIKE: 0.20, PROFILE_FOOT: 0.65, PROFILE_MOTORCYCLE: 0.25}[profile]
     elif flags & FLAG_ROUGH:
-        kmh *= {PROFILE_CAR: 0.65, PROFILE_OFFROAD: 0.80, PROFILE_BIKE: 0.55, PROFILE_FOOT: 0.85}[profile]
+        kmh *= {PROFILE_CAR: 0.65, PROFILE_OFFROAD: 0.80, PROFILE_BIKE: 0.55, PROFILE_FOOT: 0.85, PROFILE_MOTORCYCLE: 0.60}[profile]
     return max(kmh, 1.0) / 3.6
 
 
@@ -128,6 +129,7 @@ def classify_way(tags: dict) -> RoadInfo | None:
 
     general = _tri(tags, "access")
     car_specific = _tri(tags, "motor_vehicle", "motorcar", "vehicle")
+    motorcycle_specific = _tri(tags, "motorcycle", "motor_vehicle", "vehicle")
     bike_specific = _tri(tags, "bicycle", "vehicle")
     foot_specific = _tri(tags, "foot")
 
@@ -142,6 +144,7 @@ def classify_way(tags: dict) -> RoadInfo | None:
     if cls in _CAR_CLASSES and car_specific is True:
         car_ok = True
     offroad_ok = pick(car_specific, cls in _CAR_CLASSES or cls == 15)
+    motorcycle_ok = pick(motorcycle_specific, cls in _CAR_CLASSES)
     if cls == 15 and car_specific is False:
         offroad_ok = False
     if cls == 15 and general is False and car_specific is None:
@@ -163,6 +166,7 @@ def classify_way(tags: dict) -> RoadInfo | None:
     smoothness = tags.get("smoothness")
     if smoothness in {"horrible", "very_horrible", "impassable"}:
         car_ok = False
+        motorcycle_ok = False
         bike_ok = False
     if smoothness == "impassable":
         offroad_ok = False
@@ -182,6 +186,7 @@ def classify_way(tags: dict) -> RoadInfo | None:
     for bit, ok, ignore_oneway in (
         (PROFILE_CAR, car_ok, False), (PROFILE_OFFROAD, offroad_ok, False),
         (PROFILE_BIKE, bike_ok, bike_free), (PROFILE_FOOT, foot_ok, True),
+        (PROFILE_MOTORCYCLE, motorcycle_ok, False),
     ):
         if not ok:
             continue
