@@ -1546,6 +1546,12 @@ private fun SettingsScreen(modifier: Modifier, settings: LocalSettings, onShowOn
                     color = MaterialTheme.colorScheme.error
                 )
             }
+            if (!storageOptionsLoaded) {
+                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(Space.xs)) {
+                    CircularProgressIndicator(modifier = Modifier.size(16.dp), strokeWidth = 2.dp)
+                    Text("Проверяю доступные накопители…", style = MaterialTheme.typography.bodySmall)
+                }
+            }
             Column(verticalArrangement = Arrangement.spacedBy(Space.xs)) {
                 storageOptions.forEach { option ->
                     val freeGb = option.availableBytes / (1024.0 * 1024.0 * 1024.0)
@@ -1607,7 +1613,7 @@ private fun SettingsScreen(modifier: Modifier, settings: LocalSettings, onShowOn
             if (isMovingMap) {
                 Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(Space.xs)) {
                     CircularProgressIndicator(modifier = Modifier.size(16.dp), strokeWidth = 2.dp)
-                    Text("Перенос карты…", style = MaterialTheme.typography.bodySmall)
+                    Text("Подготовка карты…", style = MaterialTheme.typography.bodySmall)
                 }
             }
             storageMessage?.let {
