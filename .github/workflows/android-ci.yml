@@ -160,16 +160,17 @@ jobs:
         uses: actions/cache/restore@v4
         with:
           path: app/src/main/assets/offline/georgia-roads.bin
-          key: georgia-roads-v4-${{ runner.os }}-restore-only
+          key: georgia-roads-v5-${{ runner.os }}-${{ hashFiles('scripts/road_graph_format.py', 'scripts/build_road_graph.py', 'scripts/verify_road_graph.py') }}-restore-only
           restore-keys: |
-            georgia-roads-v4-${{ runner.os }}-
+            georgia-roads-v5-${{ runner.os }}-${{ hashFiles('scripts/road_graph_format.py', 'scripts/build_road_graph.py', 'scripts/verify_road_graph.py') }}-
+            georgia-roads-v5-${{ runner.os }}-
 
       - name: Check restored road graph
         id: roads-state
         shell: bash
         run: |
           roads=app/src/main/assets/offline/georgia-roads.bin
-          if [[ -s "$roads" && "$(head -c 4 "$roads")" == "GRT1" ]]; then
+          if [[ -s "$roads" ]] && python3 scripts/verify_road_graph.py "$roads"; then
             echo "exists=true" >> "$GITHUB_OUTPUT"
             echo "Restored road graph: $(stat -c %s "$roads") bytes"
           else
@@ -214,7 +215,7 @@ jobs:
         uses: actions/cache/save@v4
         with:
           path: app/src/main/assets/offline/georgia-roads.bin
-          key: georgia-roads-v4-${{ runner.os }}-${{ github.run_id }}
+          key: georgia-roads-v5-${{ runner.os }}-${{ hashFiles('scripts/road_graph_format.py', 'scripts/build_road_graph.py', 'scripts/verify_road_graph.py') }}-${{ github.run_id }}
 
       - name: Build Mapsforge map-writer plugin
         if: ${{ success() && (steps.map-state.outputs.exists != 'true' || github.event_name == 'schedule' || inputs.refresh_map == true) }}
