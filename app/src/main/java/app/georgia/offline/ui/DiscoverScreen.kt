@@ -92,6 +92,7 @@ internal fun DiscoverScreen(
     var planMode by rememberSaveable { mutableStateOf(false) }
     var tripStops by remember { mutableStateOf(tripPlanRepository.list()) }
     var tripPois by remember { mutableStateOf<List<PoiRepository.PoiRecord>>(emptyList()) }
+    var tripPoisLoading by remember { mutableStateOf(false) }
     val here = tracker.location?.takeIf { tracker.hasFreshFix() }
 
     LaunchedEffect(Unit) {
@@ -108,11 +109,13 @@ internal fun DiscoverScreen(
         val stops = tripPlanRepository.list()
         tripStops = stops
         val localDatabase = database
+        tripPoisLoading = localDatabase != null && stops.isNotEmpty()
         tripPois = if (localDatabase != null) {
             PoiRepository.byIds(localDatabase, stops.map { it.poiId })
         } else {
             emptyList()
         }
+        tripPoisLoading = false
     }
 
     LaunchedEffect(database, query, selectedCategory) {
@@ -159,6 +162,14 @@ internal fun DiscoverScreen(
             SelectPill("План поездки · ${tripStops.size}", selected = planMode, onClick = { planMode = true })
         }
         if (planMode) {
+            if (tripPoisLoading || (database == null && loading)) {
+                Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(Space.s)) {
+                    CircularProgressIndicator(modifier = Modifier.size(16.dp), strokeWidth = 2.dp)
+                    Text("Загружаю места плана…", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                }
+            } else if (database == null && tripStops.isNotEmpty()) {
+                InfoCard("Офлайн-база недоступна", statusMessage)
+            } else {
             TripPlanContent(
                 stops = tripStops,
                 pois = tripPois,
@@ -182,6 +193,7 @@ internal fun DiscoverScreen(
                     tripStops = tripPlanRepository.list()
                 }
             )
+            }
         } else {
         OutlinedTextField(
             value = query,
