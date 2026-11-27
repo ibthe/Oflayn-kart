@@ -102,6 +102,7 @@ import kotlinx.coroutines.withContext
 import java.io.File
 import app.georgia.offline.data.LocalSettings
 import app.georgia.offline.data.MapFileRepository
+import app.georgia.offline.data.MapStorageOption
 import app.georgia.offline.data.PoiRepository
 import app.georgia.offline.data.TrackRepository
 import app.georgia.offline.data.TripPlanRepository
@@ -1409,6 +1410,13 @@ private fun SettingsScreen(modifier: Modifier, settings: LocalSettings, onShowOn
     var isImportingMap by remember { mutableStateOf(false) }
     var mapImportMessage by remember { mutableStateOf<String?>(null) }
     var mapImportError by remember { mutableStateOf(false) }
+    var storageOptions by remember { mutableStateOf<List<MapStorageOption>>(emptyList()) }
+    var isMovingMap by remember { mutableStateOf(false) }
+    var storageMessage by remember { mutableStateOf<String?>(null) }
+    var storageError by remember { mutableStateOf(false) }
+    LaunchedEffect(context) {
+        storageOptions = withContext(Dispatchers.IO) { MapFileRepository.availableStorageOptions(context) }
+    }
     val mapPicker = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
         if (uri != null) {
             coroutineScope.launch {
@@ -1417,7 +1425,7 @@ private fun SettingsScreen(modifier: Modifier, settings: LocalSettings, onShowOn
                 mapImportError = false
                 try {
                     val file = withContext(Dispatchers.IO) {
-                        MapFileRepository.importGeorgiaMap(context, uri)
+                        MapFileRepository.importGeorgiaMap(context, uri, settings.mapStorageId)
                     }
                     settings.setMapFilePath(file.absolutePath, bundled = false)
                     mapImportMessage = "Карта проверена: ${file.length() / (1024 * 1024)} МБ"
@@ -1508,6 +1516,80 @@ private fun SettingsScreen(modifier: Modifier, settings: LocalSettings, onShowOn
                 color = MaterialTheme.colorScheme.onSurfaceVariant
             )
 
+        }
+
+        SectionLabel("Хранение")
+        Panel {
+            Text("Место хранения офлайн-карт", style = MaterialTheme.typography.titleSmall)
+            val selectedStorageId = settings.mapStorageId ?: MapFileRepository.INTERNAL_STORAGE_ID
+            val selectedStorageAvailable = storageOptions.any { it.id == selectedStorageId }
+            if (!selectedStorageAvailable) {
+                Text(
+                    "Выбранная SD-карта не подключена. Подключи её или выбери внутреннюю память.",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.error
+                )
+            }
+            Column(verticalArrangement = Arrangement.spacedBy(Space.xs)) {
+                storageOptions.forEach { option ->
+                    val freeGb = option.availableBytes / (1024.0 * 1024.0 * 1024.0)
+                    val totalGb = option.totalBytes / (1024.0 * 1024.0 * 1024.0)
+                    SelectPill(
+                        label = "${option.label} · ${"%.1f".format(java.util.Locale.US, freeGb)} ГБ свободно",
+                        selected = selectedStorageId == option.id,
+                        onClick = {
+                            if (selectedStorageId != option.id && !isMovingMap && !isImportingMap) {
+                                coroutineScope.launch {
+                                    val currentFile = settings.mapFilePath?.let(::File)
+                                    val userMap = currentFile?.isFile == true && !settings.mapFileIsBundled
+                                    if (userMap && currentFile != null) {
+                                        isMovingMap = true
+                                    }
+                                    storageError = false
+                                    storageMessage = if (userMap) "Переношу карту и проверяю копию…" else "Новое место хранения выбрано."
+                                    try {
+                                        if (userMap && currentFile != null) {
+                                            val moved = withContext(Dispatchers.IO) {
+                                                MapFileRepository.moveImportedMap(context, currentFile, option.id)
+                                            }
+                                            settings.updateMapStorageId(option.id)
+                                            settings.setMapFilePath(moved.absolutePath, bundled = false)
+                                            storageMessage = "Карта перенесена · ${moved.length() / (1024 * 1024)} МБ"
+                                        } else {
+                                            settings.updateMapStorageId(option.id)
+                                            storageMessage = "Место выбрано. Встроенная карта будет подготовлена на нём."
+                                        }
+                                    } catch (error: Exception) {
+                                        storageError = true
+                                        storageMessage = error.message ?: "Не удалось сменить место хранения."
+                                    } finally {
+                                        isMovingMap = false
+                                    }
+                                }
+                            }
+                        }
+                    )
+                    Text(
+                        if (option.totalBytes > 0L) "Всего: ${"%.1f".format(java.util.Locale.US, totalGb)} ГБ" else "Объём накопителя недоступен",
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+            }
+            if (isMovingMap) {
+                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(Space.xs)) {
+                    CircularProgressIndicator(modifier = Modifier.size(16.dp), strokeWidth = 2.dp)
+                    Text("Перенос карты…", style = MaterialTheme.typography.bodySmall)
+                }
+            }
+            storageMessage?.let {
+                Text(it, style = MaterialTheme.typography.bodySmall, color = if (storageError) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.onSurfaceVariant)
+            }
+            Text(
+                "На SD-карту помещаются большие офлайн-карты в папку приложения. Если карта извлечена, она станет недоступна до подключения.",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
         }
 
         SectionLabel("Мои места")
