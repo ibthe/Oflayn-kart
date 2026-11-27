@@ -14,8 +14,8 @@ import build_contours as contours
 
 
 def main() -> None:
-    assert contours.tile_origin("N41E044.dem.gz") == (41, 44)
-    assert contours.tile_origin("S01W001.dem.gz") == (-1, -1)
+    assert contours.tile_origin("N41E044.dem.gzip") == (41, 44)
+    assert contours.tile_origin("S01W001.dem.gzip") == (-1, -1)
 
     gradient = np.tile(np.linspace(0, 1000, 120, dtype=np.int16)[:, None], (1, 120))
     lines = contours.extract_tile_contours(
@@ -41,7 +41,7 @@ def main() -> None:
         dem_dir = root / "dem"
         dem_dir.mkdir()
         values = np.tile(np.linspace(0, 1000, 1200, dtype=np.int16)[:, None], (1, 1200))
-        tile_name = "N41E044.dem.gz"
+        tile_name = "N41E044.dem.gzip"
         (dem_dir / tile_name).write_bytes(gzip.compress(values.astype("<i2").tobytes()))
         (dem_dir / "manifest.json").write_text(
             json.dumps({"tiles": [{"file": tile_name}]}), encoding="utf-8"
