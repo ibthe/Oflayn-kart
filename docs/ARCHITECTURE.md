@@ -48,6 +48,12 @@ APK assets
 - Bundled maps are installed and user-imported maps are validated on the selected volume. Imported maps are copied and validated before settings switch to the new path; the previous copy is deleted only after the new path is saved.
 - SD storage is app-specific (`Android/data/.../files/maps`), needs no broad storage permission, and is removed by Android when the app is uninstalled. A removed card makes its map unavailable until reconnected or the user selects another volume.
 
+## Offline elevation model
+
+- CI downloads 24 one-degree Copernicus WorldDEM-90 COG tiles for the Georgia map bounds, converts them to deterministic gzip-compressed little-endian int16 grids, and verifies tile checksums and dimensions before APK packaging.
+- `DemRepository` lazily loads at most four 1200×1200 tiles and samples route geometry at roughly 100 m intervals. `ElevationProfile` reports approximate ascent, descent, minimum and maximum elevation.
+- The source is a 90 m digital surface model (DSM), not bare-earth terrain or road-surface elevation. Attribution is shown in About; elevation profiles are omitted when tiles are unavailable.
+
 ## Offline emergency panel
 
 - `EmergencyPanel` shows only a fresh GPS fix, coordinate accuracy and battery percentage.
