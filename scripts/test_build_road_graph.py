@@ -13,7 +13,8 @@ def way(refs, coords, **tags):
     tags.setdefault("highway", "residential")
     info = rg.classify_way(tags)
     assert info is not None, tags
-    return rg.WayRecord(info, list(refs), [round(c[0] * 1e6) for c in coords], [round(c[1] * 1e6) for c in coords])
+    way_id = tags.pop("way_id", 0)
+    return rg.WayRecord(info, list(refs), [round(c[0] * 1e6) for c in coords], [round(c[1] * 1e6) for c in coords], way_id)
 
 
 A, B, C = (41.700, 44.800), (41.700, 44.810), (41.700, 44.820)
@@ -243,6 +244,42 @@ class RoutingTest(unittest.TestCase):
         self.assertIsNotNone(forward)
         self.assertLess(forward["distance_m"], 1000)
         self.assertGreater(backward["distance_m"], 1500)
+
+    def test_no_turn_restriction_is_serialized_and_enforced(self):
+        ways = [
+            way([1, 2], [A, B], name="Approach", way_id=100),
+            way([2, 3], [B, C], name="Forbidden exit", way_id=200),
+            way([2, 4, 3], [B, N, C], name="Alternative", way_id=300),
+        ]
+        restriction = rg.TurnRestriction(100, 200, 2, rg.PROFILE_CAR, rg.TURN_NO)
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / "turns.bin"
+            summary = rg.write_graph(path, rg.build_graph(ways, [restriction]))
+            graph = rg.Graph.load(path)
+        self.assertGreater(summary["turnRestrictionCount"], 0)
+        approach = next(i for i, v in enumerate(graph.vert[::2]) if v == round(B[0] * 1e6))
+        incoming_arc = next(
+            arc for pos in range(graph.arc_start[approach], graph.arc_start[approach + 1])
+            for arc in [graph.arcs[pos]] if (arc >> 1) < graph.E and graph.edges[arc >> 1][0] == approach
+        )
+        self.assertEqual(len(graph.turn_records), summary["turnRestrictionCount"])
+
+    def test_only_turn_restriction_blocks_other_exits(self):
+        ways = [
+            way([1, 2], [A, B], name="Approach", way_id=100),
+            way([2, 3], [B, C], name="Required exit", way_id=200),
+            way([2, 4, 3], [B, N, C], name="Alternative", way_id=300),
+        ]
+        restriction = rg.TurnRestriction(100, 200, 2, rg.PROFILE_CAR, rg.TURN_ONLY)
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / "only.bin"
+            rg.write_graph(path, rg.build_graph(ways, [restriction]))
+            graph = rg.Graph.load(path)
+        approach_edge = next(i for i, edge in enumerate(graph.edges) if edge[9] == 0 and graph.edge_points(i)[0] == A and graph.edge_points(i)[-1] == B)
+        required_edge = next(i for i, edge in enumerate(graph.edges) if graph.edge_points(i)[0] == B and graph.edge_points(i)[-1] == C)
+        alternative_edge = next(i for i, edge in enumerate(graph.edges) if graph.edge_points(i)[0] == B and graph.edge_points(i)[-1] == N)
+        self.assertFalse(graph.turn_allowed(rg.PROFILE_CAR, approach_edge << 1, alternative_edge << 1))
+        self.assertTrue(graph.turn_allowed(rg.PROFILE_CAR, approach_edge << 1, required_edge << 1))
 
     def test_snap_too_far_returns_none(self):
         self.assertIsNone(self.graph.route(rg.PROFILE_CAR, 42.5, 44.8, 41.7, 44.81, max_snap_m=2000))
