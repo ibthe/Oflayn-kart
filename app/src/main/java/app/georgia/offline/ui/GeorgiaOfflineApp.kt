@@ -657,6 +657,9 @@ private fun MapScreen(modifier: Modifier, settings: LocalSettings, navigation: N
         poiDatabaseMessage = installation.message
         poiDatabaseLoading = false
     }
+    LaunchedEffect(session.route) {
+        if (session.route == null) mapSearchAlongRoute = false
+    }
     LaunchedEffect(poiDatabase, mapSearchViewport, mapSearchQuery, mapSearchCategory, mapSearchAlongRoute, session.route) {
         val db = poiDatabase ?: return@LaunchedEffect
         val route = session.route
@@ -734,7 +737,7 @@ private fun MapScreen(modifier: Modifier, settings: LocalSettings, navigation: N
     val showMapSearch = !session.navigating &&
         navigation.pointSelection == null &&
         !navigation.routeMenuVisible &&
-        navigation.origin == null &&
+        (navigation.origin == null || session.route != null) &&
         selectedMapPoi == null &&
         selectedPlace == null
 
