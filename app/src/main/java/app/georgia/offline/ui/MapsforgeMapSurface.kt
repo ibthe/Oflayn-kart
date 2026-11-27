@@ -518,13 +518,21 @@ fun MapsforgeMapSurface(
                     OverlayState(userLocation, destination, recenterToken, zoomInToken, zoomOutToken, routePoints, trackPoints, viaPoints, followUser, fitToken, places, selectedPlaceId, selectedPoi, searchResultPoints, origin, focusToken)
                 )
                 rasterLayerRef?.let { layer ->
-                    layer.setAlpha(rasterOpacity.coerceIn(0.25f, 0.9f))
                     val layers = view.layerManager.layers
+                    val targetAlpha = rasterOpacity.coerceIn(0.25f, 0.9f)
+                    var needsRedraw = false
+                    if (layer.alpha != targetAlpha) {
+                        layer.setAlpha(targetAlpha)
+                        needsRedraw = true
+                    }
                     if (rasterEnabled && !layers.contains(layer)) {
                         layers.add(layer)
+                        needsRedraw = true
                     } else if (!rasterEnabled && layers.contains(layer)) {
                         layers.remove(layer)
+                        needsRedraw = true
                     }
+                    if (needsRedraw) view.invalidate()
                 }
                 // Wait until Mapsforge has applied a pan/zoom before reading the visible corners.
                 view.postDelayed({
