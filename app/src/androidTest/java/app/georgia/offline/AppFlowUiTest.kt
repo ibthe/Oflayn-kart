@@ -30,6 +30,9 @@ class AppFlowUiTest {
         // At the end of each transition, only the target page title remains beside its tab label.
         composeRule.onNodeWithText("Места", substring = false).performClick()
         awaitCount("Места", 2)
+        composeRule.onNodeWithText("План поездки · 0", substring = false).performClick()
+        composeRule.onNodeWithText("План пока пуст", substring = false).assertExists()
+        composeRule.onNodeWithText("Каталог", substring = false).performClick()
         composeRule.onNodeWithText("Утилиты", substring = false).performClick()
         awaitCount("Утилиты", 2)
         composeRule.waitForIdle()
