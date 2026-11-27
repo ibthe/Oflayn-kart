@@ -49,5 +49,6 @@ class RoutingProfileTest {
         assertFalse(RoadGraph.FLAG_ROUGH and RoadGraph.FLAG_UNPAVED != 0)
         assertFalse(RoadGraph.FLAG_SEVERE and RoadGraph.FLAG_ROUNDABOUT != 0)
         assertFalse(RoadGraph.FLAG_STEEP and RoadGraph.FLAG_SEVERE != 0)
+        assertFalse(RoadGraph.FLAG_STEEP and RoadGraph.FLAG_ROUNDABOUT != 0)
     }
 }
