@@ -56,6 +56,21 @@ class RouteSessionTest {
     }
 
     @Test
+    fun trackFollowReportsOffTrackWithoutRequestingRoadReroute() {
+        val session = RouteSession().apply { beginTrackFollow(simpleRoute()) }
+        assertEquals(TrackingEvent.NONE, session.update(0.0, 0.005, 1_000L))
+        assertEquals(TrackingEvent.NONE, session.update(0.01, 0.005, 2_000L))
+        assertEquals(TrackingEvent.NONE, session.update(0.01, 0.005, 3_000L))
+        assertEquals(TrackingEvent.OFF_TRACK, session.update(0.01, 0.005, 4_000L))
+        assertEquals(TrackingEvent.NONE, session.update(0.01, 0.005, 5_000L))
+        assertEquals(TrackingEvent.NONE, session.update(0.01, 0.005, 6_000L))
+        assertEquals(TrackingEvent.NONE, session.update(0.0, 0.005, 7_000L))
+        assertEquals(TrackingEvent.NONE, session.update(0.01, 0.005, 8_000L))
+        assertEquals(TrackingEvent.NONE, session.update(0.01, 0.005, 9_000L))
+        assertEquals(TrackingEvent.OFF_TRACK, session.update(0.01, 0.005, 10_000L))
+    }
+
+    @Test
     fun arrivingWithinTwentyFiveMetersOfTheDestinationIsRecognized() {
         val session = RouteSession().apply {
             route = simpleRoute()
