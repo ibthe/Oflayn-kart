@@ -30,7 +30,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 
 MAGIC = b"GRT1"
-FORMAT_VERSION = 1
+FORMAT_VERSION = 2
 HEADER_SIZE = 64
 EDGE_STRUCT = struct.Struct("<iiiiHBBBBHi")
 EDGE_SIZE = EDGE_STRUCT.size  # 28
@@ -63,7 +63,7 @@ UNPAVED_FACTOR = {PROFILE_CAR: 0.6, PROFILE_OFFROAD: 0.85, PROFILE_BIKE: 0.7, PR
 MAX_SPEED_MPS = {PROFILE_CAR: 25.0, PROFILE_OFFROAD: 25.0, PROFILE_BIKE: 5.0, PROFILE_FOOT: 1.5, PROFILE_MOTORCYCLE: 38.9}
 
 
-def speed_mps(profile: int, cls: int, flags: int) -> float:
+def speed_mps(profile: int, cls: int, flags: int, incline_percent: int = 0) -> float:
     kmh = SPEED_KMH[profile].get(cls, 10)
     if flags & FLAG_UNPAVED:
         kmh = max(kmh * UNPAVED_FACTOR[profile], 3.0)
@@ -71,8 +71,18 @@ def speed_mps(profile: int, cls: int, flags: int) -> float:
         kmh *= {PROFILE_CAR: 0.30, PROFILE_OFFROAD: 0.55, PROFILE_BIKE: 0.20, PROFILE_FOOT: 0.65, PROFILE_MOTORCYCLE: 0.25}[profile]
     elif flags & FLAG_ROUGH:
         kmh *= {PROFILE_CAR: 0.65, PROFILE_OFFROAD: 0.80, PROFILE_BIKE: 0.55, PROFILE_FOOT: 0.85, PROFILE_MOTORCYCLE: 0.60}[profile]
-    if flags & FLAG_STEEP:
+    if flags & FLAG_STEEP and incline_percent == 0:
         kmh *= {PROFILE_CAR: 0.82, PROFILE_OFFROAD: 0.90, PROFILE_BIKE: 0.65, PROFILE_FOOT: 0.78, PROFILE_MOTORCYCLE: 0.75}[profile]
+    if incline_percent:
+        slope = min(abs(incline_percent), 40) / 100.0
+        coefficient = {
+            PROFILE_CAR: (1.25, 0.55),
+            PROFILE_OFFROAD: (0.75, 0.35),
+            PROFILE_BIKE: (2.00, 0.80),
+            PROFILE_FOOT: (1.20, 0.50),
+            PROFILE_MOTORCYCLE: (1.40, 0.65),
+        }[profile][0 if incline_percent > 0 else 1]
+        kmh *= max(0.55, 1.0 / (1.0 + slope * coefficient))
     return max(kmh, 1.0) / 3.6
 
 
@@ -92,6 +102,8 @@ class RoadInfo:
     fwd: int
     back: int
     name: str | None = None
+    incline_forward: int = 0
+    incline_backward: int = 0
 
 
 @dataclass
@@ -121,26 +133,50 @@ def _tri(tags: dict, *keys: str):
     return None
 
 
+def _parse_incline_value(raw_value) -> float | None:
+    raw = str(raw_value or "").strip().lower().replace(",", ".")
+    if not raw:
+        return None
+    if raw == "up":
+        return 10.0
+    if raw == "down":
+        return -10.0
+    try:
+        if raw.endswith("%"):
+            return float(raw[:-1].strip())
+        if raw.endswith("°"):
+            return math.tan(math.radians(float(raw[:-1].strip()))) * 100.0
+        if re.fullmatch(r"[+-]?\d+(?:\.\d+)?", raw):
+            return float(raw)
+    except ValueError:
+        return None
+    return None
+
+
+def _incline_pair(tags: dict) -> tuple[int, int]:
+    """Return signed forward/backward grades; positive means uphill in that travel direction."""
+    base = _parse_incline_value(tags.get("incline"))
+    forward_specific = _parse_incline_value(tags.get("incline:forward"))
+    backward_specific = _parse_incline_value(tags.get("incline:backward"))
+    if base is not None:
+        forward = base
+        backward = -base
+    else:
+        forward = -backward_specific if backward_specific is not None else 0.0
+        backward = -forward_specific if forward_specific is not None else 0.0
+    if forward_specific is not None:
+        forward = forward_specific
+    if backward_specific is not None:
+        backward = backward_specific
+    return (
+        int(round(max(-100.0, min(100.0, forward)))),
+        int(round(max(-100.0, min(100.0, backward)))),
+    )
+
+
 def _incline_percent(tags: dict) -> float:
-    """Parse common OSM incline forms; preserve the steepest directional value."""
-    grades = []
-    for key in ("incline", "incline:forward", "incline:backward"):
-        raw = str(tags.get(key, "")).strip().lower().replace(",", ".")
-        if not raw:
-            continue
-        if raw in {"up", "down"}:
-            grades.append(10.0)
-            continue
-        try:
-            if raw.endswith("%"):
-                grades.append(float(raw[:-1].strip()))
-            elif raw.endswith("°"):
-                grades.append(math.tan(math.radians(float(raw[:-1].strip()))) * 100.0)
-            elif re.fullmatch(r"[+-]?\d+(?:\.\d+)?", raw):
-                grades.append(float(raw))
-        except ValueError:
-            continue
-    return max(grades, key=abs, default=0.0)
+    forward, backward = _incline_pair(tags)
+    return float(max(abs(forward), abs(backward)))
 
 
 def classify_way(tags: dict) -> RoadInfo | None:
@@ -237,10 +273,11 @@ def classify_way(tags: dict) -> RoadInfo | None:
         flags |= FLAG_ROUGH
     elif smoothness == "very_horrible":
         flags |= FLAG_SEVERE
-    if abs(_incline_percent(tags)) >= 8.0:
+    incline_forward, incline_backward = _incline_pair(tags)
+    if max(abs(incline_forward), abs(incline_backward)) >= 8:
         flags |= FLAG_STEEP
     name = tags.get("name:ru") or tags.get("name") or tags.get("name:en") or tags.get("ref")
-    return RoadInfo(cls, flags, fwd, back, name)
+    return RoadInfo(cls, flags, fwd, back, name, incline_forward, incline_backward)
 
 
 # --------------------------------------------------------------------------- graph building
@@ -249,7 +286,7 @@ def classify_way(tags: dict) -> RoadInfo | None:
 class GraphData:
     vlat: array = field(default_factory=lambda: array("i"))
     vlon: array = field(default_factory=lambda: array("i"))
-    edges: list = field(default_factory=list)  # (from, to, lenDm, shape[(lat,lon)], cls, flags, fwd, back, nameIdx)
+    edges: list = field(default_factory=list)  # (from, to, lenDm, shape, cls, flags, fwd, back, nameIdx, inclineFwd, inclineBack)
     names: list = field(default_factory=list)
 
 
@@ -290,7 +327,7 @@ def build_graph(ways) -> GraphData:
                 u = vertex(way.refs[start], way.lats[start], way.lons[start])
                 v = vertex(way.refs[i], way.lats[i], way.lons[i])
                 if length > 0.0 or u != v:
-                    data.edges.append((u, v, int(round(length * 10)), shape, info.cls, info.flags, info.fwd, info.back, name_idx))
+                    data.edges.append((u, v, int(round(length * 10)), shape, info.cls, info.flags, info.fwd, info.back, name_idx, info.incline_forward, info.incline_backward))
                 start = i
                 length = 0.0
                 shape = []
@@ -315,12 +352,13 @@ def write_graph(path: Path, data: GraphData) -> dict:
     shape = array("i")
     edge_blob = bytearray()
     degree = [0] * (vcount + 1)
-    for u, v, length_dm, pts, cls, flags, fwd, back, name_idx in data.edges:
+    for u, v, length_dm, pts, cls, flags, fwd, back, name_idx, incline_forward, incline_backward in data.edges:
         offset = len(shape) * 4
         for lat, lon in pts:
             shape.append(lat)
             shape.append(lon)
-        edge_blob += EDGE_STRUCT.pack(u, v, length_dm, offset, len(pts), cls, flags, fwd, back, 0, name_idx)
+        incline_pair = (incline_forward & 0xFF) | ((incline_backward & 0xFF) << 8)
+        edge_blob += EDGE_STRUCT.pack(u, v, length_dm, offset, len(pts), cls, flags, fwd, back, incline_pair, name_idx)
         degree[u] += 1
         degree[v] += 1
     arc_start = array("i", [0] * (vcount + 1))
