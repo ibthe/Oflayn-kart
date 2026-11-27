@@ -18,6 +18,7 @@ from collections import Counter
 from pathlib import Path
 
 import road_graph_format as rg
+from dem_sampler import DemSampler
 
 BBOX_DEFAULT = (41.0, 39.8, 43.7, 46.8)
 
@@ -155,7 +156,8 @@ def main() -> int:
         if not ways:
             raise RuntimeError("no routable roads were found in the PBF")
         started = time.monotonic()
-        data = rg.build_graph(ways, restrictions)
+        dem_sampler = DemSampler(args.dem_dir) if args.dem_dir is not None else None
+    data = rg.build_graph(ways, restrictions, dem_sampler=dem_sampler)
         del ways
         print(f"[roads] graph built: vertices={len(data.vlat):,}, edges={len(data.edges):,}, "
               f"elapsed={time.monotonic() - started:.1f}s", flush=True)
