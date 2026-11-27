@@ -38,7 +38,6 @@ import app.georgia.offline.data.GpxCodec
 import app.georgia.offline.data.TrackRepository
 import app.georgia.offline.data.SavedTrackInfo
 import app.georgia.offline.data.TrackPoint
-import app.georgia.offline.data.TrackRepository
 import app.georgia.offline.data.GpxTrack
 import app.georgia.offline.domain.GeoFormatting
 import app.georgia.offline.domain.Qibla
