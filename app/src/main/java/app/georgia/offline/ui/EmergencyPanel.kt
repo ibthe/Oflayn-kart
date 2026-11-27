@@ -15,11 +15,19 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
+import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
+import app.georgia.offline.data.EmergencyContact
+import app.georgia.offline.data.EmergencyContactRepository
 import app.georgia.offline.domain.GeoFormatting
 import app.georgia.offline.ui.theme.Space
 
@@ -30,6 +38,10 @@ fun EmergencyPanel(context: Context, location: Location?) {
         ?.getIntProperty(BatteryManager.BATTERY_PROPERTY_CAPACITY)
         ?.takeIf { it in 0..100 }
     val accuracyMeters = location?.takeIf { it.hasAccuracy() }?.accuracy
+    var savedContact by remember { mutableStateOf(EmergencyContactRepository.load(context)) }
+    var editingContact by rememberSaveable { mutableStateOf(false) }
+    var contactName by rememberSaveable { mutableStateOf("") }
+    var contactPhone by rememberSaveable { mutableStateOf("") }
     val message = buildString {
         append("Нужна помощь. Мои координаты: ")
         append(coordinates ?: "актуальная GPS-позиция недоступна")
@@ -50,6 +62,11 @@ fun EmergencyPanel(context: Context, location: Location?) {
                 coordinates?.let { "Текущие координаты: $it" } ?: "Нет актуальной GPS-позиции. Включи геолокацию и дождись фикса.",
                 style = MaterialTheme.typography.bodySmall,
                 color = if (coordinates == null) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.onSurface
+            )
+            Text(
+                "В Грузии 112 — единый номер полиции, скорой и спасателей. Работает круглосуточно; для звонка нужна зона покрытия мобильной сети. Оператор может принять обращение на русском.",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
             )
             Text(
                 listOfNotNull(
@@ -97,6 +114,94 @@ fun EmergencyPanel(context: Context, location: Location?) {
                 enabled = coordinates != null,
                 modifier = Modifier.fillMaxWidth()
             ) { Text("Поделиться координатами") }
+            HorizontalDivider()
+            Text("Экстренный контакт", style = MaterialTheme.typography.titleSmall)
+            if (savedContact != null && !editingContact) {
+                Text(
+                    "${savedContact!!.name} · ${savedContact!!.phone}",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(Space.xs)) {
+                    OutlinedButton(
+                        onClick = {
+                            runCatching {
+                                val dialable = savedContact!!.phone.filter { it.isDigit() || it == '+' }
+                                context.startActivity(Intent(Intent.ACTION_DIAL, Uri.parse("tel:$dialable")))
+                            }.onFailure {
+                                Toast.makeText(context, "Не удалось открыть набор номера.", Toast.LENGTH_SHORT).show()
+                            }
+                        },
+                        modifier = Modifier.weight(1f)
+                    ) { Text("Позвонить") }
+                    OutlinedButton(
+                        onClick = {
+                            runCatching {
+                                val sms = Intent(Intent.ACTION_SENDTO).apply {
+                                    data = Uri.parse("smsto:${Uri.encode(savedContact!!.phone)}")
+                                    putExtra("sms_body", message)
+                                }
+                                context.startActivity(sms)
+                            }.onFailure {
+                                Toast.makeText(context, "Не удалось открыть сообщения.", Toast.LENGTH_SHORT).show()
+                            }
+                        },
+                        enabled = coordinates != null,
+                        modifier = Modifier.weight(1f)
+                    ) { Text("Отправить координаты") }
+                }
+                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+                    TextButton(onClick = {
+                        contactName = savedContact!!.name
+                        contactPhone = savedContact!!.phone
+                        editingContact = true
+                    }) { Text("Изменить") }
+                    TextButton(onClick = {
+                        EmergencyContactRepository.clear(context)
+                        savedContact = null
+                    }) { Text("Удалить") }
+                }
+            } else {
+                if (!editingContact) {
+                    Text("Сохрани номер близкого человека. Он останется только на этом устройстве.", style = MaterialTheme.typography.bodySmall)
+                    TextButton(onClick = { editingContact = true }) { Text("Добавить контакт") }
+                } else {
+                    OutlinedTextField(
+                        value = contactName,
+                        onValueChange = { contactName = it.take(60) },
+                        modifier = Modifier.fillMaxWidth(),
+                        singleLine = true,
+                        label = { Text("Имя контакта") }
+                    )
+                    OutlinedTextField(
+                        value = contactPhone,
+                        onValueChange = { contactPhone = it.take(32) },
+                        modifier = Modifier.fillMaxWidth(),
+                        singleLine = true,
+                        label = { Text("Телефон с кодом страны") }
+                    )
+                    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(Space.xs)) {
+                        OutlinedButton(
+                            onClick = {
+                                if (EmergencyContactRepository.save(context, contactName, contactPhone)) {
+                                    savedContact = EmergencyContact(contactName.trim(), contactPhone.trim())
+                                    editingContact = false
+                                    Toast.makeText(context, "Контакт сохранён на устройстве.", Toast.LENGTH_SHORT).show()
+                                } else {
+                                    Toast.makeText(context, "Проверь имя и номер телефона.", Toast.LENGTH_SHORT).show()
+                                }
+                            },
+                            enabled = EmergencyContactRepository.isValid(contactName, contactPhone),
+                            modifier = Modifier.weight(1f)
+                        ) { Text("Сохранить") }
+                        TextButton(onClick = {
+                            editingContact = false
+                            contactName = savedContact?.name.orEmpty()
+                            contactPhone = savedContact?.phone.orEmpty()
+                        }) { Text("Отмена") }
+                    }
+                }
+            }
             Text(
                 "Кнопка 112 только открывает набор номера — звонок не совершается автоматически. Координаты не отправляются приложением без твоего действия.",
                 style = MaterialTheme.typography.bodySmall,
