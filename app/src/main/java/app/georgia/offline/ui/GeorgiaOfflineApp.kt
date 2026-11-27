@@ -125,7 +125,7 @@ import app.georgia.offline.ui.theme.THEME_MODE_CHOICES
 import app.georgia.offline.ui.theme.ThemeMode
 import app.georgia.offline.ui.theme.paletteById
 import app.georgia.offline.ui.theme.resolveThemeMode
-import androidx.compose.material3.Slider
+
 
 private enum class AppTab(val label: String) {
     MAP("Карта"),
