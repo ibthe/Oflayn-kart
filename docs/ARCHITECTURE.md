@@ -42,6 +42,11 @@ APK assets
 - Language variants are requested from the writer as `en,ru,ka`; a name variant is stored only if the corresponding OSM tag exists. There is no automatic translation. The user independently enables map-label languages; Mapsforge `MultiMapDataStore(RETURN_ALL)` combines one reader per enabled language so the renderer can place labels from all selected variants. The language used in place lists is a separate preference.
 - The SD-folder picker is present, but direct map extraction to external SAF storage is not implemented yet. An explicit map-disable setting is persisted across launches, users can restore the APK-bundled map, and the repository checks free space before copying a large asset.
 
+## Offline trip planner
+
+- `TripPlanRepository` stores POI IDs and day/order metadata locally in an atomic app-private file.
+- Places can be added from the catalog or map, reordered within a day, moved to another day, and routed as a day itinerary using the existing multi-waypoint planner.
+
 ## GPX tracks and foreground recorder
 
 - `GpxCodec` securely parses GPX 1.1 track/route points with coordinate validation, external-entity protections and optional descriptions/notes, and exports standards-compliant GPX.
