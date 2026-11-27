@@ -32,22 +32,22 @@ def sample_ways():
 class ClassificationTest(unittest.TestCase):
     def test_residential_is_open_to_everyone_both_ways(self):
         info = rg.classify_way({"highway": "residential"})
-        self.assertEqual(info.fwd, 15)
-        self.assertEqual(info.back, 15)
+        self.assertEqual(info.fwd, 31)
+        self.assertEqual(info.back, 31)
 
     def test_oneway_restricts_vehicles_but_not_pedestrians(self):
         info = rg.classify_way({"highway": "residential", "oneway": "yes"})
-        self.assertEqual(info.fwd, 15)
-        self.assertEqual(info.back, rg.PROFILE_FOOT | rg.PROFILE_BIKE * 0)
+        self.assertEqual(info.fwd, 31)
+        self.assertEqual(info.back, rg.PROFILE_FOOT)
 
     def test_reverse_oneway(self):
         info = rg.classify_way({"highway": "residential", "oneway": "-1"})
         self.assertEqual(info.fwd, rg.PROFILE_FOOT)
-        self.assertEqual(info.back, 15)
+        self.assertEqual(info.back, 31)
 
     def test_motorway_is_car_only_and_oneway(self):
         info = rg.classify_way({"highway": "motorway"})
-        self.assertEqual(info.fwd, rg.PROFILE_CAR | rg.PROFILE_OFFROAD)
+        self.assertEqual(info.fwd, rg.PROFILE_CAR | rg.PROFILE_OFFROAD | rg.PROFILE_MOTORCYCLE)
         self.assertEqual(info.back, 0)
 
     def test_roundabout_is_oneway_and_flagged(self):
@@ -58,6 +58,19 @@ class ClassificationTest(unittest.TestCase):
     def test_footway_is_foot_only(self):
         info = rg.classify_way({"highway": "footway"})
         self.assertEqual(info.fwd, rg.PROFILE_FOOT)
+
+    def test_motorcycle_access_uses_motorcycle_specific_tags(self):
+        default = rg.classify_way({"highway": "residential"})
+        self.assertTrue(default.fwd & rg.PROFILE_MOTORCYCLE)
+        car_only = rg.classify_way({"highway": "residential", "motorcar": "no"})
+        self.assertTrue(car_only.fwd & rg.PROFILE_MOTORCYCLE)
+        motorcycle_banned = rg.classify_way({"highway": "residential", "motorcycle": "no", "motor_vehicle": "yes"})
+        self.assertFalse(motorcycle_banned.fwd & rg.PROFILE_MOTORCYCLE)
+        self.assertTrue(motorcycle_banned.fwd & rg.PROFILE_CAR)
+        track = rg.classify_way({"highway": "track"})
+        self.assertFalse(track.fwd & rg.PROFILE_MOTORCYCLE)
+        permitted_track = rg.classify_way({"highway": "track", "motorcycle": "yes"})
+        self.assertTrue(permitted_track.fwd & rg.PROFILE_MOTORCYCLE)
 
     def test_track_is_offroad_bike_foot_and_unpaved(self):
         info = rg.classify_way({"highway": "track"})
@@ -94,6 +107,14 @@ class ClassificationTest(unittest.TestCase):
         self.assertFalse(very_horrible.fwd & rg.PROFILE_CAR)
 
         self.assertIsNone(rg.classify_way({"highway": "residential", "smoothness": "impassable"}))
+
+    def test_motorcycle_speed_is_positive_and_penalizes_rough_surfaces(self):
+        paved = rg.speed_mps(rg.PROFILE_MOTORCYCLE, 12, 0)
+        rough = rg.speed_mps(rg.PROFILE_MOTORCYCLE, 12, rg.FLAG_ROUGH)
+        severe = rg.speed_mps(rg.PROFILE_MOTORCYCLE, 12, rg.FLAG_SEVERE)
+        self.assertGreater(paved, rough)
+        self.assertGreater(rough, severe)
+        self.assertGreater(rg.MAX_SPEED_MPS[rg.PROFILE_MOTORCYCLE], rg.MAX_SPEED_MPS[rg.PROFILE_CAR])
 
     def test_smoothness_reduces_route_speed(self):
         paved = rg.speed_mps(rg.PROFILE_OFFROAD, 15, 0)
