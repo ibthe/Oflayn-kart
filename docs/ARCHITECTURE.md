@@ -51,6 +51,10 @@ APK assets
 - Bundled maps are installed and user-imported maps are validated on the selected volume. Imported maps are copied and validated before settings switch to the new path; the previous copy is deleted only after the new path is saved.
 - SD storage is app-specific (`Android/data/.../files/maps`), needs no broad storage permission, and is removed by Android when the app is uninstalled. A removed card makes its map unavailable until reconnected or the user selects another volume.
 
+## Compact navigation metrics
+
+- The active navigation footer remains collapsed by default and can expand to show fresh GPS speed, GPS altitude, course and coordinates. Stale last-known fixes are never presented as live values.
+
 ## Offline elevation model
 
 - CI downloads 24 one-degree Copernicus WorldDEM-90 COG tiles for the Georgia map bounds, converts them to deterministic gzip-compressed little-endian int16 grids, and verifies tile checksums and dimensions before APK packaging.
@@ -80,6 +84,11 @@ APK assets
 - Saved tracks and their notes can be displayed in the track catalog; a selected continuous segment is drawn on the map and automatically framed. Reverse guidance snaps to the nearest point within 150 m and follows that continuous GPX segment back to its beginning; off-track deviation is reported without silently switching to a road route. Segments separated by GPX gaps are not joined.
 - Recovery checkpoints are written to a private hidden GPX file after the first two fixes, then every 10 points or 30 seconds. On startup the app offers to continue, save or discard the unfinished recording; checkpoint generations prevent an older asynchronous write from recreating a completed track.
 - Background location is intentionally not requested. Recording pauses when the app leaves the foreground.
+
+## Route-corridor POI search
+
+- `PoiRepository.searchAlongRoute` samples the planned polyline into bounded SQLite windows, then filters candidates against the route geometry within a 2.5 km corridor.
+- Results are ordered by route progress, so the list follows the planned direction. Selecting a place allows it to be inserted as a via stop without replacing the destination.
 
 ## GPS tools (0.2.0)
 
