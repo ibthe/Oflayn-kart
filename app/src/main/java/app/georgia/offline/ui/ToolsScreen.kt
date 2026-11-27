@@ -217,16 +217,15 @@ private fun TrackRecorderPanel(context: Context, tracker: LocationTracker, recor
         pendingExportId = null
         if (uri != null && id != null) {
             scope.launch {
-                runCatching {
+                try {
                     val xml = withContext(Dispatchers.IO) { GpxCodec.write(repository.load(id)) }
                     withContext(Dispatchers.IO) {
                         context.contentResolver.openOutputStream(uri)?.use { it.write(xml.toByteArray(Charsets.UTF_8)) }
                             ?: error("Не удалось создать GPX-файл.")
                     }
-                }.onSuccess {
                     message = "GPX экспортирован."
-                }.onFailure {
-                    message = it.message ?: "Не удалось экспортировать GPX."
+                } catch (error: Exception) {
+                    message = error.message ?: "Не удалось экспортировать GPX."
                 }
             }
         }
@@ -236,17 +235,16 @@ private fun TrackRecorderPanel(context: Context, tracker: LocationTracker, recor
     ) { uri ->
         if (uri != null) {
             scope.launch {
-                runCatching {
+                try {
                     withContext(Dispatchers.IO) {
                         context.contentResolver.openInputStream(uri)?.use { input ->
                             repository.save(GpxCodec.parse(input))
                         } ?: error("Не удалось открыть выбранный файл.")
                     }
-                }.onSuccess {
                     savedTracks = withContext(Dispatchers.IO) { repository.list() }
                     message = "GPX импортирован в локальные треки."
-                }.onFailure {
-                    message = it.message ?: "Не удалось импортировать GPX."
+                } catch (error: Exception) {
+                    message = error.message ?: "Не удалось импортировать GPX."
                 }
             }
         }
@@ -273,12 +271,13 @@ private fun TrackRecorderPanel(context: Context, tracker: LocationTracker, recor
                             message = "Недостаточно точек GPS: нужно не менее двух."
                         } else {
                             scope.launch {
-                                runCatching { withContext(Dispatchers.IO) { repository.save(track) } }
-                                    .onSuccess {
-                                        savedTracks = withContext(Dispatchers.IO) { repository.list() }
-                                        message = "Трек сохранён на устройстве."
-                                    }
-                                    .onFailure { message = it.message ?: "Не удалось сохранить трек." }
+                                try {
+                                    withContext(Dispatchers.IO) { repository.save(track) }
+                                    savedTracks = withContext(Dispatchers.IO) { repository.list() }
+                                    message = "Трек сохранён на устройстве."
+                                } catch (error: Exception) {
+                                    message = error.message ?: "Не удалось сохранить трек."
+                                }
                             }
                         }
                     }
@@ -327,9 +326,13 @@ private fun TrackRecorderPanel(context: Context, tracker: LocationTracker, recor
                         androidx.compose.material3.TextButton(
                             onClick = {
                                 scope.launch {
-                                    withContext(Dispatchers.IO) { repository.delete(track.id) }
-                                    savedTracks = withContext(Dispatchers.IO) { repository.list() }
-                                    message = "Трек удалён."
+                                    try {
+                                        withContext(Dispatchers.IO) { repository.delete(track.id) }
+                                        savedTracks = withContext(Dispatchers.IO) { repository.list() }
+                                        message = "Трек удалён."
+                                    } catch (error: Exception) {
+                                        message = error.message ?: "Не удалось удалить трек."
+                                    }
                                 }
                             }
                         ) { Text("Удалить") }
