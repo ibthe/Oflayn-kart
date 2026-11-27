@@ -62,6 +62,13 @@ class RoadGraph(buffer: ByteBuffer) {
     fun edgeLengthMeters(e: Int): Double = buf.getInt(edgeBase(e) + 8) / 10.0
     fun edgeClass(e: Int): Int = buf.get(edgeBase(e) + 18).toInt() and 0xFF
     fun edgeFlags(e: Int): Int = buf.get(edgeBase(e) + 19).toInt() and 0xFF
+
+    /** Signed incline in the edge's digitised direction (0) or reverse direction (1). */
+    fun edgeInclinePercent(e: Int, direction: Int): Int {
+        val packed = buf.getShort(edgeBase(e) + 22).toInt() and 0xFFFF
+        val value = if (direction == 0) packed and 0xFF else (packed ushr 8) and 0xFF
+        return if (value >= 128) value - 256 else value
+    }
     fun isRoundabout(e: Int): Boolean = edgeFlags(e) and FLAG_ROUNDABOUT != 0
 
     /** Whether [profile] may travel edge [e] in [direction] (0 = from to to, 1 = to to from). */
@@ -115,7 +122,7 @@ class RoadGraph(buffer: ByteBuffer) {
     companion object {
         const val HEADER_SIZE = 64
         const val EDGE_SIZE = 28
-        const val FORMAT_VERSION = 1
+        const val FORMAT_VERSION = 2
         const val FLAG_UNPAVED = 1
         const val FLAG_ROUNDABOUT = 2
         const val FLAG_ROUGH = 4
