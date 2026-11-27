@@ -111,7 +111,7 @@ def main() -> None:
         "noData": NODATA,
         "bbox": list(bbox),
         "source": "https://registry.opendata.aws/copernicus-dem/",
-        "license": "Copernicus DEM terms",
+        "license": "Copernicus WorldDEM-90 free and open licence; attribution required",
         "tiles": [],
     }
     for index, (latitude, longitude) in enumerate(tiles, start=1):
