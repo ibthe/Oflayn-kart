@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Validate the separate Mapsforge elevation-contour map and write its asset manifest."""
+"""Validate a newly generated or cached Mapsforge elevation-contour map."""
 from __future__ import annotations
 
 import argparse
@@ -19,12 +19,30 @@ def sha256_file(path: Path) -> str:
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--map", type=Path, required=True)
-    parser.add_argument("--contour-manifest", type=Path, required=True)
-    parser.add_argument("--output-manifest", type=Path, required=True)
+    parser.add_argument("--contour-manifest", type=Path)
+    parser.add_argument("--output-manifest", type=Path)
+    parser.add_argument("--existing-manifest", type=Path)
     args = parser.parse_args()
 
     if not args.map.is_file() or args.map.stat().st_size < 1024:
         raise SystemExit(f"ERROR: contour map is missing or too small: {args.map}")
+    if args.existing_manifest:
+        manifest = json.loads(args.existing_manifest.read_text(encoding="utf-8"))
+        if manifest.get("mapFile") != args.map.name or manifest.get("mapFileSizeBytes") != args.map.stat().st_size:
+            raise SystemExit("ERROR: cached contour map metadata does not match the file.")
+        if manifest.get("mapFileSha256") != sha256_file(args.map):
+            raise SystemExit("ERROR: cached contour map checksum mismatch.")
+        if manifest.get("contourWays", 0) <= 0 or manifest.get("contourNodes", 0) <= 0:
+            raise SystemExit("ERROR: cached contour map has no geometry metadata.")
+        print(
+            f"[contours-verify] cached {args.map.name}: {args.map.stat().st_size:,} bytes, "
+            f"sha256={manifest['mapFileSha256']}",
+            flush=True,
+        )
+        return 0
+
+    if not args.contour_manifest or not args.output_manifest:
+        parser.error("provide --existing-manifest or both --contour-manifest and --output-manifest")
     source = json.loads(args.contour_manifest.read_text(encoding="utf-8"))
     if source.get("contourWays", 0) <= 0 or source.get("contourNodes", 0) <= 0:
         raise SystemExit("ERROR: contour source manifest contains no generated geometry.")
