@@ -37,6 +37,22 @@ enum class RoutingProfile(
 
     fun speedMps(roadClass: Int, flags: Int): Double {
         val index = if (roadClass in 0 until CLASS_COUNT) roadClass else 0
-        return if (flags and RoadGraph.FLAG_UNPAVED != 0) unpavedMps[index] else pavedMps[index]
+        var speed = if (flags and RoadGraph.FLAG_UNPAVED != 0) unpavedMps[index] else pavedMps[index]
+        speed *= when {
+            flags and RoadGraph.FLAG_SEVERE != 0 -> when (this) {
+                CAR -> 0.30
+                OFFROAD -> 0.55
+                BIKE -> 0.20
+                FOOT -> 0.65
+            }
+            flags and RoadGraph.FLAG_ROUGH != 0 -> when (this) {
+                CAR -> 0.65
+                OFFROAD -> 0.80
+                BIKE -> 0.55
+                FOOT -> 0.85
+            }
+            else -> 1.0
+        }
+        return speed.coerceAtLeast(1.0 / 3.6)
     }
 }
