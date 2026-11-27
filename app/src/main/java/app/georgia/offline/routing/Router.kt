@@ -88,23 +88,21 @@ class Router(private val graph: RoadGraph) {
         val lengthA = graph.edgeLengthMeters(ea)
         val lengthB = graph.edgeLengthMeters(eb)
 
-        // The start point sits inside edge ea: it can leave towards either end the profile may use.
-        var seedToVertex = -1
-        var seedToCost = Double.MAX_VALUE
-        var seedFromVertex = -1
-        var seedFromCost = Double.MAX_VALUE
-        if (graph.usable(profile, ea, 0)) {
-            seedToVertex = graph.edgeTo(ea)
-            seedToCost = (lengthA - a.alongMeters) / speedAForward
-        }
-        if (graph.usable(profile, ea, 1)) {
-            seedFromVertex = graph.edgeFrom(ea)
-            seedFromCost = a.alongMeters / speedABackward
-        }
-        // The end point sits inside edge eb: it is reached from one of its ends.
-        var targetFromVertex = -1 // reached at `from`, then driven forward to the point
+        // Search state is the directed edge just traversed, not merely the vertex.
+        // This is essential: OSM turn restrictions depend on the incoming road.
+        val seedForwardArc = ea shl 1
+        val seedBackwardArc = seedForwardArc or 1
+        val targetForwardArc = eb shl 1
+        val targetBackwardArc = targetForwardArc or 1
+
+        var seedForwardCost = Double.MAX_VALUE
+        var seedBackwardCost = Double.MAX_VALUE
+        if (graph.usable(profile, ea, 0)) seedForwardCost = (lengthA - a.alongMeters) / speedAForward
+        if (graph.usable(profile, ea, 1)) seedBackwardCost = a.alongMeters / speedABackward
+
+        var targetFromVertex = -1 // arrive at from endpoint, then travel forward along eb
         var targetFromCost = 0.0
-        var targetToVertex = -1 // reached at `to`, then driven backward to the point
+        var targetToVertex = -1 // arrive at to endpoint, then travel backward along eb
         var targetToCost = 0.0
         if (graph.usable(profile, eb, 0)) {
             targetFromVertex = graph.edgeFrom(eb)
@@ -115,7 +113,7 @@ class Router(private val graph: RoadGraph) {
             targetToCost = (lengthB - b.alongMeters) / speedBBackward
         }
 
-        // Both points on the same edge: driving straight along it may beat any detour.
+        // A same-edge trip has no junction transition, so it is unaffected by turn restrictions.
         var sameEdgeSeconds = Double.MAX_VALUE
         var sameEdgeDirection = 0
         if (ea == eb) {
@@ -129,73 +127,72 @@ class Router(private val graph: RoadGraph) {
             }
         }
 
-        val bestG = DoubleArray(graph.arcCount) { Double.MAX_VALUE }
-        val parentArc = IntArray(graph.arcCount) { -1 }
-        val closed = BooleanArray(graph.arcCount)
+        val stateCount = graph.arcCount
+        val g = DoubleArray(stateCount) { Double.MAX_VALUE }
+        val parentState = IntArray(stateCount) { -1 }
+        val closed = BooleanArray(stateCount)
         val heap = MinHeap()
         val goalLat = b.lat
         val goalLon = b.lon
         val mLon = METERS_PER_DEGREE * cos(Math.toRadians(goalLat))
-        fun heuristic(v: Int): Double =
-            hypot((graph.vertexLon(v) - goalLon) * mLon, (graph.vertexLat(v) - goalLat) * METERS_PER_DEGREE) *
+        fun endVertex(arc: Int): Int {
+            val edge = arc ushr 1
+            return if ((arc and 1) == 0) graph.edgeTo(edge) else graph.edgeFrom(edge)
+        }
+        fun heuristic(vertex: Int): Double =
+            hypot((graph.vertexLon(vertex) - goalLon) * mLon, (graph.vertexLat(vertex) - goalLat) * METERS_PER_DEGREE) *
                 0.995 / profile.maxSpeedMps
 
-        // A state is the directed arc used to arrive at its end vertex. This keeps distinct
-        // incoming roads separate, which is required to enforce no_* and only_* restrictions.
-        if (seedToVertex >= 0) {
-            val arc = ea shl 1
-            bestG[arc] = seedToCost
-            heap.push(seedToCost + heuristic(seedToVertex), arc)
+        if (seedForwardCost < Double.MAX_VALUE) {
+            g[seedForwardArc] = seedForwardCost
+            heap.push(seedForwardCost + heuristic(endVertex(seedForwardArc)), seedForwardArc)
         }
-        if (seedFromVertex >= 0) {
-            val arc = (ea shl 1) or 1
-            if (seedFromCost < bestG[arc]) {
-                bestG[arc] = seedFromCost
-                heap.push(seedFromCost + heuristic(seedFromVertex), arc)
-            }
-        }
-
-        val targets = HashMap<Int, MutableList<Target>>()
-        if (targetFromVertex >= 0) {
-            targets.getOrPut(targetFromVertex) { ArrayList() }.add(Target(eb shl 1, targetFromCost))
-        }
-        if (targetToVertex >= 0) {
-            targets.getOrPut(targetToVertex) { ArrayList() }.add(Target((eb shl 1) or 1, targetToCost))
+        if (seedBackwardCost < g[seedBackwardArc]) {
+            g[seedBackwardArc] = seedBackwardCost
+            heap.push(seedBackwardCost + heuristic(endVertex(seedBackwardArc)), seedBackwardArc)
         }
 
         var bestTotal = Double.MAX_VALUE
         var bestState = -1
-        var bestFinalArc = -1
-        if (targets.isNotEmpty() && (seedToVertex >= 0 || seedFromVertex >= 0)) {
+        var bestSide = 0
+        if ((targetFromVertex >= 0 || targetToVertex >= 0) && heap.size > 0) {
             while (heap.size > 0) {
                 if (heap.peekKey() >= bestTotal) break
                 val incomingArc = heap.pop()
                 if (closed[incomingArc]) continue
                 closed[incomingArc] = true
-                val gu = bestG[incomingArc]
-                val u = graph.arcToVertex(incomingArc)
+                val u = endVertex(incomingArc)
+                val gu = g[incomingArc]
 
-                for (target in targets[u].orEmpty()) {
-                    if (graph.turnAllowed(profile, incomingArc, target.arc) && gu + target.cost < bestTotal) {
-                        bestTotal = gu + target.cost
-                        bestState = incomingArc
-                        bestFinalArc = target.arc
-                    }
+                if (u == targetFromVertex && graph.turnAllowed(profile, incomingArc, targetForwardArc) &&
+                    gu + targetFromCost < bestTotal
+                ) {
+                    bestTotal = gu + targetFromCost
+                    bestState = incomingArc
+                    bestSide = 0
+                }
+                if (u == targetToVertex && graph.turnAllowed(profile, incomingArc, targetBackwardArc) &&
+                    gu + targetToCost < bestTotal
+                ) {
+                    bestTotal = gu + targetToCost
+                    bestState = incomingArc
+                    bestSide = 1
                 }
 
                 for (i in graph.arcStart(u) until graph.arcStart(u + 1)) {
                     val outgoingArc = graph.arc(i)
-                    val e = outgoingArc ushr 1
+                    val edge = outgoingArc ushr 1
                     val direction = outgoingArc and 1
-                    if (!graph.usable(profile, e, direction) ||
-                        !graph.turnAllowed(profile, incomingArc, outgoingArc)
+                    if (!graph.usable(profile, edge, direction) ||
+                        !graph.turnAllowed(profile, incomingArc, outgoingArc) ||
+                        closed[outgoingArc]
                     ) continue
-                    val w = graph.arcToVertex(outgoingArc)
-                    val ng = gu + graph.edgeLengthMeters(e) / speed(profile, e, direction)
-                    if (ng < bestG[outgoingArc]) {
-                        bestG[outgoingArc] = ng
-                        parentArc[outgoingArc] = incomingArc
-                        heap.push(ng + heuristic(w), outgoingArc)
+                    val nextVertex = endVertex(outgoingArc)
+                    val nextCost = gu + graph.edgeLengthMeters(edge) / speed(profile, edge, direction)
+                    if (nextCost < g[outgoingArc]) {
+                        g[outgoingArc] = nextCost
+                        parentState[outgoingArc] = incomingArc
+                        heap.push(nextCost + heuristic(nextVertex), outgoingArc)
                     }
                 }
             }
@@ -215,20 +212,19 @@ class Router(private val graph: RoadGraph) {
             }
             buffer.add(b.lat, b.lon)
             pieces.add(Piece(ea, sameEdgeDirection, buffer.toArray(), -1))
-        } else if (bestState >= 0 && bestFinalArc >= 0) {
+        } else if (bestState >= 0) {
             seconds = bestTotal
             val chain = ArrayList<Int>()
             var state = bestState
             while (state >= 0) {
                 chain.add(state)
-                state = parentArc[state]
+                state = parentState[state]
             }
             chain.reverse()
             val firstArc = chain.first()
             val startDirection = firstArc and 1
-            val firstVertex = graph.arcToVertex(firstArc)
 
-            // Start piece: from the snapped start point to the first graph vertex.
+            // Start piece: from the snapped start point to the endpoint reached by the seed arc.
             run {
                 val pts = graph.edgePoints(ea)
                 val buffer = PointBuffer()
@@ -238,34 +234,32 @@ class Router(private val graph: RoadGraph) {
                 } else {
                     for (i in a.segment downTo 0) buffer.add(pts[2 * i], pts[2 * i + 1])
                 }
-                pieces.add(Piece(ea, startDirection, buffer.toArray(), firstVertex))
+                pieces.add(Piece(ea, startDirection, buffer.toArray(), endVertex(firstArc)))
             }
-            // Full edges between the snapped start and end edges.
+            // The first arc is already represented by the start piece.
             for (arc in chain.drop(1)) {
-                val e = arc ushr 1
+                val edge = arc ushr 1
                 val direction = arc and 1
-                val pts = graph.edgePoints(e)
+                val pts = graph.edgePoints(edge)
                 val buffer = PointBuffer()
                 if (direction == 0) {
                     for (i in 0 until pts.size / 2) buffer.add(pts[2 * i], pts[2 * i + 1])
                 } else {
                     for (i in pts.size / 2 - 1 downTo 0) buffer.add(pts[2 * i], pts[2 * i + 1])
                 }
-                pieces.add(Piece(e, direction, buffer.toArray(), graph.arcToVertex(arc)))
+                pieces.add(Piece(edge, direction, buffer.toArray(), endVertex(arc)))
             }
-            // Final partial edge; its directed arc was checked against the incoming turn restriction.
+            // End piece follows the checked transition onto the destination edge.
             run {
-                val finalEdge = bestFinalArc ushr 1
-                val direction = bestFinalArc and 1
-                val pts = graph.edgePoints(finalEdge)
+                val pts = graph.edgePoints(eb)
                 val buffer = PointBuffer()
-                if (direction == 0) {
+                if (bestSide == 0) {
                     for (i in 0..b.segment) buffer.add(pts[2 * i], pts[2 * i + 1])
                 } else {
                     for (i in pts.size / 2 - 1 downTo b.segment + 1) buffer.add(pts[2 * i], pts[2 * i + 1])
                 }
                 buffer.add(b.lat, b.lon)
-                pieces.add(Piece(finalEdge, direction, buffer.toArray(), -1))
+                pieces.add(Piece(eb, bestSide, buffer.toArray(), -1))
             }
         } else {
             return RouteResult.failed(RouteFailure.NO_PATH)
