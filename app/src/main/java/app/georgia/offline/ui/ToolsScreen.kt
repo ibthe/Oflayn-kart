@@ -20,6 +20,7 @@ import androidx.compose.foundation.background
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
+import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
@@ -255,6 +256,14 @@ private fun TrackRecorderPanel(context: Context, tracker: LocationTracker, recor
     Panel(padding = 0.dp) {
         Column(Modifier.fillMaxWidth().padding(Space.card), verticalArrangement = Arrangement.spacedBy(Space.xs)) {
             Text("Запись и GPX-треки", style = MaterialTheme.typography.titleMedium)
+            OutlinedTextField(
+                value = recorder.note,
+                onValueChange = { recorder.note = it.take(1_000) },
+                modifier = Modifier.fillMaxWidth(),
+                label = { Text("Заметка к треку") },
+                maxLines = 2,
+                singleLine = false
+            )
             Text(
                 if (recorder.recording) {
                     "Запись активна · точек: ${recorder.points.size}"
@@ -316,6 +325,9 @@ private fun TrackRecorderPanel(context: Context, tracker: LocationTracker, recor
                     ) {
                         Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
                             Text(track.name, style = MaterialTheme.typography.bodyMedium, maxLines = 1)
+                            track.description?.takeIf { it.isNotBlank() }?.let {
+                                Text(it, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 2)
+                            }
                             Text("${track.pointCount} точек", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                         }
                         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(Space.xxs)) {
