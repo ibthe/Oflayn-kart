@@ -795,7 +795,10 @@ private fun MapScreen(modifier: Modifier, settings: LocalSettings, navigation: N
             )
             if (!rerouting && session.route != null) {
                 delay(7_000)
-                if (!session.navigating && session.route != null) session.fitToken++
+                if (!session.navigating && session.route != null) {
+                    session.fitToken++
+                    zoomInToken++ // after fitting the route, remove the extra fit margin for a closer view
+                }
             }
             if (rerouting && session.navigating && session.voice && session.message == null) speaker.speak("Маршрут перестроен")
         }
