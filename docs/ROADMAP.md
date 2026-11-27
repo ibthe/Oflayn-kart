@@ -48,12 +48,12 @@
 
 ### 0.5.3 — локальный POI справочник и практические сведения
 
-- [x] PyOsmium extracts named and categorized OSM nodes and closed ways from the same verified Georgia PBF.
+- [x] PyOsmium extracts named and categorized OSM nodes, closed ways and multipolygon relations from the verified Georgia PBF; a relation smoke fixture checks multilingual names and centroid output.
 - [x] SQLite schema stores English, Russian and Georgian names when present, category, coordinates and tags.
 - [x] Local category/name/address/phone/website search and copy-coordinate action in the Discover screen.
 - [x] POI cards display address, phone, website, opening hours, cuisine and public access details when OSM tags exist.
 - [x] POI SHA-256 / row-count / SQLite-integrity checks in CI and APK validation.
-- [ ] CI run must still confirm full PBF processing, APK packaging and actual device search.
+- [ ] Full-country PBF extraction still needs an uncached end-to-end run and on-device search relevance review.
 
 ## Следующие этапы — функциональность прежде финальной проверки
 
