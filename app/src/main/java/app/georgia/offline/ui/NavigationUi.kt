@@ -53,6 +53,7 @@ import app.georgia.offline.routing.RoutingRepository
 import app.georgia.offline.ui.theme.Radius
 import app.georgia.offline.ui.theme.Space
 import java.util.Locale
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 
@@ -130,7 +131,17 @@ class RouteSession {
             addAll(waypoints)
             add(toLat to toLon)
         }
-        val result = withContext(Dispatchers.Default) { router.route(profile, orderedPoints) }
+        val result = try {
+            withContext(Dispatchers.Default) { router.route(profile, orderedPoints) }
+        } catch (cancelled: CancellationException) {
+            throw cancelled
+        } catch (error: Exception) {
+            if (id == requestId) {
+                busy = false
+                message = "Не удалось построить маршрут: ${error.message ?: "ошибка расчёта"}"
+            }
+            return
+        }
         if (id != requestId) return
         busy = false
         val found = result.route
