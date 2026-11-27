@@ -145,6 +145,8 @@ class GraphBuildTest(unittest.TestCase):
         self.assertEqual((graph.V, graph.E), (5, 5))
         self.assertEqual(summary["arcCount"], 10)
         self.assertEqual(len(graph.arcs), 10)
+        self.assertTrue(graph.usable(rg.PROFILE_MOTORCYCLE, 0, 0))
+        self.assertTrue(graph.usable(rg.PROFILE_MOTORCYCLE, 0, 1))
         self.assertEqual(sorted(graph.names), sorted(data.names))
         shaped = [e for e in range(graph.E) if graph.edges[e][4] > 0]
         self.assertEqual(len(shaped), 1)
@@ -172,6 +174,14 @@ class RoutingTest(unittest.TestCase):
         self.assertGreater(n_to_c_car["distance_m"], 1800)  # must go back through the junction
         self.assertLess(n_to_c_foot["distance_m"], 1500)    # pedestrians ignore the one-way
         self.assertLess(c_to_n_car["seconds"], n_to_c_car["seconds"])
+
+    def test_motorcycle_obeys_oneway_and_uses_its_own_access_mask(self):
+        c_to_n = self.graph.route(rg.PROFILE_MOTORCYCLE, 41.7, 44.8199, 41.7099, 44.8101)
+        n_to_c = self.graph.route(rg.PROFILE_MOTORCYCLE, 41.7099, 44.8101, 41.7, 44.8199)
+        self.assertIsNotNone(c_to_n)
+        self.assertIsNotNone(n_to_c)
+        self.assertLess(c_to_n["distance_m"], 1500)
+        self.assertGreater(n_to_c["distance_m"], 1800)
 
     def test_route_on_the_same_edge(self):
         result = self.graph.route(rg.PROFILE_CAR, 41.7, 44.8020, 41.7, 44.8060)
