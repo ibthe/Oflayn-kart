@@ -49,6 +49,9 @@ jobs:
         with:
           gradle-version: '9.6.0'
 
+      - name: Install offline DEM build dependencies
+        run: python3 -m pip install --disable-pip-version-check rasterio==1.4.3
+
       - name: Verify source manifest is offline
         run: python3 scripts/verify_offline_manifest.py
 
@@ -57,6 +60,9 @@ jobs:
 
       - name: Test offline POI extractor and progress logging
         run: python3 scripts/test_build_poi_database.py
+
+      - name: Test offline DEM tile selection and encoding
+        run: python3 scripts/test_build_dem.py
 
       - name: Test offline road graph builder and reference router
         run: python3 scripts/test_build_road_graph.py
@@ -237,6 +243,20 @@ jobs:
 
       - name: Verify generated country map and multilingual metadata
         run: python3 scripts/verify_bundled_map.py
+
+      - name: Restore or cache Georgia Copernicus DEM tiles
+        id: georgia-dem-cache
+        uses: actions/cache@v4
+        with:
+          path: app/src/main/assets/dem
+          key: georgia-dem-glo90-v1-${{ runner.os }}-${{ hashFiles('scripts/build_dem.py') }}
+
+      - name: Build Georgia Copernicus GLO-90 elevation tiles
+        if: steps.georgia-dem-cache.outputs.cache-hit != 'true'
+        run: python3 scripts/build_dem.py --output app/src/main/assets/dem
+
+      - name: Verify Georgia DEM package
+        run: python3 scripts/verify_dem.py app/src/main/assets/dem
 
       - name: Assemble debug APK with the complete offline map
         run: gradle --no-daemon --stacktrace --console=plain :app:assembleDebug
