@@ -80,6 +80,7 @@ fun MapsforgeMapSurface(
     preferredLanguages: List<String>,
     mapTheme: String,
     hillshadeDirectory: File? = null,
+    contoursMapFile: File? = null,
     modifier: Modifier = Modifier,
     userLocation: Location? = null,
     destination: LatLong? = null,
@@ -127,12 +128,13 @@ fun MapsforgeMapSurface(
     val currentRoutePoints by rememberUpdatedState(routePoints)
     val currentViaPoints by rememberUpdatedState(viaPoints)
     val currentRouteDrag by rememberUpdatedState(onRouteDrag)
-    key(mapFile.absolutePath, mapFile.lastModified(), preferredLanguages, mapTheme, hillshadeDirectory?.absolutePath, accentColor, destinationColor, routeColor, trackColor, savedColor, carColor, originColor) {
+    key(mapFile.absolutePath, mapFile.lastModified(), preferredLanguages, mapTheme, hillshadeDirectory?.absolutePath, contoursMapFile?.absolutePath, contoursMapFile?.lastModified(), accentColor, destinationColor, routeColor, trackColor, savedColor, carColor, originColor) {
         val overlays = remember { MapOverlays(accentColor, destinationColor, routeColor, trackColor, savedColor, carColor, originColor) }
         var mapViewRef by remember { mutableStateOf<MapView?>(null) }
         var mapDataStoreRef by remember { mutableStateOf<MapDataStore?>(null) }
         var hillshadeDataStoreRef by remember { mutableStateOf<MapDataStore?>(null) }
         var hillsRenderConfigRef by remember { mutableStateOf<HillsRenderConfig?>(null) }
+        var contoursDataStoreRef by remember { mutableStateOf<MapDataStore?>(null) }
         var rendererError by remember { mutableStateOf<String?>(null) }
         var cameraRestored by remember { mutableStateOf(false) }
 
@@ -221,6 +223,34 @@ fun MapsforgeMapSurface(
                             } catch (_: Exception) {
                                 runCatching { pendingHillDataStore?.close() }
                                 runCatching { pendingHillsConfig?.interruptAndDestroy() }
+                            }
+                        }
+                        val availableContoursFile = contoursMapFile?.takeIf { it.isFile && it.length() > 1024L }
+                        if (availableContoursFile != null) {
+                            var pendingContoursStore: MapDataStore? = null
+                            try {
+                                val contourDataStore: MapDataStore = MapFile(availableContoursFile)
+                                pendingContoursStore = contourDataStore
+                                val contourCache = AndroidUtil.createTileCache(
+                                    viewContext,
+                                    "georgia-contours-${availableContoursFile.parentFile?.name ?: "default"}",
+                                    model.displayModel.tileSize,
+                                    1f,
+                                    model.frameBufferModel.overdrawFactor
+                                )
+                                val contourLayer = AndroidUtil.createTileRendererLayer(
+                                    contourCache,
+                                    model.mapViewPosition,
+                                    contourDataStore,
+                                    resolveContourTheme(mapTheme, viewContext),
+                                    true,
+                                    true,
+                                    false
+                                )
+                                layerManager.layers.add(contourLayer)
+                                contoursDataStoreRef = contourDataStore
+                            } catch (_: Exception) {
+                                runCatching { pendingContoursStore?.close() }
                             }
                         }
                         // The map can neither be shrunk to a speck nor dragged away from Georgia.
@@ -495,6 +525,7 @@ fun MapsforgeMapSurface(
                 }
                 runCatching { mapDataStoreRef?.close() }
                 runCatching { hillshadeDataStoreRef?.close() }
+                runCatching { contoursDataStoreRef?.close() }
                 runCatching { hillsRenderConfigRef?.interruptAndDestroy() }
                 AndroidGraphicFactory.clearResourceMemoryCache()
             }
@@ -502,6 +533,21 @@ fun MapsforgeMapSurface(
     }
 }
 
+
+
+private fun resolveContourTheme(value: String, context: Context): XmlRenderTheme {
+    val bundledThemeName = if (value == "oflayn_natural_dark") {
+        "oflayn-contours-dark.xml"
+    } else {
+        "oflayn-contours-light.xml"
+    }
+    val themeFile = File(context.filesDir, bundledThemeName)
+    val bundledTheme = context.assets.open("themes/$bundledThemeName").use { it.readBytes() }
+    if (!themeFile.isFile || !themeFile.readBytes().contentEquals(bundledTheme)) {
+        themeFile.writeBytes(bundledTheme)
+    }
+    return ExternalRenderTheme(themeFile)
+}
 
 private fun resolveMapTheme(value: String, context: Context): XmlRenderTheme {
     // Both Natural variants are bundled assets and are refreshed in the app-private copy on update.
