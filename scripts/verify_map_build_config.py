@@ -66,6 +66,9 @@ def main() -> int:
     app_build = APP_BUILD.read_text(encoding="utf-8")
     poi_repository = POI_REPOSITORY.read_text(encoding="utf-8")
     poi_ui = POI_UI.read_text(encoding="utf-8")
+    poi_builder = POI_BUILDER.read_text(encoding="utf-8")
+    poi_tests = POI_TESTS.read_text(encoding="utf-8")
+    poi_verifier = POI_VERIFIER.read_text(encoding="utf-8")
     dem_builder = DEM_BUILDER.read_text(encoding="utf-8")
     dem_verifier = DEM_VERIFIER.read_text(encoding="utf-8")
     dem_tests = DEM_TESTS.read_text(encoding="utf-8")
@@ -332,6 +335,18 @@ def main() -> int:
     for asset in ("georgia-contours.map", "georgia-contours-manifest.json"):
         if asset not in required_assets:
             return fail(f"Offline data manifest must require {asset}.")
+
+
+    for token in ("def deduplicate_pois", "def deduplicate_database", "max_distance_m", "duplicatesRemoved"):
+        if token not in poi_builder:
+            return fail(f"POI cross-geometry deduplication is missing: {token}.")
+    if "test_same_place_node_way_relation_duplicates_merge_without_merging_nearby_businesses" not in poi_tests:
+        return fail("POI tests must cover node/way/relation deduplication and nearby distinct businesses.")
+    for token in ("relationsWritten", "duplicatesRemoved", "relationsIncluded"):
+        if token not in poi_verifier:
+            return fail(f"POI database verification is missing relation/dedup metadata: {token}.")
+    if "poiDeduplication" not in map_script or "poiDuplicatesRemoved" not in map_script:
+        return fail("The generated map manifest must record POI deduplication coverage.")
 
     if "continue-on-error: true" in workflow:
         return fail("map preparation must fail fast; do not hide failed prerequisites.")
