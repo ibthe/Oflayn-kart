@@ -49,6 +49,10 @@ object TerrainRepository {
         if (!alreadyInstalled) {
             val temporary = File(directory, "$fileName.tmp")
             temporary.writeBytes(bytes)
+            if (target.exists() && !target.delete()) {
+                temporary.delete()
+                throw IllegalStateException("Не удалось заменить пакет контурных линий.")
+            }
             if (!temporary.renameTo(target)) {
                 temporary.delete()
                 throw IllegalStateException("Не удалось сохранить офлайн-пакет контурных линий.")
