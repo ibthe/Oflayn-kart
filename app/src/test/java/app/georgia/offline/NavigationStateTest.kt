@@ -86,6 +86,32 @@ class NavigationStateTest {
     }
 
     @Test
+    fun newMapDestinationDoesNotInheritOldIntermediateStops() {
+        val state = NavigationState()
+        state.target = NavigationTarget("Old destination", 41.8, 44.9)
+        state.addWaypoint(NavigationTarget("Old stop", 41.7, 44.8))
+        state.closeRouteMenu()
+
+        state.chooseMapPoint("New destination", 41.9, 45.0)
+
+        assertEquals("New destination", state.target?.name)
+        assertEquals(0, state.viaPoints.size)
+    }
+
+    @Test
+    fun changingDestinationInsideOpenPlannerKeepsArrangedStops() {
+        val state = NavigationState()
+        state.target = NavigationTarget("Old destination", 41.8, 44.9)
+        state.addWaypoint(NavigationTarget("Keep this stop", 41.7, 44.8))
+        state.routeMenuVisible = true
+
+        state.chooseMapPoint("New destination", 41.9, 45.0)
+
+        assertEquals("New destination", state.target?.name)
+        assertEquals("Keep this stop", state.viaPoints.single().name)
+    }
+
+    @Test
     fun mapPointCanBeAssignedAsRouteStart() {
         val state = NavigationState()
         state.chooseMapPoint("Destination", 41.7, 44.8)
