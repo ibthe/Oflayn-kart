@@ -42,7 +42,6 @@ import app.georgia.offline.data.GpxTrack
 import app.georgia.offline.domain.GeoFormatting
 import app.georgia.offline.domain.Qibla
 import app.georgia.offline.ui.theme.Space
-import java.util.Locale
 import kotlin.math.abs
 import kotlin.math.roundToInt
 
@@ -57,6 +56,7 @@ fun ToolsScreen(modifier: Modifier = Modifier, settings: LocalSettings, tracker:
     PageColumn(modifier) {
         PageTitle("Утилиты", "Датчики телефона. Всё работает без интернета.")
 
+        EmergencyPanel(context, currentLocation)
         GpsPanel(settings, tracker, currentLocation, context)
         TrackRecorderPanel(context, tracker, trackRecorder, trackRepository, recoveryLoaded, onShowTrack, onFollowTrack)
 
