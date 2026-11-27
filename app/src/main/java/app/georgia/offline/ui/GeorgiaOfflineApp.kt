@@ -247,11 +247,29 @@ fun GeorgiaOfflineApp(settings: LocalSettings) {
                     ) { tab ->
                         when (tab) {
                             AppTab.MAP -> MapScreen(Modifier.padding(padding), settings, navigation, tracker, routeSession, speaker, selectedTrackPoints, trackRecorder.recording, trackRecorder.points.size, { selectedTrackPoints = emptyList() }) { selectedTab = AppTab.TOOLS.name }
-                            AppTab.DISCOVER -> DiscoverScreen(Modifier.padding(padding), settings, tracker) { name, latitude, longitude ->
-                                routeSession.reset()
-                                navigation.startRouteTo(NavigationTarget(name, latitude, longitude))
-                                selectedTab = AppTab.MAP.name
-                            }
+                            AppTab.DISCOVER -> DiscoverScreen(
+                                Modifier.padding(padding),
+                                settings,
+                                tracker,
+                                tripPlanRepository,
+                                tripPlanRevision,
+                                onNavigate = { name, latitude, longitude ->
+                                    routeSession.reset()
+                                    navigation.startRouteTo(NavigationTarget(name, latitude, longitude))
+                                    selectedTab = AppTab.MAP.name
+                                },
+                                onPlanRoute = { stops ->
+                                    if (stops.isNotEmpty()) {
+                                        routeSession.reset()
+                                        val destination = stops.last()
+                                        navigation.startRouteTo(NavigationTarget(destination.nameIn(settings.language), destination.latitude, destination.longitude))
+                                        stops.dropLast(1).forEach { poi ->
+                                            navigation.addWaypoint(NavigationTarget(poi.nameIn(settings.language), poi.latitude, poi.longitude))
+                                        }
+                                        selectedTab = AppTab.MAP.name
+                                    }
+                                }
+                            )
                             AppTab.TOOLS -> ToolsScreen(
                                 Modifier.padding(padding),
                                 settings,
