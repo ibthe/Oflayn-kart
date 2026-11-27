@@ -90,6 +90,20 @@ object DemRepository {
     }
 
 
+
+    fun bundledHillshadeBytes(context: Context): Long = runCatching {
+        val json = context.assets.open("dem/manifest.json").bufferedReader(Charsets.UTF_8).use { it.readText() }
+        val tiles = JSONObject(json).optJSONArray("tiles") ?: return 0L
+        (0 until tiles.length()).sumOf { index ->
+            tiles.optJSONObject(index)?.optLong("hgtCompressedBytes", 0L)?.coerceAtLeast(0L) ?: 0L
+        }
+    }.getOrDefault(0L)
+
+    fun installedHillshadeBytes(context: Context): Long =
+        File(context.filesDir, "dem/hgt").walkTopDown()
+            .filter { it.isFile && it.name.endsWith(".hgt.zip") }
+            .sumOf { it.length() }
+
     /**
      * Installs the bundled HGT archives into app-private storage for Mapsforge's hillshading
      * reader. Files are copied atomically and checked against the manifest; no network is used.
