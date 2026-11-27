@@ -57,7 +57,7 @@ import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 
-enum class TrackingEvent { NONE, REROUTE, ARRIVED }
+enum class TrackingEvent { NONE, REROUTE, OFF_TRACK, ARRIVED }
 
 /** State of one planned or running road route. Lives with the map screen. */
 class RouteSession {
@@ -66,6 +66,7 @@ class RouteSession {
     var busy by mutableStateOf(false)
     var message by mutableStateOf<String?>(null)
     var navigating by mutableStateOf(false)
+    var followingTrack by mutableStateOf(false)
     var voice by mutableStateOf(true)
     var along by mutableDoubleStateOf(0.0)
     var fitToken by mutableIntStateOf(0)
@@ -83,6 +84,7 @@ class RouteSession {
         route = null
         message = null
         navigating = false
+        followingTrack = false
         along = 0.0
         segmentHint = 0
         offRouteFixes = 0
@@ -90,11 +92,26 @@ class RouteSession {
     }
 
     fun beginNavigation() {
+        followingTrack = false
         announced.clear()
         along = 0.0
         segmentHint = 0
         offRouteFixes = 0
         navigating = true
+    }
+
+    /** Starts guidance along a previously recorded GPX line, in reverse order. */
+    fun beginTrackFollow(trackRoute: Route) {
+        requestId++
+        route = trackRoute
+        message = null
+        busy = false
+        followingTrack = true
+        navigating = true
+        along = 0.0
+        segmentHint = 0
+        offRouteFixes = 0
+        announced.clear()
     }
 
     /** Computes a route from the given position. When [rerouting] the current route stays on screen until the new one is ready. */
@@ -110,6 +127,7 @@ class RouteSession {
         val id = ++requestId
         busy = true
         if (!rerouting) {
+            followingTrack = false
             // A newly requested route/profile must never leave an older route startable
             // if the new calculation fails.
             message = null
@@ -178,13 +196,20 @@ class RouteSession {
         if (destinationDistance <= ARRIVE_METERS) return TrackingEvent.ARRIVED
         if (projection.offRouteMeters > OFF_ROUTE_METERS) {
             offRouteFixes++
-            if (offRouteFixes >= 3 && !busy && nowMillis - lastRerouteAt > 10_000L) {
-                lastRerouteAt = nowMillis
+            if (offRouteFixes >= 3 && !busy) {
                 offRouteFixes = 0
-                return TrackingEvent.REROUTE
+                if (followingTrack) {
+                    message = "Вы отклонились от записанного трека. Вернитесь к выделенной линии."
+                    return TrackingEvent.OFF_TRACK
+                }
+                if (nowMillis - lastRerouteAt > 10_000L) {
+                    lastRerouteAt = nowMillis
+                    return TrackingEvent.REROUTE
+                }
             }
         } else {
             offRouteFixes = 0
+            if (followingTrack) message = null
         }
         return TrackingEvent.NONE
     }
