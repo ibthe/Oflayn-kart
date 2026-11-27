@@ -442,7 +442,7 @@ def deduplicate_pois(pois: Iterable[PoiInput], max_distance_m: float = 18.0) -> 
         matching = [
             cluster_id for cluster_id in candidates
             if cluster_id in clusters
-            and any(_distance_meters(poi, member) <= max_distance_m for member in clusters[cluster_id])
+            and _distance_meters(poi, clusters[cluster_id][0]) <= max_distance_m
         ]
 
         if matching:
