@@ -487,6 +487,7 @@ def write_graph(path: Path, data: GraphData) -> dict:
             handle.write(chunk)
     return {"formatVersion": FORMAT_VERSION, "vertexCount": vcount, "edgeCount": ecount, "arcCount": len(arcs), "nameCount": len(data.names),
             "turnRestrictionCount": len(turn_blob) // TURN_STRUCT.size,
+             "demGradeEdges": data.dem_grade_edges,
             "sizeBytes": path.stat().st_size, "bbox": [min_lat / 1e6, min_lon / 1e6, max_lat / 1e6, max_lon / 1e6]}
 
 
