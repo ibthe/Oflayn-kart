@@ -2,13 +2,11 @@ package app.georgia.offline.data
 
 import android.content.Context
 import android.net.Uri
-import org.json.JSONArray
 import org.json.JSONObject
 import java.io.BufferedInputStream
 import java.io.BufferedOutputStream
 import java.io.ByteArrayOutputStream
 import java.io.File
-import java.io.FileInputStream
 import java.io.FileOutputStream
 import java.util.UUID
 import java.util.zip.ZipInputStream
@@ -295,8 +293,8 @@ object RasterPackageRepository {
         val maxZoom = json.optInt("maxZoom", -1)
         val tileCount = json.optInt("tileCount", -1)
         require(name.isNotBlank() && name.length <= 80) { "В манифесте неверное название пакета." }
-        require(attribution.isNotBlank() && attribution.length <= 240) { "В манифесте отсутствует атрибуция источника снимков." }
-        require(license.isNotBlank() && license.length <= 120) { "В манифесте не указана лицензия снимков." }
+        require(attribution.isNotBlank() && attribution.length <= 120) { "В манифесте отсутствует атрибуция источника снимков." }
+        require(license.isNotBlank() && license.length <= 80) { "В манифесте не указана лицензия снимков." }
         require(json.optString("tileScheme") == "xyz") { "Поддерживается только XYZ-схема тайлов." }
         require(json.optInt("tileSize", -1) == 256) { "Размер тайла должен быть 256×256." }
         require(extension == "png" || extension == "jpg") { "Поддерживаются только PNG и JPG тайлы." }
