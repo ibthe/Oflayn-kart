@@ -19,6 +19,10 @@ enum class RoutingProfile(
         1, "Авто", 25.0, 0.6,
         mapOf(1 to 90, 2 to 50, 3 to 75, 4 to 45, 5 to 60, 6 to 40, 7 to 50, 8 to 35, 9 to 40, 10 to 30, 11 to 35, 12 to 25, 13 to 10, 14 to 15, 15 to 15, 21 to 30)
     ),
+    MOTORCYCLE(
+        16, "Мотоцикл", 38.9, 0.75,
+        mapOf(1 to 90, 2 to 50, 3 to 75, 4 to 45, 5 to 60, 6 to 40, 7 to 50, 8 to 35, 9 to 40, 10 to 30, 11 to 35, 12 to 30, 13 to 15, 14 to 20, 15 to 20, 21 to 30)
+    ),
     OFFROAD(
         2, "4×4", 25.0, 0.85,
         mapOf(1 to 90, 2 to 50, 3 to 75, 4 to 45, 5 to 60, 6 to 40, 7 to 50, 8 to 35, 9 to 40, 10 to 30, 11 to 35, 12 to 25, 13 to 10, 14 to 15, 15 to 20, 21 to 30)
