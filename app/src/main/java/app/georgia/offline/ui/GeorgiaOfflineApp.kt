@@ -1067,8 +1067,8 @@ private fun MapScreen(modifier: Modifier, settings: LocalSettings, navigation: N
                                 Text(
                                     "Снимки: ${rasterPackage.attribution} · ${rasterPackage.license}",
                                     style = MaterialTheme.typography.labelSmall,
-                                    maxLines = 1,
-                                    overflow = TextOverflow.Ellipsis
+                                    maxLines = 3,
+                                    overflow = TextOverflow.Clip
                                 )
                             }
                         }
