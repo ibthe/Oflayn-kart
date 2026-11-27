@@ -26,23 +26,30 @@ class TrackRecorder {
     }
 
     fun addFix(location: Location) {
-        if (!recording || !location.latitude.isFinite() || !location.longitude.isFinite()) return
-        if (location.latitude !in -90.0..90.0 || location.longitude !in -180.0..180.0) return
-        if (location.elapsedRealtimeNanos <= lastElapsedRealtimeNanos) return
-        if (location.hasAccuracy() && location.accuracy > MAX_ACCURACY_METERS) return
-
-        val point = TrackPoint(
-            latitude = location.latitude,
-            longitude = location.longitude,
-            elevationMeters = if (location.hasAltitude()) location.altitude else null,
-            timeEpochMillis = location.time.takeIf { it > 0L }
+        addFix(
+            TrackPoint(
+                latitude = location.latitude,
+                longitude = location.longitude,
+                elevationMeters = if (location.hasAltitude()) location.altitude else null,
+                timeEpochMillis = location.time.takeIf { it > 0L }
+            ),
+            location.elapsedRealtimeNanos,
+            if (location.hasAccuracy()) location.accuracy else null
         )
+    }
+
+    fun addFix(point: TrackPoint, elapsedRealtimeNanos: Long, accuracyMeters: Float? = null) {
+        if (!recording || !point.latitude.isFinite() || !point.longitude.isFinite()) return
+        if (point.latitude !in -90.0..90.0 || point.longitude !in -180.0..180.0) return
+        if (elapsedRealtimeNanos <= lastElapsedRealtimeNanos) return
+        if (accuracyMeters != null && accuracyMeters > MAX_ACCURACY_METERS) return
+
         val previous = points.lastOrNull()
         if (previous != null) {
             val distance = GeoMath.distanceMeters(previous.latitude, previous.longitude, point.latitude, point.longitude)
             val elapsed = (point.timeEpochMillis ?: 0L) - (previous.timeEpochMillis ?: 0L)
             if (distance < MIN_POINT_DISTANCE_METERS && elapsed < MAX_STATIONARY_INTERVAL_MILLIS) {
-                lastElapsedRealtimeNanos = location.elapsedRealtimeNanos
+                lastElapsedRealtimeNanos = elapsedRealtimeNanos
                 return
             }
         }
