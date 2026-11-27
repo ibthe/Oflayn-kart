@@ -48,7 +48,7 @@ import kotlin.math.abs
 import kotlin.math.roundToInt
 
 @Composable
-fun ToolsScreen(modifier: Modifier = Modifier, settings: LocalSettings, tracker: LocationTracker, trackRecorder: TrackRecorder, onShowTrack: (List<TrackPoint>) -> Unit, onFollowTrack: (GpxTrack) -> Unit) {
+fun ToolsScreen(modifier: Modifier = Modifier, settings: LocalSettings, tracker: LocationTracker, trackRecorder: TrackRecorder, recoveryLoaded: Boolean, onShowTrack: (List<TrackPoint>) -> Unit, onFollowTrack: (GpxTrack) -> Unit) {
     val context = LocalContext.current
     val currentLocation = tracker.location?.takeIf { tracker.hasFreshFix() }
     val compass = rememberCompass(currentLocation)
@@ -59,7 +59,7 @@ fun ToolsScreen(modifier: Modifier = Modifier, settings: LocalSettings, tracker:
         PageTitle("Утилиты", "Датчики телефона. Всё работает без интернета.")
 
         GpsPanel(settings, tracker, currentLocation, context)
-        TrackRecorderPanel(context, tracker, trackRecorder, onShowTrack, onFollowTrack)
+        TrackRecorderPanel(context, tracker, trackRecorder, recoveryLoaded, onShowTrack, onFollowTrack)
 
         // ----- Compass -----
         Panel(padding = 0.dp) {
@@ -203,7 +203,7 @@ fun ToolsScreen(modifier: Modifier = Modifier, settings: LocalSettings, tracker:
 }
 
 @Composable
-private fun TrackRecorderPanel(context: Context, tracker: LocationTracker, recorder: TrackRecorder, onShowTrack: (List<TrackPoint>) -> Unit, onFollowTrack: (GpxTrack) -> Unit) {
+private fun TrackRecorderPanel(context: Context, tracker: LocationTracker, recorder: TrackRecorder, recoveryLoaded: Boolean, onShowTrack: (List<TrackPoint>) -> Unit, onFollowTrack: (GpxTrack) -> Unit) {
     val repository = remember(context) { TrackRepository(File(context.filesDir, "tracks")) }
     val scope = rememberCoroutineScope()
     var savedTracks by remember { mutableStateOf(emptyList<SavedTrackInfo>()) }
@@ -274,7 +274,59 @@ private fun TrackRecorderPanel(context: Context, tracker: LocationTracker, recor
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant
             )
-            if (recorder.recording) {
+            if (!recoveryLoaded) {
+                Text("Проверяю незавершённую запись…", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            } else if (recorder.hasRecovery && !recorder.recording) {
+                Text(
+                    "Найдена незавершённая запись · ${recorder.points.size} точек. Можно продолжить или сохранить её.",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.tertiary
+                )
+                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(Space.xxs)) {
+                    GradientButton(
+                        text = "Продолжить",
+                        onClick = {
+                            if (!tracker.hasPermission() || !tracker.providerEnabled()) {
+                                tracker.start()
+                                message = "После разрешения геолокации нажмите «Продолжить» ещё раз."
+                            } else {
+                                tracker.start()
+                                recorder.start()
+                                message = "Запись восстановлена и продолжается."
+                            }
+                        },
+                        modifier = Modifier.weight(1f)
+                    )
+                    androidx.compose.material3.TextButton(
+                        onClick = {
+                            val recovered = recorder.finish()
+                            if (recovered != null) {
+                                scope.launch {
+                                    try {
+                                        withContext(Dispatchers.IO) {
+                                            repository.save(recovered)
+                                            repository.clearRecovery()
+                                        }
+                                        savedTracks = withContext(Dispatchers.IO) { repository.list() }
+                                        message = "Восстановленный трек сохранён."
+                                    } catch (error: Exception) {
+                                        message = error.message ?: "Не удалось сохранить восстановленный трек."
+                                    }
+                                }
+                            }
+                        },
+                        modifier = Modifier.weight(1f)
+                    ) { Text("Сохранить") }
+                }
+                androidx.compose.material3.TextButton(
+                    onClick = {
+                        recorder.cancel()
+                        scope.launch { withContext(Dispatchers.IO) { repository.clearRecovery() } }
+                        message = "Незавершённый трек удалён."
+                    },
+                    modifier = Modifier.align(Alignment.End)
+                ) { Text("Удалить запись") }
+            } else if (recorder.recording) {
                 GradientButton(
                     text = "Завершить и сохранить трек",
                     onClick = {
@@ -284,7 +336,10 @@ private fun TrackRecorderPanel(context: Context, tracker: LocationTracker, recor
                         } else {
                             scope.launch {
                                 try {
-                                    withContext(Dispatchers.IO) { repository.save(track) }
+                                    withContext(Dispatchers.IO) {
+                                        repository.save(track)
+                                        repository.clearRecovery()
+                                    }
                                     savedTracks = withContext(Dispatchers.IO) { repository.list() }
                                     message = "Трек сохранён на устройстве."
                                 } catch (error: Exception) {
@@ -297,6 +352,7 @@ private fun TrackRecorderPanel(context: Context, tracker: LocationTracker, recor
             } else {
                 GradientButton(
                     text = if (!tracker.active) "Начать запись · включить GPS" else "Начать запись трека",
+                    enabled = recoveryLoaded,
                     onClick = {
                         if (!tracker.hasPermission() || !tracker.providerEnabled()) {
                             tracker.start()
