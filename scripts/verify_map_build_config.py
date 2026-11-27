@@ -42,6 +42,7 @@ MAP_ZOOM_POLICY = ROOT / "app/src/main/java/app/georgia/offline/ui/MapZoomPolicy
 MAP_ZOOM_TESTS = ROOT / "app/src/test/java/app/georgia/offline/ui/MapZoomPolicyTest.kt"
 ROAD_FORMAT = ROOT / "scripts/road_graph_format.py"
 ROAD_GRAPH_READER = ROOT / "app/src/main/java/app/georgia/offline/routing/RoadGraph.kt"
+ROUTING_REPOSITORY = ROOT / "app/src/main/java/app/georgia/offline/routing/RoutingRepository.kt"
 ROAD_ROUTER = ROOT / "app/src/main/java/app/georgia/offline/routing/Router.kt"
 ROUTING_PROFILE = ROOT / "app/src/main/java/app/georgia/offline/routing/RoutingProfile.kt"
 ROAD_TESTS = ROOT / "scripts/test_build_road_graph.py"
@@ -65,7 +66,7 @@ def fail(message: str) -> int:
 
 
 def main() -> int:
-    required = (MAP_SCRIPT, PBF_PREP_SCRIPT, WRITER_SCRIPT, WORKFLOW, DATA_SOURCES, SMOKE_FIXTURE, BUNDLE_MANIFEST, POI_BUILDER, POI_VERIFIER, POI_TESTS, POI_SMOKE_TEST, POI_SMOKE_FIXTURE, PBF_CACHE_TEST, APP_BUILD, POI_REPOSITORY, POI_UI, DEM_BUILDER, DEM_VERIFIER, DEM_TESTS, APK_VERIFIER, DEM_REPOSITORY, MAP_SURFACE, CONTOUR_BUILDER, CONTOUR_TESTS, CONTOUR_MAP_BUILDER, CONTOUR_MAP_VERIFIER, TERRAIN_REPOSITORY, CONTOUR_THEME_LIGHT, CONTOUR_THEME_DARK, ANDROID_MANIFEST, TOOLS_SCREEN, MAP_ZOOM_POLICY, MAP_ZOOM_TESTS, ROAD_FORMAT, ROAD_GRAPH_READER, ROAD_ROUTER, ROUTING_PROFILE, ROAD_TESTS, ROUTING_PROFILE_TESTS, TINY_ROAD_GRAPH, TINY_TURN_GRAPH, TINY_ONLY_TURN_GRAPH)
+    required = (MAP_SCRIPT, PBF_PREP_SCRIPT, WRITER_SCRIPT, WORKFLOW, DATA_SOURCES, SMOKE_FIXTURE, BUNDLE_MANIFEST, POI_BUILDER, POI_VERIFIER, POI_TESTS, POI_SMOKE_TEST, POI_SMOKE_FIXTURE, PBF_CACHE_TEST, APP_BUILD, POI_REPOSITORY, POI_UI, DEM_BUILDER, DEM_VERIFIER, DEM_TESTS, APK_VERIFIER, DEM_REPOSITORY, MAP_SURFACE, CONTOUR_BUILDER, CONTOUR_TESTS, CONTOUR_MAP_BUILDER, CONTOUR_MAP_VERIFIER, TERRAIN_REPOSITORY, CONTOUR_THEME_LIGHT, CONTOUR_THEME_DARK, ANDROID_MANIFEST, TOOLS_SCREEN, MAP_ZOOM_POLICY, MAP_ZOOM_TESTS, ROAD_FORMAT, ROAD_GRAPH_READER, ROUTING_REPOSITORY, ROAD_ROUTER, ROUTING_PROFILE, ROAD_TESTS, ROUTING_PROFILE_TESTS, TINY_ROAD_GRAPH, TINY_TURN_GRAPH, TINY_ONLY_TURN_GRAPH)
     for path in required:
         if not path.is_file():
             return fail(f"required build file is missing: {path.relative_to(ROOT)}")
@@ -99,6 +100,7 @@ def main() -> int:
     map_zoom_tests = MAP_ZOOM_TESTS.read_text(encoding="utf-8")
     road_format = ROAD_FORMAT.read_text(encoding="utf-8")
     road_graph_reader = ROAD_GRAPH_READER.read_text(encoding="utf-8")
+    routing_repository = ROUTING_REPOSITORY.read_text(encoding="utf-8")
     road_router = ROAD_ROUTER.read_text(encoding="utf-8")
     routing_profile = ROUTING_PROFILE.read_text(encoding="utf-8")
     road_tests = ROAD_TESTS.read_text(encoding="utf-8")
@@ -405,6 +407,8 @@ def main() -> int:
             return fail(f"Road graph format is missing turn restriction support: {token}.")
     if "turnAllowed" not in road_graph_reader or "TURN_RECORD_SIZE = 8" not in road_graph_reader or "graph.turnAllowed" not in road_router:
         return fail("Android routing must enforce incoming/outgoing OSM turn transitions.")
+    if "RoadGraph.FORMAT_VERSION" not in routing_repository:
+        return fail("RoutingRepository must reinstall the bundled road graph when its format changes.")
     for token in ("test_no_turn_restriction_forces_a_detour", "test_only_turn_restriction_keeps_the_allowed_exit", "test_via_way_is_counted_as_unsupported_not_silently_misapplied"):
         if token not in road_tests:
             return fail(f"OSM turn restriction regression coverage is missing: {token}.")
