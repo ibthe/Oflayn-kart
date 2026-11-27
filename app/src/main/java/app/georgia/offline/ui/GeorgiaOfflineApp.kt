@@ -158,13 +158,14 @@ fun GeorgiaOfflineApp(settings: LocalSettings) {
                 navigation.clearRoute()
             }
             TrackingEvent.REROUTE -> {
-                val origin = navigation.origin
-                val via = navigation.viaPoints.map { it.latitude to it.longitude }
+                // Rerouting always starts at the latest GPS fix, never the old
+                // explicitly selected origin. Keep only via stops still ahead.
+                val via = routeSession.remainingWaypoints()
                 coroutineScope.launch {
                     routeSession.plan(
                         context,
-                        origin?.latitude ?: fix.latitude,
-                        origin?.longitude ?: fix.longitude,
+                        fix.latitude,
+                        fix.longitude,
                         target.latitude,
                         target.longitude,
                         rerouting = true,
@@ -586,17 +587,28 @@ private fun MapScreen(modifier: Modifier, settings: LocalSettings, navigation: N
         val goal = navigation.target ?: return
         // "Route from here" starts at the chosen point; otherwise at the GPS position.
         val currentFix = fix?.takeIf { tracker.hasFreshFix() }
-        val startLat = navigation.origin?.latitude ?: currentFix?.latitude ?: return
-        val startLon = navigation.origin?.longitude ?: currentFix?.longitude ?: return
+        // An off-route recalculation must begin where the person is now. The explicit
+        // origin is used only for the initial route; reusing it would send the route
+        // backwards to the original starting point.
+        val start = if (rerouting) {
+            currentFix ?: return
+        } else {
+            navigation.origin?.let { android.location.Location("route-origin").apply {
+                latitude = it.latitude
+                longitude = it.longitude
+            } } ?: currentFix ?: return
+        }
+        val waypoints = if (rerouting) session.remainingWaypoints()
+            else navigation.viaPoints.map { it.latitude to it.longitude }
         coroutineScope.launch {
             session.plan(
                 context,
-                startLat,
-                startLon,
+                start.latitude,
+                start.longitude,
                 goal.latitude,
                 goal.longitude,
                 rerouting,
-                navigation.viaPoints.map { it.latitude to it.longitude }
+                waypoints
             )
             if (!rerouting && session.route != null) {
                 delay(7_000)
