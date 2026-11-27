@@ -59,7 +59,8 @@ def main() -> int:
         for tile in dem_tiles:
             dem_entry = f"assets/dem/{tile.get('file', '')}"
             if dem_entry not in entries:
-                print(f"ERROR: APK is missing DEM tile {dem_entry}.", file=sys.stderr)
+                available_dem = sorted(name for name in entries if name.startswith("assets/dem/"))
+                print(f"ERROR: APK is missing DEM tile {dem_entry}; available DEM entries: {available_dem[:30]!r}.", file=sys.stderr)
                 return 7
             tile_digest = hashlib.sha256()
             with apk.open(dem_entry) as compressed_stream:
