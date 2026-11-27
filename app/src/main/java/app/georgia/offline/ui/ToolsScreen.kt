@@ -323,9 +323,16 @@ private fun TrackRecorderPanel(context: Context, tracker: LocationTracker, recor
                                 onClick = {
                                     scope.launch {
                                         try {
-                                            val points = withContext(Dispatchers.IO) { repository.load(track.id).segments.flatten() }
-                                            onShowTrack(points)
-                                            message = "Трек показан на карте."
+                                            val gpx = withContext(Dispatchers.IO) { repository.load(track.id) }
+                                            val segments = gpx.segments.filter { it.size >= 2 }
+                                            val longest = segments.maxByOrNull { it.size }
+                                                ?: error("В треке нет непрерывного участка с двумя точками.")
+                                            onShowTrack(longest)
+                                            message = if (segments.size > 1) {
+                                                "На карте показан самый длинный непрерывный сегмент трека."
+                                            } else {
+                                                "Трек показан на карте."
+                                            }
                                         } catch (error: Exception) {
                                             message = error.message ?: "Не удалось открыть трек."
                                         }
