@@ -688,6 +688,7 @@ private fun MapScreen(modifier: Modifier, settings: LocalSettings, navigation: N
                     ?.map { LatLong(it.lat, it.lon) }
                     ?: emptyList(),
                 routeColor = MaterialTheme.colorScheme.tertiary.toArgb(),
+                trackColor = MaterialTheme.colorScheme.secondary.toArgb(),
                 followUser = session.navigating,
                 fitToken = session.fitToken,
                 places = mapPlaces,
