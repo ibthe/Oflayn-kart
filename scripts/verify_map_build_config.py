@@ -26,6 +26,9 @@ POI_SMOKE_FIXTURE = ROOT / "scripts/fixtures/poi-smoke.osm"
 DEM_BUILDER = ROOT / "scripts/build_dem.py"
 DEM_VERIFIER = ROOT / "scripts/verify_dem.py"
 DEM_TESTS = ROOT / "scripts/test_build_dem.py"
+DEM_SAMPLER = ROOT / "scripts/dem_sampler.py"
+DEM_SAMPLER_TESTS = ROOT / "scripts/test_dem_sampler.py"
+ROAD_BUILDER = ROOT / "scripts/build_road_graph.py"
 APK_VERIFIER = ROOT / "scripts/verify_apk_bundle.py"
 CONTOUR_BUILDER = ROOT / "scripts/build_contours.py"
 CONTOUR_TESTS = ROOT / "scripts/test_build_contours.py"
@@ -66,7 +69,6 @@ MAP_STORAGE_TESTS = ROOT / "app/src/androidTest/java/app/georgia/offline/MapStor
 RASTER_PACKAGE_REPOSITORY = ROOT / "app/src/main/java/app/georgia/offline/data/RasterPackageRepository.kt"
 RASTER_PACKAGE_TESTS = ROOT / "app/src/androidTest/java/app/georgia/offline/RasterPackageRepositoryTest.kt"
 RASTER_PACK_DOCS = ROOT / "docs/OFLAYN_RASTER_PACK_FORMAT.md"
-MAP_SURFACE = ROOT / "app/src/main/java/app/georgia/offline/ui/MapsforgeMapSurface.kt"
 
 EXPECTED_MIRROR = "https://download.openstreetmap.fr/extracts/asia/georgia.osm.pbf"
 EXPECTED_MIRROR_MD5 = "https://download.openstreetmap.fr/extracts/asia/georgia.osm.pbf.md5"
@@ -83,7 +85,7 @@ def fail(message: str) -> int:
 
 
 def main() -> int:
-    required = (MAP_SCRIPT, PBF_PREP_SCRIPT, WRITER_SCRIPT, WORKFLOW, DATA_SOURCES, SMOKE_FIXTURE, BUNDLE_MANIFEST, POI_BUILDER, POI_VERIFIER, POI_TESTS, POI_SMOKE_TEST, POI_SMOKE_FIXTURE, PBF_CACHE_TEST, APP_BUILD, POI_REPOSITORY, POI_UI, DEM_BUILDER, DEM_VERIFIER, DEM_TESTS, APK_VERIFIER, DEM_REPOSITORY, MAP_SURFACE, CONTOUR_BUILDER, CONTOUR_TESTS, CONTOUR_MAP_BUILDER, CONTOUR_MAP_VERIFIER, TERRAIN_REPOSITORY, CONTOUR_THEME_LIGHT, CONTOUR_THEME_DARK, ANDROID_MANIFEST, TOOLS_SCREEN, MAP_ZOOM_POLICY, MAP_ZOOM_TESTS, ROAD_FORMAT, ROAD_GRAPH_READER, ROUTING_REPOSITORY, ROAD_ROUTER, ROUTING_PROFILE, ROAD_TESTS, ROAD_TURN_SMOKE, ROAD_TURN_FIXTURE, ROUTING_PROFILE_TESTS, TINY_ROAD_GRAPH, TINY_TURN_GRAPH, TINY_ONLY_TURN_GRAPH, GUIDEBOOK_REPOSITORY, GUIDEBOOK_TESTS, GUIDEBOOK_SOURCES, SAFETY_REPOSITORY, EMERGENCY_CONTACT_REPOSITORY, SAFETY_TESTS, SAFETY_SOURCES, APP_FLOW_UI_TESTS, MAP_FILE_REPOSITORY, MAP_STORAGE_TESTS, RASTER_PACKAGE_REPOSITORY, RASTER_PACKAGE_TESTS, RASTER_PACK_DOCS, MAP_SURFACE, APP_UI)
+    required = (MAP_SCRIPT, PBF_PREP_SCRIPT, WRITER_SCRIPT, WORKFLOW, DATA_SOURCES, SMOKE_FIXTURE, BUNDLE_MANIFEST, POI_BUILDER, POI_VERIFIER, POI_TESTS, POI_SMOKE_TEST, POI_SMOKE_FIXTURE, PBF_CACHE_TEST, APP_BUILD, POI_REPOSITORY, POI_UI, DEM_BUILDER, DEM_VERIFIER, DEM_TESTS, DEM_SAMPLER, DEM_SAMPLER_TESTS, ROAD_BUILDER, APK_VERIFIER, DEM_REPOSITORY, MAP_SURFACE, CONTOUR_BUILDER, CONTOUR_TESTS, CONTOUR_MAP_BUILDER, CONTOUR_MAP_VERIFIER, TERRAIN_REPOSITORY, CONTOUR_THEME_LIGHT, CONTOUR_THEME_DARK, ANDROID_MANIFEST, TOOLS_SCREEN, MAP_ZOOM_POLICY, MAP_ZOOM_TESTS, ROAD_FORMAT, ROAD_GRAPH_READER, ROUTING_REPOSITORY, ROAD_ROUTER, ROUTING_PROFILE, ROAD_TESTS, ROAD_TURN_SMOKE, ROAD_TURN_FIXTURE, ROUTING_PROFILE_TESTS, TINY_ROAD_GRAPH, TINY_TURN_GRAPH, TINY_ONLY_TURN_GRAPH, GUIDEBOOK_REPOSITORY, GUIDEBOOK_TESTS, GUIDEBOOK_SOURCES, SAFETY_REPOSITORY, EMERGENCY_CONTACT_REPOSITORY, SAFETY_TESTS, SAFETY_SOURCES, APP_FLOW_UI_TESTS, MAP_FILE_REPOSITORY, MAP_STORAGE_TESTS, RASTER_PACKAGE_REPOSITORY, RASTER_PACKAGE_TESTS, RASTER_PACK_DOCS, MAP_SURFACE, APP_UI)
     for path in required:
         if not path.is_file():
             return fail(f"required build file is missing: {path.relative_to(ROOT)}")
@@ -103,6 +105,9 @@ def main() -> int:
     dem_builder = DEM_BUILDER.read_text(encoding="utf-8")
     dem_verifier = DEM_VERIFIER.read_text(encoding="utf-8")
     dem_tests = DEM_TESTS.read_text(encoding="utf-8")
+    dem_sampler = DEM_SAMPLER.read_text(encoding="utf-8")
+    dem_sampler_tests = DEM_SAMPLER_TESTS.read_text(encoding="utf-8")
+    road_builder = ROAD_BUILDER.read_text(encoding="utf-8")
     apk_verifier = APK_VERIFIER.read_text(encoding="utf-8")
     dem_repository = DEM_REPOSITORY.read_text(encoding="utf-8")
     map_surface = MAP_SURFACE.read_text(encoding="utf-8")
@@ -511,6 +516,20 @@ def main() -> int:
     for token in ("onlyMountedRemovableVolumesAreOfferedAsSdStorage", "failedMoveKeepsTheOriginalMapAndCleansTemporaryCopy"):
         if token not in map_storage_tests:
             return fail(f"Map storage regression coverage is missing: {token}.")
+
+    for token in ("TILE_PIXELS = 1200", "NODATA = -32768", "np.median"):
+        if token not in dem_sampler:
+            return fail(f"DEM grade sampler is missing: {token}.")
+    for token in ("test_samples_north_up_tile_and_uses_local_median", "test_missing_and_nodata_cells_return_none"):
+        if token not in dem_sampler_tests:
+            return fail(f"DEM sampling regression coverage is missing: {token}.")
+    if "--dem-dir" not in road_builder or "dem_sampler=dem_sampler" not in road_builder:
+        return fail("Road graph generation must consume the verified offline DEM package.")
+    for token in ("test_dem_sampler.py", "--dem-dir app/src/main/assets/dem", "georgia-roads-v7"):
+        if token not in workflow:
+            return fail(f"DEM-derived road grade workflow is missing: {token}.")
+    if "georgia-roads-v6" in workflow:
+        return fail("A pre-DEM road graph cache must not bypass DEM-derived grade generation.")
 
     for token in ("fun importZip", "MAX_TOTAL_BYTES", "isValidImageHeader", "license.isNotBlank", "temporary.renameTo(destination)"):
         if token not in raster_package_repository:
