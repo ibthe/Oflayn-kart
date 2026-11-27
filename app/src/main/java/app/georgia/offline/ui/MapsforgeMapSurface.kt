@@ -87,6 +87,7 @@ fun MapsforgeMapSurface(
     trackPoints: List<LatLong> = emptyList(),
     viaPoints: List<LatLong> = emptyList(),
     routeColor: Int = 0xFF2F6FED.toInt(),
+    trackColor: Int = 0xFF14A8A0.toInt(),
     followUser: Boolean = false,
     fitToken: Int = 0,
     places: List<MapPlace> = emptyList(),
@@ -121,8 +122,8 @@ fun MapsforgeMapSurface(
     val currentRoutePoints by rememberUpdatedState(routePoints)
     val currentViaPoints by rememberUpdatedState(viaPoints)
     val currentRouteDrag by rememberUpdatedState(onRouteDrag)
-    key(mapFile.absolutePath, mapFile.lastModified(), preferredLanguages, mapTheme, accentColor, destinationColor, routeColor, savedColor, carColor, originColor) {
-        val overlays = remember { MapOverlays(accentColor, destinationColor, routeColor, savedColor, carColor, originColor) }
+    key(mapFile.absolutePath, mapFile.lastModified(), preferredLanguages, mapTheme, accentColor, destinationColor, routeColor, trackColor, savedColor, carColor, originColor) {
+        val overlays = remember { MapOverlays(accentColor, destinationColor, routeColor, trackColor, savedColor, carColor, originColor) }
         var mapViewRef by remember { mutableStateOf<MapView?>(null) }
         var mapDataStoreRef by remember { mutableStateOf<MapDataStore?>(null) }
         var rendererError by remember { mutableStateOf<String?>(null) }
@@ -495,6 +496,7 @@ private class MapOverlays(
     private val accentColor: Int,
     private val destinationColor: Int,
     private val routeColor: Int,
+    private val trackColor: Int,
     private val savedColor: Int,
     private val carColor: Int,
     private val originColor: Int
@@ -665,7 +667,7 @@ private class MapOverlays(
             trackLine?.let { layers.remove(it) }
             trackLine = null
             if (state.trackPoints.size >= 2) {
-                val line = Polyline(paint(0xFF14A8A0.toInt(), Style.STROKE, 4.5f * density), AndroidGraphicFactory.INSTANCE)
+                val line = Polyline(paint(trackColor, Style.STROKE, 4.5f * density), AndroidGraphicFactory.INSTANCE)
                 state.trackPoints.forEach { line.latLongs.add(it) }
                 trackLine = line
                 layers.add(1, line)
