@@ -85,10 +85,10 @@ class PoiDatabaseTests(unittest.TestCase):
         large = [(0.0, 0.0), (0.0, 4.0), (4.0, 4.0), (4.0, 0.0)]
         small = [(10.0, 10.0), (10.0, 11.0), (11.0, 11.0), (11.0, 10.0)]
         lat, lon = multipolygon_centroid([large, small])
-        self.assertGreater(lat, 1.0)
-        self.assertLess(lat, 2.0)
-        self.assertGreater(lon, 1.0)
-        self.assertLess(lon, 2.0)
+        self.assertGreater(lat, 2.0)
+        self.assertLess(lat, 3.0)
+        self.assertGreater(lon, 2.0)
+        self.assertLess(lon, 3.0)
         self.assertIsNone(multipolygon_centroid([]))
         self.assertIsNone(multipolygon_centroid([[(1.0, 1.0), (1.0, 1.0)]]))
 
