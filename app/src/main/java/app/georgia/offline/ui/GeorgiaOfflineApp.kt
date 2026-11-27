@@ -1520,6 +1520,11 @@ private fun SettingsScreen(modifier: Modifier, settings: LocalSettings, onShowOn
 
         }
 
+        SectionLabel("Мои места")
+        Panel {
+            SavedPlacesList(settings, onShowOnMap)
+        }
+
         SectionLabel("Хранение")
         Panel {
             Text("Место хранения офлайн-карт", style = MaterialTheme.typography.titleSmall)
@@ -1601,11 +1606,6 @@ private fun SettingsScreen(modifier: Modifier, settings: LocalSettings, onShowOn
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant
             )
-        }
-
-        SectionLabel("Мои места")
-        Panel {
-            SavedPlacesList(settings, onShowOnMap)
         }
 
         SectionLabel("О карте")
