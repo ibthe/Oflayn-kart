@@ -28,10 +28,12 @@ import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -146,6 +148,45 @@ private fun DeviceStatusPanel(context: Context) {
 }
 
 @Composable
+private fun IncidentResponsePanel() {
+    var expanded by rememberSaveable { mutableStateOf(false) }
+    Panel(padding = 0.dp) {
+        Column(
+            Modifier.fillMaxWidth().padding(Space.card),
+            verticalArrangement = Arrangement.spacedBy(Space.xs)
+        ) {
+            Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                    Text("Если произошло ДТП", style = MaterialTheme.typography.titleMedium)
+                    Text(
+                        "Краткая памятка до прибытия экстренных служб",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+                TextButton(onClick = { expanded = !expanded }) {
+                    Text(if (expanded) "Свернуть" else "Открыть")
+                }
+            }
+            if (expanded) {
+                SafetyChecklistRepository.incidentSteps.forEachIndexed { index, item ->
+                    if (index > 0) HorizontalDivider()
+                    Column(Modifier.fillMaxWidth().padding(vertical = Space.xs), verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                        Text("${index + 1}. ${item.title}", style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.SemiBold)
+                        Text(item.detail, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    }
+                }
+                Text(
+                    "Это краткая справка, а не обучение первой помощи. Не подвергай себя опасности и выполняй указания оператора 112.",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
+        }
+    }
+}
+
+@Composable
 private fun PreRideSafetyChecklist(context: Context) {
     val items = SafetyChecklistRepository.items
     var checkedIds by remember { mutableStateOf(SafetyChecklistRepository.load(context)) }
@@ -220,6 +261,7 @@ fun ToolsScreen(modifier: Modifier = Modifier, settings: LocalSettings, tracker:
         PageTitle("Утилиты", "Датчики телефона. Всё работает без интернета.")
 
         EmergencyPanel(context, currentLocation)
+        IncidentResponsePanel()
         PreRideSafetyChecklist(context)
         DeviceStatusPanel(context)
         GpsPanel(settings, tracker, currentLocation, context)
