@@ -671,6 +671,8 @@ fun NavigationFooter(
     var detailsExpanded by remember { mutableStateOf(false) }
     val remaining = (route.distanceMeters - session.along).coerceAtLeast(0.0)
     val seconds = if (route.distanceMeters > 0) route.durationSeconds * remaining / route.distanceMeters else 0.0
+    val arrival = java.time.LocalTime.now().plusSeconds(seconds.toLong().coerceAtLeast(0L))
+    val eta = String.format(java.util.Locale.ROOT, "%02d:%02d", arrival.hour, arrival.minute)
     Surface(
         modifier = Modifier.fillMaxWidth().appear(),
         shape = RoundedCornerShape(Radius.card),
@@ -699,7 +701,7 @@ fun NavigationFooter(
                         gpsStatus != null -> gpsStatus
                         session.busy -> "Перестраиваю · ${formatDuration(seconds)}"
                         session.message != null -> session.message!!
-                        else -> "Осталось · ${formatDuration(seconds)}"
+                        else -> "Осталось · ${formatDuration(seconds)} · прибытие ~$eta"
                     },
                     style = MaterialTheme.typography.labelSmall,
                     color = if (gpsError || (session.message != null && !session.busy)) MaterialTheme.colorScheme.error
@@ -748,7 +750,12 @@ fun NavigationFooter(
             }
             if (detailsExpanded) {
                 val speed = location?.takeIf { it.hasSpeed() }?.speed?.times(3.6f)
-                val altitude = location?.takeIf { it.hasAltitude() }?.altitude
+                val gpsAltitude = location?.takeIf { it.hasAltitude() }?.altitude
+                val demAltitude = session.elevationProfile?.samples?.minByOrNull {
+                    kotlin.math.abs(it.distanceMeters - session.along)
+                }?.elevationMeters?.toDouble()
+                val altitude = gpsAltitude ?: demAltitude
+                val altitudeLabel = if (gpsAltitude != null) "Высота GPS" else if (demAltitude != null) "Высота DEM · ~90 м" else "Высота"
                 val course = location?.takeIf { it.hasBearing() }?.bearing
                 val coordinates = location?.let { GeoFormatting.decimalCoordinates(it.latitude, it.longitude) }
                 Row(
@@ -756,7 +763,7 @@ fun NavigationFooter(
                     horizontalArrangement = Arrangement.spacedBy(Space.s)
                 ) {
                     NavigationMetric("Скорость", speed?.let { "${it.toInt()} км/ч" } ?: "—", Modifier.weight(1f))
-                    NavigationMetric("Высота GPS", altitude?.let { "${it.toInt()} м" } ?: "—", Modifier.weight(1f))
+                    NavigationMetric(altitudeLabel, altitude?.let { "${it.toInt()} м" } ?: "—", Modifier.weight(1f))
                     NavigationMetric("Курс", course?.let { "${GeoFormatting.cardinalDirection(it)} ${it.toInt()}°" } ?: "—", Modifier.weight(1f))
                 }
                 coordinates?.let {
