@@ -18,7 +18,7 @@ class RoutingProfileTest {
 
     @Test
     fun smoothnessFlagsNeverProduceZeroOrNegativeSpeed() {
-        for (profile in RoutingProfile.entries) {
+        for (profile in RoutingProfile.values()) {
             assertTrue(profile.speedMps(15, RoadGraph.FLAG_SEVERE) > 0.0)
         }
     }
