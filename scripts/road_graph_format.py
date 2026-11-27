@@ -159,6 +159,14 @@ def classify_way(tags: dict) -> RoadInfo | None:
     if cls == 18 and foot_specific is True:
         foot_ok = True
 
+    # Smoothness is a routing quality constraint, not just a visual tag.
+    smoothness = tags.get("smoothness")
+    if smoothness in {"horrible", "very_horrible", "impassable"}:
+        car_ok = False
+        bike_ok = False
+    if smoothness == "impassable":
+        offroad_ok = False
+
     # Direction of travel.
     oneway = tags.get("oneway")
     roundabout = tags.get("junction") in {"roundabout", "circular"}
