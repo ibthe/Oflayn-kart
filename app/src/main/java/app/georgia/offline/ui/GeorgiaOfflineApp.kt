@@ -872,7 +872,7 @@ private fun MapScreen(modifier: Modifier, settings: LocalSettings, navigation: N
                     }
                 }
                 val activeRoute = session.route
-                if (target != null && session.navigating && activeRoute != null) {
+                if ((target != null || session.followingTrack) && session.navigating && activeRoute != null) {
                         NavigationFooter(
                             activeRoute,
                             session,
