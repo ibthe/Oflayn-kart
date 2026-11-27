@@ -108,6 +108,22 @@ class ClassificationTest(unittest.TestCase):
 
         self.assertIsNone(rg.classify_way({"highway": "residential", "smoothness": "impassable"}))
 
+    def test_incline_tags_mark_steep_roads_and_parse_common_formats(self):
+        for value in ("8%", "-12%", "up", "down", "10°"):
+            info = rg.classify_way({"highway": "residential", "incline": value})
+            self.assertTrue(info.flags & rg.FLAG_STEEP, value)
+        moderate = rg.classify_way({"highway": "residential", "incline": "5%"})
+        self.assertFalse(moderate.flags & rg.FLAG_STEEP)
+        unknown = rg.classify_way({"highway": "residential", "incline": "variable"})
+        self.assertFalse(unknown.flags & rg.FLAG_STEEP)
+
+    def test_steep_grade_penalizes_every_routing_profile(self):
+        for profile in rg.PROFILES.values():
+            normal = rg.speed_mps(profile, 12, 0)
+            steep = rg.speed_mps(profile, 12, rg.FLAG_STEEP)
+            self.assertGreater(normal, steep)
+            self.assertGreater(steep, 0.0)
+
     def test_motorcycle_speed_is_positive_and_penalizes_rough_surfaces(self):
         paved = rg.speed_mps(rg.PROFILE_MOTORCYCLE, 12, 0)
         rough = rg.speed_mps(rg.PROFILE_MOTORCYCLE, 12, rg.FLAG_ROUGH)
