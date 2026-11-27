@@ -268,7 +268,6 @@ fun MapsforgeMapSurface(
                         }
                         if (availableRasterPackage != null) {
                             try {
-                                model.displayModel.setFixedTileSize(256)
                                 val tileStore = TileStore(
                                     availableRasterPackage.tileDirectory,
                                     ".${availableRasterPackage.extension}",
