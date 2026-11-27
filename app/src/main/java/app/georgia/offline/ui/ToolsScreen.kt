@@ -37,6 +37,7 @@ import app.georgia.offline.data.GpxCodec
 import app.georgia.offline.data.TrackRepository
 import app.georgia.offline.data.SavedTrackInfo
 import app.georgia.offline.data.TrackPoint
+import app.georgia.offline.data.GpxTrack
 import app.georgia.offline.domain.GeoFormatting
 import app.georgia.offline.domain.Qibla
 import app.georgia.offline.ui.theme.Space
@@ -45,7 +46,7 @@ import kotlin.math.abs
 import kotlin.math.roundToInt
 
 @Composable
-fun ToolsScreen(modifier: Modifier = Modifier, settings: LocalSettings, tracker: LocationTracker, trackRecorder: TrackRecorder, onShowTrack: (List<TrackPoint>) -> Unit) {
+fun ToolsScreen(modifier: Modifier = Modifier, settings: LocalSettings, tracker: LocationTracker, trackRecorder: TrackRecorder, onShowTrack: (List<TrackPoint>) -> Unit, onFollowTrack: (GpxTrack) -> Unit) {
     val context = LocalContext.current
     val currentLocation = tracker.location?.takeIf { tracker.hasFreshFix() }
     val compass = rememberCompass(currentLocation)
@@ -56,7 +57,7 @@ fun ToolsScreen(modifier: Modifier = Modifier, settings: LocalSettings, tracker:
         PageTitle("Утилиты", "Датчики телефона. Всё работает без интернета.")
 
         GpsPanel(settings, tracker, currentLocation, context)
-        TrackRecorderPanel(context, tracker, trackRecorder, onShowTrack)
+        TrackRecorderPanel(context, tracker, trackRecorder, onShowTrack, onFollowTrack)
 
         // ----- Compass -----
         Panel(padding = 0.dp) {
@@ -200,7 +201,7 @@ fun ToolsScreen(modifier: Modifier = Modifier, settings: LocalSettings, tracker:
 }
 
 @Composable
-private fun TrackRecorderPanel(context: Context, tracker: LocationTracker, recorder: TrackRecorder, onShowTrack: (List<TrackPoint>) -> Unit) {
+private fun TrackRecorderPanel(context: Context, tracker: LocationTracker, recorder: TrackRecorder, onShowTrack: (List<TrackPoint>) -> Unit, onFollowTrack: (GpxTrack) -> Unit) {
     val repository = remember(context) { TrackRepository(File(context.filesDir, "tracks")) }
     val scope = rememberCoroutineScope()
     var savedTracks by remember { mutableStateOf(emptyList<SavedTrackInfo>()) }
@@ -318,6 +319,18 @@ private fun TrackRecorderPanel(context: Context, tracker: LocationTracker, recor
                             Text(track.name, style = MaterialTheme.typography.bodyMedium, maxLines = 1)
                             Text("${track.pointCount} точек", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                         }
+                        androidx.compose.material3.TextButton(
+                            onClick = {
+                                scope.launch {
+                                    try {
+                                        val gpx = withContext(Dispatchers.IO) { repository.load(track.id) }
+                                        onFollowTrack(gpx)
+                                    } catch (error: Exception) {
+                                        message = error.message ?: "Не удалось открыть GPX-трек."
+                                    }
+                                }
+                            }
+                        ) { Text("Возврат") }
                         androidx.compose.material3.TextButton(
                             onClick = {
                                 scope.launch {
