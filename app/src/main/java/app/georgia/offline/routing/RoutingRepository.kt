@@ -47,7 +47,7 @@ object RoutingRepository {
         val target = File(directory, ASSET_NAME)
         val stamp = File(directory, "installed.version")
         val info = context.packageManager.getPackageInfo(context.packageName, 0)
-        val version = PackageInfoCompat.getLongVersionCode(info).toString()
+        val version = "${PackageInfoCompat.getLongVersionCode(info)}-${RoadGraph.FORMAT_VERSION}"
         if (!(target.isFile && stamp.isFile && stamp.readText() == version)) {
             directory.mkdirs()
             val temporary = File(directory, "$ASSET_NAME.tmp")
