@@ -795,7 +795,7 @@ private fun MapScreen(modifier: Modifier, settings: LocalSettings, navigation: N
                 waypoints
             )
             if (!rerouting && session.route != null) {
-                delay(7_000)
+                delay(ROUTE_AUTO_ZOOM_DELAY_MS)
                 if (!session.navigating && session.route != null) {
                     session.fitToken++
                     zoomInToken++ // after fitting the route, remove the extra fit margin for a closer view
