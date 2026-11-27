@@ -454,9 +454,16 @@ class Graph:
     def edge_length_m(self, e: int) -> float:
         return self.edges[e][2] / 10.0
 
-    def edge_seconds(self, profile: int, e: int, metres: float | None = None) -> float:
+    def edge_incline_percent(self, e: int, direction: int) -> int:
+        packed = self.edges[e][9]
+        value = (packed & 0xFF) if direction == 0 else ((packed >> 8) & 0xFF)
+        return value - 256 if value >= 128 else value
+
+    def edge_seconds(self, profile: int, e: int, direction: int, metres: float | None = None) -> float:
         edge = self.edges[e]
-        return (self.edge_length_m(e) if metres is None else metres) / speed_mps(profile, edge[5], edge[6])
+        return (self.edge_length_m(e) if metres is None else metres) / speed_mps(
+            profile, edge[5], edge[6], self.edge_incline_percent(e, direction)
+        )
 
     def usable(self, profile: int, e: int, direction: int) -> bool:
         edge = self.edges[e]
@@ -515,7 +522,7 @@ class Graph:
                 if not self.usable(profile, e, direction):
                     continue
                 w = self.edges[e][1] if direction == 0 else self.edges[e][0]
-                ng = g + self.edge_seconds(profile, e)
+                ng = g + self.edge_seconds(profile, e, direction)
                 if ng < best_g.get(w, math.inf):
                     best_g[w] = ng
                     parent[w] = (u, arc)
@@ -531,20 +538,22 @@ class Graph:
         seeds, seed_info, targets, target_info = {}, {}, {}, {}
         ea = a.edge
         la_total = self._geom_scale(ea)
-        sa = self._speed(profile, ea)
+        sa_forward = self._speed(profile, ea, 0)
+        sa_backward = self._speed(profile, ea, 1)
         if self.usable(profile, ea, 0):
-            cost = (self.edge_length_m(ea) - a.along * la_total) / sa
+            cost = (self.edge_length_m(ea) - a.along * la_total) / sa_forward
             self._seed(seeds, seed_info, self.edges[ea][1], cost, (0, "to"))
         if self.usable(profile, ea, 1):
-            cost = a.along * la_total / sa
+            cost = a.along * la_total / sa_backward
             self._seed(seeds, seed_info, self.edges[ea][0], cost, (1, "from"))
         eb = b.edge
-        sb = self._speed(profile, eb)
+        sb_forward = self._speed(profile, eb, 0)
+        sb_backward = self._speed(profile, eb, 1)
         if self.usable(profile, eb, 0):  # arrive at `from`, drive forward to the point
-            targets[self.edges[eb][0]] = b.along * self._geom_scale(eb) / sb
+            targets[self.edges[eb][0]] = b.along * self._geom_scale(eb) / sb_forward
             target_info[self.edges[eb][0]] = "from"
         if self.usable(profile, eb, 1):  # arrive at `to`, drive backward to the point
-            cost = (self.edge_length_m(eb) - b.along * self._geom_scale(eb)) / sb
+            cost = (self.edge_length_m(eb) - b.along * self._geom_scale(eb)) / sb_backward
             vtx = self.edges[eb][1]
             if cost < targets.get(vtx, math.inf):
                 targets[vtx] = cost
@@ -553,9 +562,9 @@ class Graph:
         if ea == eb:
             delta = (b.along - a.along) * la_total
             if delta >= 0 and self.usable(profile, ea, 0):
-                candidates.append((delta / sa, "same", 0))
+                candidates.append((delta / sa_forward, "same", 0))
             if delta <= 0 and self.usable(profile, ea, 1):
-                candidates.append((-delta / sa, "same", 1))
+                candidates.append((-delta / sa_backward, "same", 1))
         if seeds and targets:
             total, end_vertex, parent = self._astar(profile, seeds, targets, (b.lat, b.lon))
             if end_vertex is not None:
@@ -602,8 +611,9 @@ class Graph:
         geom = sum(dist_m(p[0], p[1], q[0], q[1]) for p, q in zip(pts, pts[1:]))
         return 1.0 if geom == 0 else self.edge_length_m(e) / geom
 
-    def _speed(self, profile: int, e: int) -> float:
-        return speed_mps(profile, self.edges[e][5], self.edges[e][6])
+    def _speed(self, profile: int, e: int, direction: int) -> float:
+        edge = self.edges[e]
+        return speed_mps(profile, edge[5], edge[6], self.edge_incline_percent(e, direction))
 
     @staticmethod
     def _seed(seeds, info, vertex, cost, tag):
