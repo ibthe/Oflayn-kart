@@ -131,6 +131,12 @@ fun GeorgiaOfflineApp(settings: LocalSettings) {
     var selectedTab by rememberSaveable { mutableStateOf(AppTab.MAP.name) }
     val navigation = remember { NavigationState() }
     val tracker = rememberLocationTracker()
+    val trackRecorder = remember { TrackRecorder() }
+    // Recording follows fresh foreground GPS fixes and survives tab switches.
+    val fix = tracker.location?.takeIf { tracker.hasFreshFix() }
+    LaunchedEffect(fix, trackRecorder.recording) {
+        if (trackRecorder.recording && fix != null) trackRecorder.addFix(fix)
+    }
     // Route state and its lifecycle belong to the app, not to the currently selected tab.
     val routeSession = remember { RouteSession() }
     val speaker = remember { Speaker(context) }
@@ -143,7 +149,6 @@ fun GeorgiaOfflineApp(settings: LocalSettings) {
     LaunchedEffect(navigation.target, navigation.origin, navigation.viaPoints.toList()) { routeSession.reset() }
 
     // Keep GPS progress, voice prompts, arrival detection and rerouting alive across tab changes.
-    val fix = tracker.location?.takeIf { tracker.hasFreshFix() }
     val coroutineScope = rememberCoroutineScope()
     LaunchedEffect(fix, routeSession.navigating, navigation.target) {
         val target = navigation.target
@@ -214,7 +219,7 @@ fun GeorgiaOfflineApp(settings: LocalSettings) {
                                 navigation.startRouteTo(NavigationTarget(name, latitude, longitude))
                                 selectedTab = AppTab.MAP.name
                             }
-                            AppTab.TOOLS -> ToolsScreen(Modifier.padding(padding), settings, tracker)
+                            AppTab.TOOLS -> ToolsScreen(Modifier.padding(padding), settings, tracker, trackRecorder)
                             AppTab.SETTINGS -> SettingsScreen(Modifier.padding(padding), settings) { placeId ->
                                 navigation.selectedPlaceId = placeId
                                 navigation.focusToken++
