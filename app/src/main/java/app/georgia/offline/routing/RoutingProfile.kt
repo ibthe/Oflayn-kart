@@ -35,10 +35,6 @@ enum class RoutingProfile(
         8, "Пешком", 1.5, 0.9,
         (3..21).associateWith { 5 } + mapOf(16 to 4, 19 to 3)
     ),
-    MOTORCYCLE(
-        16, "Мотоцикл", 38.9, 0.75,
-        mapOf(1 to 90, 2 to 50, 3 to 75, 4 to 45, 5 to 60, 6 to 40, 7 to 50, 8 to 35, 9 to 40, 10 to 30, 11 to 35, 12 to 30, 13 to 15, 14 to 20, 15 to 20, 21 to 30)
-    );
 
     private val pavedMps = DoubleArray(CLASS_COUNT) { (kmhByClass[it] ?: 10) / 3.6 }
     private val unpavedMps = DoubleArray(CLASS_COUNT) { max((kmhByClass[it] ?: 10) * unpavedFactor, 3.0) / 3.6 }
