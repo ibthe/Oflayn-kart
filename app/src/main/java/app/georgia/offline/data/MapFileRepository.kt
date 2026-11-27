@@ -186,11 +186,20 @@ object MapFileRepository {
             validateGeorgiaMap(temporary)
             moveIntoPlace(temporary, destination)
             File(destination.parentFile, BUNDLED_HASH_MARKER).delete()
-            source.delete()
             destination
         } catch (error: Exception) {
             temporary.delete()
             throw IllegalArgumentException(error.message ?: "Не удалось перенести карту.", error)
+        }
+    }
+
+    /** Deletes the previous managed copy only after settings point at the validated destination. */
+    fun deletePreviousMap(source: File, destination: File) {
+        if (runCatching { source.canonicalFile != destination.canonicalFile }.getOrDefault(false) &&
+            source.name == "georgia.map" && source.parentFile?.name == "maps"
+        ) {
+            source.delete()
+            File(source.parentFile, BUNDLED_HASH_MARKER).delete()
         }
     }
 
