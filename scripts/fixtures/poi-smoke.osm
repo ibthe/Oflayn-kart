@@ -18,4 +18,24 @@
     <tag k='name' v='Test Museum'/>
     <tag k='name:ka' v='სატესტო მუზეუმი'/>
   </way>
+  <node id='1006' lat='41.72500' lon='44.82500' version='1' timestamp='2026-11-20T00:00:00Z' changeset='1' uid='1' user='ci'/>
+  <node id='1007' lat='41.72500' lon='44.82600' version='1' timestamp='2026-11-20T00:00:00Z' changeset='1' uid='1' user='ci'/>
+  <node id='1008' lat='41.72600' lon='44.82600' version='1' timestamp='2026-11-20T00:00:00Z' changeset='1' uid='1' user='ci'/>
+  <node id='1009' lat='41.72600' lon='44.82500' version='1' timestamp='2026-11-20T00:00:00Z' changeset='1' uid='1' user='ci'/>
+  <way id='2002' version='1' timestamp='2026-11-20T00:00:00Z' changeset='1' uid='1' user='ci'>
+    <nd ref='1006'/><nd ref='1007'/><nd ref='1008'/>
+  </way>
+  <way id='2003' version='1' timestamp='2026-11-20T00:00:00Z' changeset='1' uid='1' user='ci'>
+    <nd ref='1008'/><nd ref='1009'/><nd ref='1006'/>
+  </way>
+  <relation id='3001' version='1' timestamp='2026-11-20T00:00:00Z' changeset='1' uid='1' user='ci'>
+    <member type='way' ref='2002' role='outer'/>
+    <member type='way' ref='2003' role='outer'/>
+    <tag k='type' v='multipolygon'/>
+    <tag k='tourism' v='attraction'/>
+    <tag k='name' v='Test Relation Attraction'/>
+    <tag k='name:en' v='Test Relation Attraction'/>
+    <tag k='name:ru' v='Тестовая площадная достопримечательность'/>
+    <tag k='name:ka' v='სატესტო ობიექტი'/>
+  </relation>
 </osm>
