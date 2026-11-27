@@ -21,6 +21,7 @@ from __future__ import annotations
 
 import heapq
 import math
+import re
 import struct
 import sys
 from array import array
@@ -48,6 +49,7 @@ FLAG_UNPAVED = 1
 FLAG_ROUNDABOUT = 2
 FLAG_ROUGH = 4
 FLAG_SEVERE = 8
+FLAG_STEEP = 16
 
 # Average speeds in km/h per class code (index = class). Mirrored in Kotlin `RoutingProfiles`.
 _CAR = {1: 90, 2: 50, 3: 75, 4: 45, 5: 60, 6: 40, 7: 50, 8: 35, 9: 40, 10: 30, 11: 35, 12: 25, 13: 10, 14: 15, 15: 15, 21: 30}
@@ -69,6 +71,8 @@ def speed_mps(profile: int, cls: int, flags: int) -> float:
         kmh *= {PROFILE_CAR: 0.30, PROFILE_OFFROAD: 0.55, PROFILE_BIKE: 0.20, PROFILE_FOOT: 0.65, PROFILE_MOTORCYCLE: 0.25}[profile]
     elif flags & FLAG_ROUGH:
         kmh *= {PROFILE_CAR: 0.65, PROFILE_OFFROAD: 0.80, PROFILE_BIKE: 0.55, PROFILE_FOOT: 0.85, PROFILE_MOTORCYCLE: 0.60}[profile]
+    if flags & FLAG_STEEP:
+        kmh *= {PROFILE_CAR: 0.82, PROFILE_OFFROAD: 0.90, PROFILE_BIKE: 0.65, PROFILE_FOOT: 0.78, PROFILE_MOTORCYCLE: 0.75}[profile]
     return max(kmh, 1.0) / 3.6
 
 
@@ -115,6 +119,26 @@ def _tri(tags: dict, *keys: str):
         if value in _ALLOW:
             return True
     return None
+
+
+def _incline_percent(tags: dict) -> float:
+    """Parse common OSM incline forms; unknown/free-form values are left unpenalized."""
+    for key in ("incline", "incline:forward", "incline:backward"):
+        raw = str(tags.get(key, "")).strip().lower().replace(",", ".")
+        if not raw:
+            continue
+        if raw in {"up", "down"}:
+            return 10.0
+        try:
+            if raw.endswith("%"):
+                return float(raw[:-1].strip())
+            if raw.endswith("°"):
+                return math.tan(math.radians(float(raw[:-1].strip()))) * 100.0
+            if re.fullmatch(r"[+-]?\\d+(?:\\.\\d+)?", raw):
+                return float(raw)
+        except ValueError:
+            continue
+    return 0.0
 
 
 def classify_way(tags: dict) -> RoadInfo | None:
@@ -211,6 +235,8 @@ def classify_way(tags: dict) -> RoadInfo | None:
         flags |= FLAG_ROUGH
     elif smoothness == "very_horrible":
         flags |= FLAG_SEVERE
+    if abs(_incline_percent(tags)) >= 8.0:
+        flags |= FLAG_STEEP
     name = tags.get("name:ru") or tags.get("name") or tags.get("name:en") or tags.get("ref")
     return RoadInfo(cls, flags, fwd, back, name)
 
