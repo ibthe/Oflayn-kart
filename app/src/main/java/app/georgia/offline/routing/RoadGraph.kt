@@ -118,6 +118,8 @@ class RoadGraph(buffer: ByteBuffer) {
         const val FORMAT_VERSION = 1
         const val FLAG_UNPAVED = 1
         const val FLAG_ROUNDABOUT = 2
+        const val FLAG_ROUGH = 4
+        const val FLAG_SEVERE = 8
     }
 }
 
