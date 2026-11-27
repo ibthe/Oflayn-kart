@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import math
 import os
 import sqlite3
 import sys
@@ -297,7 +298,7 @@ def multipolygon_centroid(outer_rings: Iterable[Iterable[tuple[float, float]]]) 
         for index, point in enumerate(points):
             next_point = points[(index + 1) % len(points)]
             area2 += point[1] * next_point[0] - next_point[1] * point[0]
-        area = abs(area2) * max(0.1, __import__("math").cos(__import__("math").radians(lat)))
+        area = abs(area2) * max(0.1, math.cos(math.radians(lat)))
         if area <= 1e-14:
             continue
         weighted_lat += lat * area
@@ -461,7 +462,7 @@ def build_from_pbf(input_file: Path, output_file: Path, bbox: tuple[float, float
     progress = ProgressReporter()
 
     class Handler(osmium.SimpleHandler):
-        def _insert(self, obj, osm_type: str, lat: float, lon: float) -> None:
+        def _insert(self, obj, osm_type: str, lat: float, lon: float, osm_id: int | None = None) -> None:
             tags = {tag.k: tag.v for tag in obj.tags}
             classification = classify_tags(tags)
             if classification is None or not point_in_bbox(lat, lon, bbox):
@@ -473,7 +474,8 @@ def build_from_pbf(input_file: Path, output_file: Path, bbox: tuple[float, float
             name_ka = tags.get("name:ka", "").strip()
             fallback = name or name_en or name_ru or name_ka or CATEGORY_LABELS.get(category, category)
             poi = PoiInput(
-                poi_id=f"{osm_type}/{obj.id}", osm_type=osm_type, osm_id=int(obj.id),
+                poi_id=f"{osm_type}/{osm_id if osm_id is not None else obj.id}", osm_type=osm_type,
+                osm_id=int(osm_id if osm_id is not None else obj.id),
                 category=category, subcategory=subcategory, name=fallback,
                 name_en=name_en, name_ru=name_ru, name_ka=name_ka,
                 latitude=lat, longitude=lon,
@@ -535,7 +537,7 @@ def build_from_pbf(input_file: Path, output_file: Path, bbox: tuple[float, float
             lat, lon = centroid
             if not point_in_bbox(lat, lon, bbox):
                 return
-            self._insert(area, "relation", lat, lon)
+            self._insert(area, "relation", lat, lon, osm_id=int(area.orig_id()))
             stats["relationsWritten"] += 1
 
     handler = Handler()
