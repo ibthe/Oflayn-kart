@@ -48,7 +48,8 @@ APK assets
 - `TrackRecorder` collects only fresh foreground GPS fixes, filters poor accuracy and near-duplicate points, and keeps recording state at the app root so tab changes do not stop it.
 - `TrackRepository` stores imported and recorded GPX files in app-private storage. Import/export uses Android's Storage Access Framework document pickers.
 - Saved tracks and their notes can be displayed in the track catalog; a selected continuous segment is drawn on the map and automatically framed. Reverse guidance snaps to the nearest point within 150 m and follows that continuous GPX segment back to its beginning; off-track deviation is reported without silently switching to a road route. Segments separated by GPX gaps are not joined.
-- Background location is intentionally not requested. Recording pauses when the app leaves the foreground; crash-safe incremental recovery remains to be implemented.
+- Recovery checkpoints are written to a private hidden GPX file after the first two fixes, then every 10 points or 30 seconds. On startup the app offers to continue, save or discard the unfinished recording; checkpoint generations prevent an older asynchronous write from recreating a completed track.
+- Background location is intentionally not requested. Recording pauses when the app leaves the foreground.
 
 ## GPS tools (0.2.0)
 
