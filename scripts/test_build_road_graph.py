@@ -7,6 +7,7 @@ import unittest
 from pathlib import Path
 
 import road_graph_format as rg
+import build_road_graph as road_builder
 
 
 def way(refs, coords, **tags):
@@ -167,6 +168,37 @@ class ClassificationTest(unittest.TestCase):
         self.assertEqual(rg.classify_way({"highway": "residential", "name": "X", "name:ru": "Икс"}).name, "Икс")
 
 
+class RestrictionParsingTest(unittest.TestCase):
+    def setUp(self):
+        self.stats = {"restrictionRelations": 0, "nodeRestrictions": 0,
+                      "unsupportedViaWayRestrictions": 0, "unsupportedRestrictionRelations": 0}
+        self.members = [("w", "from", 100), ("n", "via", 2), ("w", "to", 200)]
+
+    def test_parses_node_via_no_turn_restriction(self):
+        records = road_builder._restriction_records(
+            {"type": "restriction", "restriction": "no_left_turn"}, self.members, self.stats
+        )
+        self.assertEqual(len(records), 5)
+        self.assertTrue(all(record.kind == rg.TURN_NO for record in records))
+        self.assertEqual({record.profile_mask for record in records}, set(rg.PROFILES.values()))
+
+    def test_except_limits_restriction_to_non_exempt_profiles(self):
+        records = road_builder._restriction_records(
+            {"type": "restriction", "restriction": "no_right_turn", "except": "bicycle;foot"},
+            self.members, self.stats
+        )
+        self.assertEqual({record.profile_mask for record in records},
+                         {rg.PROFILE_CAR, rg.PROFILE_OFFROAD, rg.PROFILE_MOTORCYCLE})
+
+    def test_via_way_is_counted_as_unsupported_not_silently_misapplied(self):
+        members = [("w", "from", 100), ("w", "via", 300), ("w", "to", 200)]
+        records = road_builder._restriction_records(
+            {"type": "restriction", "restriction": "no_left_turn"}, members, self.stats
+        )
+        self.assertEqual(records, [])
+        self.assertEqual(self.stats["unsupportedViaWayRestrictions"], 1)
+
+
 class GraphBuildTest(unittest.TestCase):
     def test_ways_split_at_junctions_and_keep_shape_points(self):
         data = rg.build_graph(sample_ways())
@@ -282,6 +314,26 @@ class RoutingTest(unittest.TestCase):
         self.assertFalse(graph.turn_allowed(rg.PROFILE_CAR, approach_edge << 1, alternative_edge << 1))
         self.assertTrue(graph.turn_allowed(rg.PROFILE_CAR, approach_edge << 1, required_edge << 1))
 
+    def test_no_turn_restriction_forces_a_detour(self):
+        restriction = rg.TurnRestriction(100, 200, 2, rg.PROFILE_CAR, rg.TURN_NO)
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / "no-turn.bin"
+            rg.write_graph(path, rg.build_graph(sample_ways(), [restriction]))
+            graph = rg.Graph.load(path)
+        result = graph.route(rg.PROFILE_CAR, A[0], A[1], S[0], S[1])
+        self.assertIsNotNone(result)
+        self.assertGreater(result["distance_m"], 4_500.0)
+
+    def test_only_turn_restriction_keeps_the_allowed_exit(self):
+        restriction = rg.TurnRestriction(100, 200, 2, rg.PROFILE_CAR, rg.TURN_ONLY)
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / "only-turn.bin"
+            rg.write_graph(path, rg.build_graph(sample_ways(), [restriction]))
+            graph = rg.Graph.load(path)
+        result = graph.route(rg.PROFILE_CAR, A[0], A[1], S[0], S[1])
+        self.assertIsNotNone(result)
+        self.assertLess(result["distance_m"], 2_500.0)
+
     def test_snap_too_far_returns_none(self):
         self.assertIsNone(self.graph.route(rg.PROFILE_CAR, 42.5, 44.8, 41.7, 44.81, max_snap_m=2000))
 
@@ -291,7 +343,7 @@ class RoutingTest(unittest.TestCase):
             path = Path(directory) / "roads.bin"
             rg.write_graph(path, rg.build_graph(ways))
             graph = rg.Graph.load(path)
-        self.assertIsNone(graph.route(rg.PROFILE_CAR, 41.6951, 44.8001, 41.6951, 44.8199, max_snap_m=300) and None)
+        self.assertIsNone(graph.route(rg.PROFILE_CAR, 41.6951, 44.8001, 41.6951, 44.8199, max_snap_m=300))
         foot = graph.route(rg.PROFILE_FOOT, 41.6951, 44.8001, 41.6951, 44.8199)
         self.assertIsNotNone(foot)
         self.assertLess(foot["distance_m"], 1800)
