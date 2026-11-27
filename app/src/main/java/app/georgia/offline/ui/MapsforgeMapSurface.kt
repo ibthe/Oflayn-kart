@@ -25,6 +25,11 @@ import org.mapsforge.core.model.LatLong
 import org.mapsforge.map.android.graphics.AndroidGraphicFactory
 import org.mapsforge.map.android.util.AndroidUtil
 import org.mapsforge.map.android.view.MapView
+import org.mapsforge.map.layer.cache.InMemoryTileCache
+import org.mapsforge.map.layer.cache.TileCache
+import org.mapsforge.map.layer.cache.TileStore
+import org.mapsforge.map.layer.cache.TwoLevelTileCache
+import org.mapsforge.map.layer.tilestore.TileStoreLayer
 import org.mapsforge.map.layer.overlay.Circle
 import org.mapsforge.map.layer.overlay.Marker
 import org.mapsforge.map.layer.overlay.Polyline
@@ -81,6 +86,9 @@ fun MapsforgeMapSurface(
     mapTheme: String,
     hillshadeDirectory: File? = null,
     contoursMapFile: File? = null,
+    rasterPackage: RasterPackageInfo? = null,
+    rasterEnabled: Boolean = false,
+    rasterOpacity: Float = 0.62f,
     modifier: Modifier = Modifier,
     userLocation: Location? = null,
     destination: LatLong? = null,
@@ -128,13 +136,15 @@ fun MapsforgeMapSurface(
     val currentRoutePoints by rememberUpdatedState(routePoints)
     val currentViaPoints by rememberUpdatedState(viaPoints)
     val currentRouteDrag by rememberUpdatedState(onRouteDrag)
-    key(mapFile.absolutePath, mapFile.lastModified(), preferredLanguages, mapTheme, hillshadeDirectory?.absolutePath, contoursMapFile?.absolutePath, contoursMapFile?.lastModified(), accentColor, destinationColor, routeColor, trackColor, savedColor, carColor, originColor) {
+    key(mapFile.absolutePath, mapFile.lastModified(), preferredLanguages, mapTheme, hillshadeDirectory?.absolutePath, contoursMapFile?.absolutePath, contoursMapFile?.lastModified(), rasterPackage?.directory?.absolutePath, rasterPackage?.extension, accentColor, destinationColor, routeColor, trackColor, savedColor, carColor, originColor) {
         val overlays = remember { MapOverlays(accentColor, destinationColor, routeColor, trackColor, savedColor, carColor, originColor) }
         var mapViewRef by remember { mutableStateOf<MapView?>(null) }
         var mapDataStoreRef by remember { mutableStateOf<MapDataStore?>(null) }
         var hillshadeDataStoreRef by remember { mutableStateOf<MapDataStore?>(null) }
         var hillsRenderConfigRef by remember { mutableStateOf<HillsRenderConfig?>(null) }
         var contoursDataStoreRef by remember { mutableStateOf<MapDataStore?>(null) }
+        var rasterLayerRef by remember { mutableStateOf<TileStoreLayer?>(null) }
+        var rasterTileCacheRef by remember { mutableStateOf<TileCache?>(null) }
         var rendererError by remember { mutableStateOf<String?>(null) }
         var cameraRestored by remember { mutableStateOf(false) }
 
@@ -251,6 +261,34 @@ fun MapsforgeMapSurface(
                                 contoursDataStoreRef = contourDataStore
                             } catch (_: Exception) {
                                 runCatching { pendingContoursStore?.close() }
+                            }
+                        }
+                        val availableRasterPackage = rasterPackage?.takeIf {
+                            it.tileDirectory.isDirectory && it.tileDirectory.canRead()
+                        }
+                        if (availableRasterPackage != null) {
+                            try {
+                                model.displayModel.setFixedTileSize(256)
+                                val tileStore = TileStore(
+                                    availableRasterPackage.tileDirectory,
+                                    ".${availableRasterPackage.extension}",
+                                    AndroidGraphicFactory.INSTANCE
+                                )
+                                val cache = TwoLevelTileCache(InMemoryTileCache(96), tileStore)
+                                val layer = TileStoreLayer(
+                                    cache,
+                                    model.mapViewPosition,
+                                    AndroidGraphicFactory.INSTANCE,
+                                    true
+                                )
+                                layer.setAlpha(rasterOpacity.coerceIn(0.25f, 0.9f))
+                                rasterTileCacheRef = cache
+                                rasterLayerRef = layer
+                                if (rasterEnabled) layerManager.layers.add(layer)
+                            } catch (_: Exception) {
+                                rasterLayerRef = null
+                                runCatching { rasterTileCacheRef?.destroy() }
+                                rasterTileCacheRef = null
                             }
                         }
                         // The map can neither be shrunk to a speck nor dragged away from Georgia.
@@ -480,6 +518,15 @@ fun MapsforgeMapSurface(
                     view,
                     OverlayState(userLocation, destination, recenterToken, zoomInToken, zoomOutToken, routePoints, trackPoints, viaPoints, followUser, fitToken, places, selectedPlaceId, selectedPoi, searchResultPoints, origin, focusToken)
                 )
+                rasterLayerRef?.let { layer ->
+                    layer.setAlpha(rasterOpacity.coerceIn(0.25f, 0.9f))
+                    val layers = view.layerManager.layers
+                    if (rasterEnabled && !layers.contains(layer)) {
+                        layers.add(layer)
+                    } else if (!rasterEnabled && layers.contains(layer)) {
+                        layers.remove(layer)
+                    }
+                }
                 // Wait until Mapsforge has applied a pan/zoom before reading the visible corners.
                 view.postDelayed({
                     runCatching {
@@ -526,6 +573,7 @@ fun MapsforgeMapSurface(
                 runCatching { mapDataStoreRef?.close() }
                 runCatching { hillshadeDataStoreRef?.close() }
                 runCatching { contoursDataStoreRef?.close() }
+                runCatching { rasterTileCacheRef?.destroy() }
                 runCatching { hillsRenderConfigRef?.interruptAndDestroy() }
                 AndroidGraphicFactory.clearResourceMemoryCache()
             }
