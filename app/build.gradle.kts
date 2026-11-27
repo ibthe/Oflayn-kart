@@ -45,7 +45,7 @@ android {
     // Keep large binary map bundles uncompressed inside the APK so they can be
     // memory-mapped or copied efficiently on first launch.
     androidResources {
-        noCompress += listOf("map", "rd5", "dem", "mbtiles", "sqlite", "db", "pbf", "gz", "zip")
+        noCompress += listOf("map", "rd5", "dem", "mbtiles", "sqlite", "db", "pbf", "gzip", "zip")
     }
 
     packaging {
