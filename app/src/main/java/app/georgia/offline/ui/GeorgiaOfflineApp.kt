@@ -635,7 +635,7 @@ private fun MapScreen(modifier: Modifier, settings: LocalSettings, navigation: N
                 places = mapPlaces,
                 selectedPlaceId = navigation.selectedPlaceId,
                 selectedPoi = selectedMapPoi?.let { LatLong(it.latitude, it.longitude) },
-                searchResultPoints = if (showMapSearch) mapSearchResults.take(6).map { LatLong(it.latitude, it.longitude) } else emptyList(),
+                searchResultPoints = if (showMapSearch && !mapStyleExpanded) mapSearchResults.take(6).map { LatLong(it.latitude, it.longitude) } else emptyList(),
                 // During turn-by-turn navigation the live GPS marker replaces the
                 // historical route-start marker; keeping both is visually misleading.
                 origin = navigation.origin?.takeUnless { session.navigating }?.let { LatLong(it.latitude, it.longitude) },
@@ -751,7 +751,7 @@ private fun MapScreen(modifier: Modifier, settings: LocalSettings, navigation: N
                             MapChip { Text("Ищу сигнал GPS…", style = MaterialTheme.typography.labelMedium) }
                         }
                         MapStylePicker(settings, expanded = mapStyleExpanded, onExpandedChange = { mapStyleExpanded = it })
-                        if (showMapSearch) {
+                        if (showMapSearch && !mapStyleExpanded) {
                             MapViewportSearchBox(
                                 query = mapSearchQuery,
                                 onQueryChange = { mapSearchQuery = it },
