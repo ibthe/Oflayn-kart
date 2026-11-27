@@ -3,6 +3,7 @@ package app.georgia.offline.ui
 import android.app.Application
 import android.content.Context
 import android.location.Location
+import app.georgia.offline.data.RasterPackageInfo
 import android.view.GestureDetector
 import android.view.MotionEvent
 import androidx.compose.runtime.Composable
