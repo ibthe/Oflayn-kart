@@ -23,6 +23,12 @@ POI_VERIFIER = ROOT / "scripts/verify_poi_database.py"
 POI_TESTS = ROOT / "scripts/test_build_poi_database.py"
 POI_SMOKE_TEST = ROOT / "scripts/test_poi_extractor_smoke.py"
 POI_SMOKE_FIXTURE = ROOT / "scripts/fixtures/poi-smoke.osm"
+DEM_BUILDER = ROOT / "scripts/build_dem.py"
+DEM_VERIFIER = ROOT / "scripts/verify_dem.py"
+DEM_TESTS = ROOT / "scripts/test_build_dem.py"
+APK_VERIFIER = ROOT / "scripts/verify_apk_bundle.py"
+DEM_REPOSITORY = ROOT / "app/src/main/java/app/georgia/offline/data/DemRepository.kt"
+MAP_SURFACE = ROOT / "app/src/main/java/app/georgia/offline/ui/MapsforgeMapSurface.kt"
 
 EXPECTED_MIRROR = "https://download.openstreetmap.fr/extracts/asia/georgia.osm.pbf"
 EXPECTED_MIRROR_MD5 = "https://download.openstreetmap.fr/extracts/asia/georgia.osm.pbf.md5"
@@ -53,6 +59,12 @@ def main() -> int:
     app_build = APP_BUILD.read_text(encoding="utf-8")
     poi_repository = POI_REPOSITORY.read_text(encoding="utf-8")
     poi_ui = POI_UI.read_text(encoding="utf-8")
+    dem_builder = DEM_BUILDER.read_text(encoding="utf-8")
+    dem_verifier = DEM_VERIFIER.read_text(encoding="utf-8")
+    dem_tests = DEM_TESTS.read_text(encoding="utf-8")
+    apk_verifier = APK_VERIFIER.read_text(encoding="utf-8")
+    dem_repository = DEM_REPOSITORY.read_text(encoding="utf-8")
+    map_surface = MAP_SURFACE.read_text(encoding="utf-8")
     data_sources = DATA_SOURCES.read_text(encoding="utf-8")
     try:
         bundle_manifest = json.loads(BUNDLE_MANIFEST.read_text(encoding="utf-8"))
@@ -251,10 +263,37 @@ def main() -> int:
     for token in ("scripts/test_build_road_graph.py", "scripts/build_road_graph.py", "scripts/verify_road_graph.py", "georgia-roads-v4-"):
         if token not in workflow:
             return fail(f"workflow must build, verify and cache the optional road graph ({token} is missing).")
+
+    # The same verified Copernicus source must produce both local elevation samples
+    # and Mapsforge-compatible HGT archives; APK packaging must preserve both.
+    for token in ("def encode_hgt", "hgtFile", "hgtSha256", "1201", "ZIP_DEFLATED"):
+        if token not in dem_builder:
+            return fail(f"DEM builder is missing HGT hillshade generation: {token}.")
+    for token in ("hgtSha256", "hgtRawBytes", "1201", "zipfile.ZipFile"):
+        if token not in dem_verifier:
+            return fail(f"DEM verifier is missing HGT archive validation: {token}.")
+    for token in ("encode_hgt", "1201", "dtype=\">i2\""):
+        if token not in dem_tests:
+            return fail(f"DEM tests are missing HGT format coverage: {token}.")
+    for token in ("hgtSha256", "assets/dem/", "1201", "ZipFile"):
+        if token not in apk_verifier:
+            return fail(f"APK verifier is missing HGT package validation: {token}.")
+    if "ensureHillshadeInstalled" not in dem_repository or "MessageDigest" not in dem_repository:
+        return fail("the app must install and checksum-verify HGT assets into private storage.")
+    for token in ("MemoryCachingHgtReaderTileSource", "DemFolderFS", "MapsforgeThemes.HILLSHADING", "interruptAndDestroy"):
+        if token not in map_surface:
+            return fail(f"Mapsforge hillshade layer is missing: {token}.")
+    if '"zip"' not in app_build or '"gz"' not in app_build:
+        return fail("precompressed DEM and HGT assets must be stored without a second compression pass.")
+    if "python3 scripts/test_build_dem.py" not in workflow or "python3 scripts/verify_dem.py" not in workflow:
+        return fail("CI must run DEM/HGT encoding tests and verify the generated elevation package.")
+    if "ensureHillshadeInstalled" not in poi_ui and "ensureHillshadeInstalled" not in (ROOT / "app/src/main/java/app/georgia/offline/ui/GeorgiaOfflineApp.kt").read_text(encoding="utf-8"):
+        return fail("the map screen must install HGT assets before enabling natural-style hillshading.")
+
     if "continue-on-error: true" in workflow:
         return fail("map preparation must fail fast; do not hide failed prerequisites.")
 
-    print("OK: OSM sources, resumable PBF cache, non-canceling CI concurrency, explicit Georgia bbox, Mapsforge writer, PyOsmium extraction, local SQLite search, multilingual names and APK assets are configured.")
+    print("OK: OSM sources, resumable PBF cache, Mapsforge writer, PyOsmium extraction, local SQLite search, motorcycle/grade routing, DEM/HGT hillshading and offline APK assets are configured.")
     return 0
 
 
