@@ -189,7 +189,8 @@ object DemRepository {
     private fun loadTile(context: Context, key: String): ShortArray? {
         tileCache[key]?.let { return it }
         val bytes = try {
-            GZIPInputStream(context.assets.open("dem/$key.dem.gz")).use { it.readBytes() }
+            // AAPT2 strips the .gz suffix from pre-compressed assets; the bytes remain a gzip stream.
+            GZIPInputStream(context.assets.open("dem/$key.dem")).use { it.readBytes() }
         } catch (_: Exception) {
             return null
         }
