@@ -1,0 +1,27 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<osm version="0.6" generator="Oflayn kart turn restriction smoke">
+  <node id="1" lat="41.7000" lon="44.8000" version="1" timestamp="2026-01-01T00:00:00Z" changeset="1" uid="1" user="test"/>
+  <node id="2" lat="41.7000" lon="44.8100" version="1" timestamp="2026-01-01T00:00:00Z" changeset="1" uid="1" user="test"/>
+  <node id="3" lat="41.7100" lon="44.8100" version="1" timestamp="2026-01-01T00:00:00Z" changeset="1" uid="1" user="test"/>
+  <node id="4" lat="41.7000" lon="44.8200" version="1" timestamp="2026-01-01T00:00:00Z" changeset="1" uid="1" user="test"/>
+  <way id="100" version="1" timestamp="2026-01-01T00:00:00Z" changeset="1" uid="1" user="test">
+    <nd ref="1"/><nd ref="2"/>
+    <tag k="highway" v="residential"/><tag k="name" v="Approach"/>
+  </way>
+  <way id="200" version="1" timestamp="2026-01-01T00:00:00Z" changeset="1" uid="1" user="test">
+    <nd ref="2"/><nd ref="3"/>
+    <tag k="highway" v="residential"/><tag k="name" v="Restricted exit"/>
+  </way>
+  <way id="300" version="1" timestamp="2026-01-01T00:00:00Z" changeset="1" uid="1" user="test">
+    <nd ref="2"/><nd ref="4"/>
+    <tag k="highway" v="residential"/><tag k="name" v="Alternative"/>
+  </way>
+  <relation id="400" version="1" timestamp="2026-01-01T00:00:00Z" changeset="1" uid="1" user="test">
+    <member type="way" ref="100" role="from"/>
+    <member type="node" ref="2" role="via"/>
+    <member type="way" ref="200" role="to"/>
+    <tag k="type" v="restriction"/>
+    <tag k="restriction" v="no_left_turn"/>
+    <tag k="except" v="bicycle;foot"/>
+  </relation>
+</osm>
