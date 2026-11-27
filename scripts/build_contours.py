@@ -9,7 +9,6 @@ import json
 import math
 import re
 from pathlib import Path
-from xml.sax.saxutils import escape
 
 import numpy as np
 
@@ -30,32 +29,26 @@ def tile_origin(filename: str) -> tuple[int, int]:
     return latitude, longitude
 
 
-def point_distance_m(a: tuple[float, float], b: tuple[float, float]) -> float:
-    mean_lat = math.radians((a[1] + b[1]) / 2.0)
-    dx = (b[0] - a[0]) * METERS_PER_DEGREE * math.cos(mean_lat)
-    dy = (b[1] - a[1]) * METERS_PER_DEGREE
-    return math.hypot(dx, dy)
-
-
 def line_length_m(points: np.ndarray) -> float:
-    return sum(
-        point_distance_m((float(a[0]), float(a[1])), (float(b[0]), float(b[1])))
-        for a, b in zip(points[:-1], points[1:])
-    )
+    if len(points) < 2:
+        return 0.0
+    mean_lat = np.radians((points[:-1, 1] + points[1:, 1]) / 2.0)
+    dx = np.diff(points[:, 0]) * METERS_PER_DEGREE * np.cos(mean_lat)
+    dy = np.diff(points[:, 1]) * METERS_PER_DEGREE
+    return float(np.hypot(dx, dy).sum())
 
 
 def simplify_line(points: np.ndarray, spacing_m: float) -> list[tuple[float, float]]:
     if len(points) < 2:
         return []
-    kept = [(float(points[0, 0]), float(points[0, 1]))]
-    for point in points[1:-1]:
-        candidate = (float(point[0]), float(point[1]))
-        if point_distance_m(kept[-1], candidate) >= spacing_m:
-            kept.append(candidate)
-    last = (float(points[-1, 0]), float(points[-1, 1]))
-    if point_distance_m(kept[-1], last) > 0.5:
-        kept.append(last)
-    return kept if len(kept) >= 2 else []
+    # GLO-90 samples are about 90 m apart; decimate in C-backed NumPy rather than
+    # walking every contour vertex in Python on the full-country build runner.
+    step = max(1, round(spacing_m / 90.0))
+    indices = np.arange(0, len(points), step, dtype=np.int64)
+    if indices[-1] != len(points) - 1:
+        indices = np.append(indices, len(points) - 1)
+    simplified = points[indices]
+    return [(float(point[0]), float(point[1])) for point in simplified]
 
 
 def extract_tile_contours(
