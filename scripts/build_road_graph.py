@@ -147,6 +147,7 @@ def main() -> int:
     parser.add_argument("output_bin", type=Path)
     parser.add_argument("--bbox", default=",".join(map(str, BBOX_DEFAULT)))
     parser.add_argument("--summary", type=Path, required=True)
+    parser.add_argument("--dem-dir", type=Path, help="Optional directory containing compressed Copernicus DEM tiles.")
     args = parser.parse_args()
     if not args.input_pbf.is_file() or args.input_pbf.stat().st_size < 1_000_000:
         print("ERROR: input OSM PBF is missing or unexpectedly small.", file=sys.stderr)
