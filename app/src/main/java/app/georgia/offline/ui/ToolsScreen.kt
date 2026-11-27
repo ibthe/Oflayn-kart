@@ -56,7 +56,7 @@ import java.util.Locale
 
 private data class DeviceStatus(
     val batteryPercent: Int?,
-    val charging: Boolean,
+    val charging: Boolean?,
     val internetAvailable: Boolean?,
 )
 
@@ -72,8 +72,11 @@ private fun readDeviceStatus(context: Context): DeviceStatus {
         else -> null
     }
     val batteryStatus = batteryIntent?.getIntExtra(BatteryManager.EXTRA_STATUS, -1) ?: -1
-    val charging = batteryStatus == BatteryManager.BATTERY_STATUS_CHARGING ||
-        batteryStatus == BatteryManager.BATTERY_STATUS_FULL
+    val charging = when (batteryStatus) {
+        BatteryManager.BATTERY_STATUS_CHARGING, BatteryManager.BATTERY_STATUS_FULL -> true
+        BatteryManager.BATTERY_STATUS_DISCHARGING, BatteryManager.BATTERY_STATUS_NOT_CHARGING -> false
+        else -> null
+    }
     val internetAvailable = runCatching {
         val connectivity = context.getSystemService(Context.CONNECTIVITY_SERVICE) as? ConnectivityManager
         if (connectivity == null) {
@@ -109,7 +112,7 @@ private fun DeviceStatusPanel(context: Context) {
                 "Заряд батареи",
                 status.batteryPercent?.let { "${it}%" } ?: "нет данных"
             )
-            MetricRow("Питание", if (status.charging) "зарядка" else "от батареи")
+            MetricRow("Питание", when (status.charging) { true -> "зарядка"; false -> "от батареи"; null -> "нет данных" })
             MetricRow(
                 "Сеть",
                 when (status.internetAvailable) {
@@ -118,7 +121,7 @@ private fun DeviceStatusPanel(context: Context) {
                     null -> "статус недоступен"
                 }
             )
-            if (status.batteryPercent != null && status.batteryPercent <= 20 && !status.charging) {
+            if (status.batteryPercent != null && status.batteryPercent <= 20 && status.charging != true) {
                 Text(
                     "Низкий заряд. Для длительной поездки подключите питание или включите энергосбережение.",
                     color = MaterialTheme.colorScheme.error,
