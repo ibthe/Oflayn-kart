@@ -38,6 +38,7 @@ class AppFlowUiTest {
         composeRule.onNodeWithText("Каталог", substring = false).performClick()
         composeRule.onNodeWithText("Утилиты", substring = false).performClick()
         awaitCount("Утилиты", 2)
+        composeRule.onAllNodesWithText("Экстренная помощь", substring = false).assertCountEquals(1)
         composeRule.waitForIdle()
         composeRule.onAllNodesWithText("Места", substring = false).assertCountEquals(1)
         composeRule.onAllNodesWithText("Запись и GPX-треки", substring = false).assertCountEquals(1)
