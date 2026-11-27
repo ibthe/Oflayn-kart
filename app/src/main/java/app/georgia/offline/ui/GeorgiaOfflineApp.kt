@@ -149,7 +149,12 @@ fun GeorgiaOfflineApp(settings: LocalSettings) {
         if (trackRecorder.recording && fix != null) {
             trackRecorder.addFix(fix)
             trackRecorder.checkpointIfDue(fix.elapsedRealtimeNanos)?.let { checkpoint ->
-                coroutineScope.launch(Dispatchers.IO) { trackRepository.saveRecovery(checkpoint) }
+                val generation = trackRecorder.checkpointGeneration
+                coroutineScope.launch(Dispatchers.IO) {
+                    trackRepository.saveRecovery(checkpoint) {
+                        trackRecorder.checkpointGeneration == generation
+                    }
+                }
             }
         }
     }
