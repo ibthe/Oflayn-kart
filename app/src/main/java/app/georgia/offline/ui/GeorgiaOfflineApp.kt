@@ -104,6 +104,7 @@ import app.georgia.offline.data.LocalSettings
 import app.georgia.offline.data.MapFileRepository
 import app.georgia.offline.data.PoiRepository
 import app.georgia.offline.data.TrackRepository
+import app.georgia.offline.data.TripPlanRepository
 import app.georgia.offline.routing.TrackRouteBuilder
 import app.georgia.offline.domain.PoiLabels
 import app.georgia.offline.domain.GeoFormatting
@@ -135,6 +136,9 @@ fun GeorgiaOfflineApp(settings: LocalSettings) {
     val tracker = rememberLocationTracker()
     val trackRecorder = remember { TrackRecorder() }
     val trackRepository = remember(context) { TrackRepository(File(context.filesDir, "tracks")) }
+    val tripPlanRepository = remember(context) { TripPlanRepository(File(context.filesDir, "trip-plan.tsv")) }
+    var tripPlanRevision by remember { mutableStateOf(0) }
+    val tripPlanIds = remember(tripPlanRevision) { tripPlanRepository.list().map { it.poiId }.toSet() }
     var recoveryLoaded by remember { mutableStateOf(false) }
     var selectedTrackPoints by remember { mutableStateOf<List<LatLong>>(emptyList()) }
     val coroutineScope = rememberCoroutineScope()
