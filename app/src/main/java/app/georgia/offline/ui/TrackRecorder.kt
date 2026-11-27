@@ -57,13 +57,13 @@ class TrackRecorder {
         lastElapsedRealtimeNanos = elapsedRealtimeNanos
     }
 
-    fun finish(name: String = "Мой трек"): GpxTrack? {
+    fun finish(name: String = "Мой трек", description: String? = null): GpxTrack? {
         recording = false
         if (points.size < 2) {
             points.clear()
             return null
         }
-        return GpxTrack(name.trim().ifBlank { "Мой трек" }.take(100), listOf(points.toList()), startedAtEpochMillis)
+        return GpxTrack(name.trim().ifBlank { "Мой трек" }.take(100), listOf(points.toList()), startedAtEpochMillis, description?.trim()?.take(1_000)?.ifBlank { null })
             .also { points.clear() }
     }
 
