@@ -119,15 +119,17 @@ MAP_SIZE="$(stat -c '%s' "$MAP_TEMP")"
 POI_SHA256="$(sha256sum "$POI_TEMP" | awk '{ print $1 }')"
 POI_SIZE="$(stat -c '%s' "$POI_TEMP")"
 POI_COUNT="$(python3 -c 'import json,sys; print(json.load(open(sys.argv[1]))["poiCount"])' "$POI_SUMMARY")"
+POI_DUPLICATES_REMOVED="$(python3 -c 'import json,sys; print(json.load(open(sys.argv[1])).get("duplicatesRemoved",0))' "$POI_SUMMARY")"
+POI_RELATIONS_WRITTEN="$(python3 -c 'import json,sys; print(json.load(open(sys.argv[1])).get("stats",{}).get("relationsWritten",0))' "$POI_SUMMARY")"
 RETRIEVED_AT="$(date -u +'%Y-%m-%dT%H:%M:%SZ')"
-python3 - "$MANIFEST_TEMP" "$MAP_SHA256" "$MAP_SIZE" "$EXPECTED_MD5" "$RETRIEVED_AT" "$MAPSFORGE_VERSION" "$SOURCE_PROVIDER" "$SOURCE_LABEL" "$SOURCE_URL" "$GEORGIA_BBOX" "$POI_SHA256" "$POI_SIZE" "$POI_COUNT" <<'PY'
+python3 - "$MANIFEST_TEMP" "$MAP_SHA256" "$MAP_SIZE" "$EXPECTED_MD5" "$RETRIEVED_AT" "$MAPSFORGE_VERSION" "$SOURCE_PROVIDER" "$SOURCE_LABEL" "$SOURCE_URL" "$GEORGIA_BBOX" "$POI_SHA256" "$POI_SIZE" "$POI_COUNT" "$POI_DUPLICATES_REMOVED" "$POI_RELATIONS_WRITTEN" <<'PY'
 import json
 import sys
 from pathlib import Path
 
 (path, map_sha256, map_size, pbf_md5, retrieved_at, writer_version,
  source_provider, source_label, source_url, map_bbox,
- poi_sha256, poi_size, poi_count) = sys.argv[1:]
+ poi_sha256, poi_size, poi_count, poi_duplicates_removed, poi_relations_written) = sys.argv[1:]
 manifest = {
     "datasetId": "georgia-openstreetmap-mapsforge",
     "datasetVersion": retrieved_at,
@@ -145,12 +147,15 @@ manifest = {
     "poiFileSha256": poi_sha256,
     "poiFileSizeBytes": int(poi_size),
     "poiCount": int(poi_count),
+    "poiDuplicatesRemoved": int(poi_duplicates_removed),
+    "poiRelationsWritten": int(poi_relations_written),
     "poiSchemaVersion": 1,
     "poiIndexVersion": 3,
     "poiCategoryCatalog": ["food", "lodging", "tourism", "medical", "transport", "services", "shops", "historic", "nature", "settlement"],
     "poiSearchLanguages": ["en", "ru", "ka"],
     "poiIndexedDetailTags": ["addr:*", "phone", "contact:phone", "telephone", "website", "contact:website", "opening_hours", "cuisine", "wheelchair", "internet_access", "operator", "brand"],
-    "poiGeometryCoverage": "OSM nodes, closed ways and multipolygon relations; full-country duplicate and coverage review remains pending.",
+    "poiGeometryCoverage": "OSM nodes, closed ways and multipolygon relations; relation-only areas are indexed using area-weighted centroids.",
+    "poiDeduplication": "Same-name, same-category node/way/relation records within 18 m are merged; relation geometry is preferred and multilingual names/contact tags are combined.",
     "mapWriter": "Mapsforge Map Writer",
     "mapWriterVersion": writer_version,
     "preferredLanguagesRequested": ["en", "ru", "ka"],
