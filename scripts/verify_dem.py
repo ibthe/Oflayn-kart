@@ -49,10 +49,10 @@ def verify(directory: Path) -> dict:
     total = 0
     for tile in tiles:
         name = tile.get("file")
-        if not isinstance(name, str) or not name.endswith(".dem.gz") or name in present_keys:
-            raise ValueError(f"Invalid or duplicate DEM tile name: {name!r}")
+        if not isinstance(name, str) or not name.endswith(".dem.gz"):
+            raise ValueError(f"Invalid DEM tile name: {name!r}")
         key = name.removesuffix(".dem.gz")
-        if key not in expected:
+        if key not in expected or key in present_keys:
             raise ValueError(f"Unexpected DEM tile outside the requested bounding box: {name}")
         present_keys.add(key)
         path = directory / name
