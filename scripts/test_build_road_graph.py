@@ -24,9 +24,9 @@ MID = (41.7055, 44.8155)
 
 def sample_ways():
     return [
-        way([1, 2, 3], [A, B, C], name="Main street"),
-        way([4, 2, 5], [N, B, S], name="Cross street"),
-        way([3, 6, 4], [C, MID, N], oneway="yes", name="One way road"),
+        way([1, 2, 3], [A, B, C], name="Main street", way_id=100),
+        way([4, 2, 5], [N, B, S], name="Cross street", way_id=200),
+        way([3, 6, 4], [C, MID, N], oneway="yes", name="One way road", way_id=300),
     ]
 
 
