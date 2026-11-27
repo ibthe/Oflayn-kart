@@ -25,6 +25,7 @@ data class GpxTrack(
 object GpxCodec {
     fun parse(input: InputStream, fallbackName: String = "Импортированный трек"): GpxTrack {
         val factory = DocumentBuilderFactory.newInstance().apply {
+            isNamespaceAware = true
             setFeature(XMLConstants.FEATURE_SECURE_PROCESSING, true)
             setFeature("http://apache.org/xml/features/disallow-doctype-decl", true)
             setFeature("http://xml.org/sax/features/external-general-entities", false)
