@@ -328,8 +328,8 @@ def main() -> int:
     for token in ("mapFileSha256", "runtimeNetworkAccessRequired", "existing-manifest"):
         if token not in contour_map_verifier:
             return fail(f"Contour map verification is missing: {token}.")
-    if "build_contours_map.sh" not in workflow or "georgia-contours.map" not in workflow:
-        return fail("CI must build/cache the separate contour map before APK assembly.")
+    if "build_contours_map.sh" not in workflow or "georgia-contours.map" not in workflow or "Install Osmosis for contour map build" not in workflow:
+        return fail("CI must install Osmosis and build/cache the separate contour map before APK assembly.")
 
 
     for token in ("contoursMapFile", "resolveContourTheme", "contoursDataStoreRef"):
