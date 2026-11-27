@@ -157,10 +157,10 @@ def main() -> int:
             raise RuntimeError("no routable roads were found in the PBF")
         started = time.monotonic()
         dem_sampler = DemSampler(args.dem_dir) if args.dem_dir is not None else None
-    data = rg.build_graph(ways, restrictions, dem_sampler=dem_sampler)
+        data = rg.build_graph(ways, restrictions, dem_sampler=dem_sampler)
         del ways
         print(f"[roads] graph built: vertices={len(data.vlat):,}, edges={len(data.edges):,}, "
-              f"elapsed={time.monotonic() - started:.1f}s", flush=True)
+              f"DEM-grade edges={data.dem_grade_edges:,}, elapsed={time.monotonic() - started:.1f}s", flush=True)
         summary = rg.write_graph(args.output_bin, data)
     except Exception as exc:  # noqa: BLE001 - report any failure as a clean build error
         args.output_bin.unlink(missing_ok=True)
