@@ -29,10 +29,11 @@ fun EmergencyPanel(context: Context, location: Location?) {
     val battery = (context.getSystemService(Context.BATTERY_SERVICE) as? BatteryManager)
         ?.getIntProperty(BatteryManager.BATTERY_PROPERTY_CAPACITY)
         ?.takeIf { it in 0..100 }
+    val accuracyMeters = location?.takeIf { it.hasAccuracy() }?.accuracy
     val message = buildString {
         append("Нужна помощь. Мои координаты: ")
         append(coordinates ?: "актуальная GPS-позиция недоступна")
-        location?.let { append(". Точность GPS около ${it.accuracy.toInt()} м") }
+        accuracyMeters?.let { append(". Точность GPS около ${it.toInt()} м") }
         battery?.let { append(". Заряд телефона: $it%") }
     }
 
@@ -52,7 +53,7 @@ fun EmergencyPanel(context: Context, location: Location?) {
             )
             Text(
                 listOfNotNull(
-                    location?.let { "Точность ±${it.accuracy.toInt()} м" },
+                    accuracyMeters?.let { "Точность ±${it.toInt()} м" },
                     battery?.let { "Заряд $it%" }
                 ).joinToString(" · "),
                 style = MaterialTheme.typography.labelSmall,
