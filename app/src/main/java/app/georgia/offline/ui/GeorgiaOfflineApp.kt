@@ -289,7 +289,8 @@ fun GeorgiaOfflineApp(settings: LocalSettings) {
                                         }
                                         selectedTab = AppTab.MAP.name
                                     }
-                                }
+                                },
+                                onTripPlanChanged = { tripPlanRevision++ }
                             )
                             AppTab.TOOLS -> ToolsScreen(
                                 Modifier.padding(padding),
