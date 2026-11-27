@@ -24,6 +24,8 @@ class TripPlanRepositoryTest {
         val reopened = TripPlanRepository(file)
         assertEquals(listOf("node/1001", "way/2001", "relation/3001"), reopened.list().map { it.poiId })
         assertEquals("Смотровая точка", reopened.list().last().note)
+        reopened.updateNote("node/1001", "Заметка к первому месту")
+        assertEquals("Заметка к первому месту", reopened.list().first().note)
         assertFalse(reopened.add("node/1001"))
         assertFalse(reopened.add("../unsafe"))
     }
