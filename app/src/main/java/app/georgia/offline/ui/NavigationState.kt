@@ -83,6 +83,23 @@ class NavigationState {
         routeMenuVisible = true
     }
 
+    /**
+     * Initial planning may use the explicitly selected origin. A reroute must always
+     * use the latest GPS fix, otherwise it sends the person back to the old start.
+     */
+    fun resolveRouteStart(
+        currentLatitude: Double?,
+        currentLongitude: Double?,
+        rerouting: Boolean
+    ): Pair<Double, Double>? {
+        val current = if (currentLatitude != null && currentLongitude != null) {
+            currentLatitude to currentLongitude
+        } else {
+            null
+        }
+        return if (rerouting) current else origin?.let { it.latitude to it.longitude } ?: current
+    }
+
     /** Selects a new route origin and waits for the person to choose a destination. */
     fun startRouteFrom(point: NavigationTarget) {
         target = null
