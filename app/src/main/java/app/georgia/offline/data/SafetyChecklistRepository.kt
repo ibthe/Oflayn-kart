@@ -28,7 +28,7 @@ object SafetyChecklistRepository {
         SafetyChecklistItem("emergency_contact", "Экстренный контакт", "Сохрани номер близкого человека в панели экстренной помощи"),
         SafetyChecklistItem("shared_route", "План поездки", "Сообщи близким направление и ожидаемое время возвращения"),
         SafetyChecklistItem("road_conditions", "Дорожные условия", "Проверь погоду, ограничения и сезонную доступность дорог"),
-        SafetyChecklistItem("repair_kit", "Ремкомплект", "Запаска или жгут, насос, инструмент и светоотражающий жилет")
+        SafetyChecklistItem("repair_kit", "Ремкомплект", "Ремкомплект для шин, насос или компрессор, инструмент и светоотражающий жилет")
     )
 
     val incidentSteps = listOf(
