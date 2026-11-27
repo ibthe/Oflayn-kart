@@ -50,6 +50,8 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import app.georgia.offline.data.LocalSettings
 import app.georgia.offline.data.PoiRepository
+import app.georgia.offline.data.TripPlanRepository
+import app.georgia.offline.data.TripPlanStop
 import app.georgia.offline.domain.GeoFormatting
 import app.georgia.offline.domain.GeoMath
 import app.georgia.offline.domain.PoiLabels
@@ -69,7 +71,10 @@ internal fun DiscoverScreen(
     modifier: Modifier,
     settings: LocalSettings,
     tracker: LocationTracker,
-    onNavigate: (String, Double, Double) -> Unit
+    tripPlanRepository: TripPlanRepository,
+    tripPlanRevision: Int,
+    onNavigate: (String, Double, Double) -> Unit,
+    onPlanRoute: (List<PoiRepository.PoiRecord>) -> Unit
 ) {
     val context = LocalContext.current
     val language = settings.language
@@ -83,6 +88,9 @@ internal fun DiscoverScreen(
     var loading by remember { mutableStateOf(false) }
     var statusMessage by remember { mutableStateOf("Подготавливаю локальную базу объектов…") }
     var statusIsError by remember { mutableStateOf(false) }
+    var planMode by rememberSaveable { mutableStateOf(false) }
+    var tripStops by remember { mutableStateOf(tripPlanRepository.list()) }
+    var tripPois by remember { mutableStateOf<List<PoiRepository.PoiRecord>>(emptyList()) }
     val here = tracker.location?.takeIf { tracker.hasFreshFix() }
 
     LaunchedEffect(Unit) {
@@ -93,6 +101,17 @@ internal fun DiscoverScreen(
         statusMessage = installation.message ?: "В базе $poiCount объектов. Поиск работает без интернета."
         statusIsError = installation.message != null
         loading = false
+    }
+
+    LaunchedEffect(tripPlanRevision, database) {
+        val stops = tripPlanRepository.list()
+        tripStops = stops
+        val localDatabase = database
+        tripPois = if (localDatabase != null) {
+            PoiRepository.byIds(localDatabase, stops.map { it.poiId })
+        } else {
+            emptyList()
+        }
     }
 
     LaunchedEffect(database, query, selectedCategory) {
@@ -134,6 +153,30 @@ internal fun DiscoverScreen(
 
     PageColumn(modifier) {
         PageTitle("Места")
+        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(Space.xs)) {
+            SelectPill("Каталог", selected = !planMode, onClick = { planMode = false })
+            SelectPill("План поездки · ${tripStops.size}", selected = planMode, onClick = { planMode = true })
+        }
+        if (planMode) {
+            TripPlanContent(
+                stops = tripStops,
+                pois = tripPois,
+                language = language,
+                onPlanRoute = onPlanRoute,
+                onMove = { id, direction ->
+                    tripPlanRepository.move(id, direction)
+                    tripStops = tripPlanRepository.list()
+                },
+                onSetDay = { id, day ->
+                    tripPlanRepository.setDay(id, day)
+                    tripStops = tripPlanRepository.list()
+                },
+                onRemove = { id ->
+                    tripPlanRepository.remove(id)
+                    tripStops = tripPlanRepository.list()
+                }
+            )
+        } else {
         OutlinedTextField(
             value = query,
             onValueChange = { query = it },
@@ -201,6 +244,16 @@ internal fun DiscoverScreen(
                         onToggle = { expandedId = if (expandedId == poi.poiId) null else poi.poiId },
                         onRoute = { onNavigate(name, poi.latitude, poi.longitude) },
                         onSave = { settings.addPlace(name, poi.latitude, poi.longitude) },
+                        inTrip = tripStops.any { it.poiId == poi.poiId },
+                        onAddToTrip = {
+                            if (tripPlanRepository.add(poi.poiId)) {
+                                tripStops = tripPlanRepository.list()
+                                tripPois = (tripPois + poi).distinctBy { it.poiId }
+                                statusMessage = "Добавлено в план поездки."
+                            } else {
+                                statusMessage = "Это место уже есть в плане."
+                            }
+                        },
                         onCopy = { copyToClipboard(context, GeoFormatting.decimalCoordinates(poi.latitude, poi.longitude)) }
                     )
                 }
@@ -212,6 +265,7 @@ internal fun DiscoverScreen(
             style = MaterialTheme.typography.labelSmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant
         )
+        }
     }
 }
 
@@ -230,9 +284,11 @@ private fun PlaceRow(
     distance: String?,
     expanded: Boolean,
     saved: Boolean,
+    inTrip: Boolean,
     onToggle: () -> Unit,
     onRoute: () -> Unit,
     onSave: () -> Unit,
+    onAddToTrip: () -> Unit,
     onCopy: () -> Unit
 ) {
     val scheme = MaterialTheme.colorScheme
@@ -309,7 +365,12 @@ private fun PlaceRow(
                         )
                     }
                 }
-                TextButton(onClick = onCopy) { Text("Копировать координаты") }
+                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+                    TextButton(onClick = onAddToTrip, enabled = !inTrip) {
+                        Text(if (inTrip) "В плане" else "Добавить в план")
+                    }
+                    TextButton(onClick = onCopy) { Text("Копировать координаты") }
+                }
             }
         }
     }
