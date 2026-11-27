@@ -442,8 +442,8 @@ def write_graph(path: Path, data: GraphData) -> dict:
     max_lat = max(data.vlat) if vcount else 0
     min_lon = min(data.vlon) if vcount else 0
     max_lon = max(data.vlon) if vcount else 0
-    header = struct.pack("<4s11i", MAGIC, FORMAT_VERSION, vcount, ecount, len(shape) * 4, len(data.names),
-                         len(name_bytes), min_lat, min_lon, max_lat, max_lon, len(arcs))
+    header = bytearray(struct.pack("<4s11i", MAGIC, FORMAT_VERSION, vcount, ecount, len(shape) * 4, len(data.names),
+                                   len(name_bytes), min_lat, min_lon, max_lat, max_lon, len(arcs)))
     struct.pack_into("<i", header, 48, len(turn_blob) // TURN_STRUCT.size)
     header += b"\x00" * (HEADER_SIZE - len(header))
     with path.open("wb") as handle:
@@ -545,6 +545,8 @@ class Graph:
         return bool((edge[7] if direction == 0 else edge[8]) & profile)
 
     def turn_allowed(self, profile: int, incoming_arc: int, outgoing_arc: int) -> bool:
+        if not (0 <= incoming_arc < 2 * self.E and 0 <= outgoing_arc < 2 * self.E):
+            return False
         only_found = False
         only_allowed = False
         prohibited = False
