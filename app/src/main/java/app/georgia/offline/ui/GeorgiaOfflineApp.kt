@@ -719,12 +719,17 @@ private fun MapScreen(modifier: Modifier, settings: LocalSettings, navigation: N
                 rasterImporting = true
                 rasterMessage = null
                 try {
+                    val previousPackage = rasterPackage
                     val imported = withContext(Dispatchers.IO) {
                         RasterPackageRepository.importZip(
                             context,
                             uri,
                             settings.mapStorageId ?: MapFileRepository.INTERNAL_STORAGE_ID
-                        )
+                        ).also { installed ->
+                            if (previousPackage != null && previousPackage.id != installed.id) {
+                                RasterPackageRepository.remove(context, previousPackage)
+                            }
+                        }
                     }
                     rasterPackage = imported
                     rasterEnabled = false
@@ -1057,6 +1062,16 @@ private fun MapScreen(modifier: Modifier, settings: LocalSettings, navigation: N
                                 }
                             )
                         }
+                        if (rasterEnabled && rasterPackage != null) {
+                            MapChip {
+                                Text(
+                                    "Снимки: ${rasterPackage.attribution} · ${rasterPackage.license}",
+                                    style = MaterialTheme.typography.labelSmall,
+                                    maxLines = 1,
+                                    overflow = TextOverflow.Ellipsis
+                                )
+                            }
+                        }
                         if (selectedTrackPoints.isNotEmpty()) {
                             MapChip(onClick = onClearTrack) { Text("Скрыть GPX-трек") }
                         }
@@ -1122,6 +1137,16 @@ private fun MapScreen(modifier: Modifier, settings: LocalSettings, navigation: N
                                     }
                                 }
                             )
+                        }
+                        if (rasterEnabled && rasterPackage != null) {
+                            MapChip {
+                                Text(
+                                    "Снимки: ${rasterPackage.attribution} · ${rasterPackage.license}",
+                                    style = MaterialTheme.typography.labelSmall,
+                                    maxLines = 1,
+                                    overflow = TextOverflow.Ellipsis
+                                )
+                            }
                         }
                         if (selectedTrackPoints.isNotEmpty()) {
                             MapChip(onClick = onClearTrack) { Text("Скрыть GPX-трек") }
