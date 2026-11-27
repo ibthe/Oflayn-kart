@@ -13,6 +13,13 @@ import org.junit.runner.RunWith
 @RunWith(AndroidJUnit4::class)
 class DemHillshadeInstallTest {
     @Test
+    fun bundledDemTileCanBeSampledFromTheCompressedAndroidAsset() = runBlocking {
+        val context = InstrumentationRegistry.getInstrumentation().targetContext
+        val elevation = DemRepository.elevationAt(context, 41.5, 44.5)
+        assertNotNull("The packaged DEM tile must be readable by the runtime repository", elevation)
+    }
+
+    @Test
     fun bundledHgtArchivesInstallAndMatchTheAssetManifest() = runBlocking {
         val context = InstrumentationRegistry.getInstrumentation().targetContext
         val assetNames = context.assets.list("dem/hgt")
