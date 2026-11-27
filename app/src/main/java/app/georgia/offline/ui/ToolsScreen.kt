@@ -44,6 +44,7 @@ import app.georgia.offline.domain.Qibla
 import app.georgia.offline.ui.theme.Space
 import kotlin.math.abs
 import kotlin.math.roundToInt
+import java.util.Locale
 
 @Composable
 fun ToolsScreen(modifier: Modifier = Modifier, settings: LocalSettings, tracker: LocationTracker, trackRecorder: TrackRecorder, trackRepository: TrackRepository, recoveryLoaded: Boolean, onShowTrack: (List<TrackPoint>) -> Unit, onFollowTrack: (GpxTrack) -> Unit) {
