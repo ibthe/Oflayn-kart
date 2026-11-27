@@ -42,6 +42,12 @@ APK assets
 - Language variants are requested from the writer as `en,ru,ka`; a name variant is stored only if the corresponding OSM tag exists. There is no automatic translation. The user independently enables map-label languages; Mapsforge `MultiMapDataStore(RETURN_ALL)` combines one reader per enabled language so the renderer can place labels from all selected variants. The language used in place lists is a separate preference.
 - The SD-folder picker is present, but direct map extraction to external SAF storage is not implemented yet. An explicit map-disable setting is persisted across launches, users can restore the APK-bundled map, and the repository checks free space before copying a large asset.
 
+## Offline map storage
+
+- `MapFileRepository` lists internal app-private storage and mounted removable SD volumes through `getExternalFilesDirs`.
+- Bundled maps are installed and user-imported maps are validated on the selected volume. Imported maps are copied and validated before settings switch to the new path; the previous copy is deleted only after the new path is saved.
+- SD storage is app-specific (`Android/data/.../files/maps`), needs no broad storage permission, and is removed by Android when the app is uninstalled. A removed card makes its map unavailable until reconnected or the user selects another volume.
+
 ## Offline trip planner
 
 - `TripPlanRepository` stores POI IDs, day/order metadata and per-stop notes locally in an atomic app-private file; an itinerary is limited to 20 stops.
