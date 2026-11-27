@@ -742,7 +742,7 @@ private fun MapScreen(modifier: Modifier, settings: LocalSettings, navigation: N
                         horizontalAlignment = Alignment.CenterHorizontally,
                         verticalArrangement = Arrangement.spacedBy(Space.xs)
                     ) {
-                        NavigationBanner(session.route!!, session.along)
+                        NavigationBanner(session.route!!, session.along, gpsFresh = tracker.hasFreshFix())
                         if (showMapStylePicker) {
                             MapStylePicker(settings, expanded = mapStyleExpanded, onExpandedChange = { mapStyleExpanded = it })
                         }
@@ -850,7 +850,13 @@ private fun MapScreen(modifier: Modifier, settings: LocalSettings, navigation: N
                 }
                 val activeRoute = session.route
                 if (target != null && session.navigating && activeRoute != null) {
-                        NavigationFooter(activeRoute, session, speaker) {
+                        NavigationFooter(
+                            activeRoute,
+                            session,
+                            speaker,
+                            gpsStatus = if (tracker.hasFreshFix()) null else tracker.error ?: "Жду сигнал GPS…",
+                            gpsError = tracker.error != null
+                        ) {
                             speaker.stop()
                             session.reset()
                             navigation.clearRoute()
