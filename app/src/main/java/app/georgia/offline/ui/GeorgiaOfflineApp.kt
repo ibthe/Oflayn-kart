@@ -106,7 +106,6 @@ import app.georgia.offline.data.PoiRepository
 import app.georgia.offline.domain.PoiLabels
 import app.georgia.offline.domain.GeoFormatting
 import app.georgia.offline.domain.MapLanguageResolver
-import app.georgia.offline.domain.FeatureCatalog
 import app.georgia.offline.ui.theme.AppPalette
 import app.georgia.offline.ui.theme.AppPalettes
 import app.georgia.offline.ui.theme.GeorgiaTheme
