@@ -62,7 +62,8 @@ class AppFlowUiTest {
 
     @Test
     fun guidebookAndEmergencyToolsExposeTheirExpandedContent() {
-        awaitText("Стиль: Классика")
+        awaitText("Карта")
+        composeRule.onNodeWithText("Карта", substring = false).performClick()
         composeRule.onNodeWithText("Места", substring = false).performClick()
         awaitCount("Места", 2)
         composeRule.onNodeWithText("Путеводитель", substring = false).performClick()
