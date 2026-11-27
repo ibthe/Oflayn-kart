@@ -22,7 +22,6 @@ class TrackRecorder {
     fun start() {
         points.clear()
         startedAtEpochMillis = System.currentTimeMillis()
-        note = ""
         lastElapsedRealtimeNanos = 0L
         recording = true
     }
@@ -75,6 +74,7 @@ class TrackRecorder {
     fun cancel() {
         recording = false
         points.clear()
+        note = ""
         lastElapsedRealtimeNanos = 0L
     }
 
