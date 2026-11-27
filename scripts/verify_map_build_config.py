@@ -248,7 +248,7 @@ def main() -> int:
 
     if "scripts/verify_map_build_config.py" not in workflow:
         return fail("workflow must run the map builder preflight before the expensive steps.")
-    for token in ("scripts/test_build_road_graph.py", "scripts/build_road_graph.py", "scripts/verify_road_graph.py", "georgia-roads-v2-"):
+    for token in ("scripts/test_build_road_graph.py", "scripts/build_road_graph.py", "scripts/verify_road_graph.py", "georgia-roads-v3-"):
         if token not in workflow:
             return fail(f"workflow must build, verify and cache the optional road graph ({token} is missing).")
     if "continue-on-error: true" in workflow:
