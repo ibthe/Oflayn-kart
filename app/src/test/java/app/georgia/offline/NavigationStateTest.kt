@@ -50,6 +50,30 @@ class NavigationStateTest {
     }
 
     @Test
+    fun initialRouteUsesExplicitOriginWhenOneWasSelected() {
+        val state = NavigationState()
+        state.startRouteFrom(NavigationTarget("Chosen start", 41.6, 44.7))
+
+        assertEquals(41.6 to 44.7, state.resolveRouteStart(41.7, 44.8, rerouting = false))
+    }
+
+    @Test
+    fun rerouteAlwaysUsesCurrentGpsInsteadOfTheOldExplicitOrigin() {
+        val state = NavigationState()
+        state.startRouteFrom(NavigationTarget("Old start", 41.6, 44.7))
+
+        assertEquals(41.8 to 44.9, state.resolveRouteStart(41.8, 44.9, rerouting = true))
+    }
+
+    @Test
+    fun rerouteWithoutFreshGpsDoesNotFallBackToTheOldOrigin() {
+        val state = NavigationState()
+        state.startRouteFrom(NavigationTarget("Old start", 41.6, 44.7))
+
+        assertEquals(null, state.resolveRouteStart(null, null, rerouting = true))
+    }
+
+    @Test
     fun mapPointDefaultsToDestination() {
         val state = NavigationState()
 
