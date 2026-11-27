@@ -1545,7 +1545,7 @@ private fun SettingsScreen(modifier: Modifier, settings: LocalSettings, onShowOn
                     val freeGb = option.availableBytes / (1024.0 * 1024.0 * 1024.0)
                     val totalGb = option.totalBytes / (1024.0 * 1024.0 * 1024.0)
                     SelectPill(
-                        label = "${option.label} · ${"%.1f".format(java.util.Locale.US, freeGb)} ГБ свободно",
+                        label = option.label,
                         selected = selectedStorageId == option.id,
                         onClick = {
                             if (selectedStorageId != option.id && storageOptionsLoaded && !isMovingMap && !isImportingMap) {
@@ -1592,7 +1592,7 @@ private fun SettingsScreen(modifier: Modifier, settings: LocalSettings, onShowOn
                         }
                     )
                     Text(
-                        if (option.totalBytes > 0L) "Всего: ${"%.1f".format(java.util.Locale.US, totalGb)} ГБ" else "Объём накопителя недоступен",
+                        if (option.totalBytes > 0L) "Свободно: ${"%.1f".format(java.util.Locale.US, freeGb)} ГБ · Всего: ${"%.1f".format(java.util.Locale.US, totalGb)} ГБ" else "Свободное место недоступно",
                         style = MaterialTheme.typography.labelSmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
