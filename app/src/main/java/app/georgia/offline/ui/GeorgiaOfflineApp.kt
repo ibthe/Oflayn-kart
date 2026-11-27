@@ -1065,10 +1065,10 @@ private fun MapScreen(modifier: Modifier, settings: LocalSettings, navigation: N
                                 }
                             )
                         }
-                        if (rasterEnabled && rasterPackage != null) {
+                        rasterPackage?.takeIf { rasterEnabled }?.let { activeRasterPackage ->
                             MapChip {
                                 Text(
-                                    "Снимки: ${rasterPackage.attribution} · ${rasterPackage.license}",
+                                    "Снимки: ${activeRasterPackage.attribution} · ${activeRasterPackage.license}",
                                     style = MaterialTheme.typography.labelSmall,
                                     maxLines = 3,
                                     overflow = TextOverflow.Clip
@@ -1141,10 +1141,10 @@ private fun MapScreen(modifier: Modifier, settings: LocalSettings, navigation: N
                                 }
                             )
                         }
-                        if (rasterEnabled && rasterPackage != null) {
+                        rasterPackage?.takeIf { rasterEnabled }?.let { activeRasterPackage ->
                             MapChip {
                                 Text(
-                                    "Снимки: ${rasterPackage.attribution} · ${rasterPackage.license}",
+                                    "Снимки: ${activeRasterPackage.attribution} · ${activeRasterPackage.license}",
                                     style = MaterialTheme.typography.labelSmall,
                                     maxLines = 3,
                                     overflow = TextOverflow.Clip
