@@ -59,6 +59,15 @@ enum class RoutingProfile(
             }
             else -> 1.0
         }
+        if (flags and RoadGraph.FLAG_STEEP != 0) {
+            speed *= when (this) {
+                CAR -> 0.82
+                OFFROAD -> 0.90
+                BIKE -> 0.65
+                FOOT -> 0.78
+                MOTORCYCLE -> 0.75
+            }
+        }
         return speed.coerceAtLeast(1.0 / 3.6)
     }
 }
