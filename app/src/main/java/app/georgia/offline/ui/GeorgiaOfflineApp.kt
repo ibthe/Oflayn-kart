@@ -588,6 +588,9 @@ private fun MapScreen(modifier: Modifier, settings: LocalSettings, navigation: N
                     }
                     if (moved.absolutePath != savedFile.absolutePath) {
                         settings.setMapFilePath(moved.absolutePath, bundled = false)
+                        withContext(Dispatchers.IO) {
+                            MapFileRepository.deletePreviousMap(savedFile, moved)
+                        }
                     }
                 } else if (!keepUserImportedMap) {
                     val bundled = withContext(Dispatchers.IO) {
@@ -1559,6 +1562,9 @@ private fun SettingsScreen(modifier: Modifier, settings: LocalSettings, onShowOn
                                             }
                                             settings.updateMapStorageId(option.id)
                                             settings.setMapFilePath(moved.absolutePath, bundled = false)
+                                            withContext(Dispatchers.IO) {
+                                                MapFileRepository.deletePreviousMap(currentFile, moved)
+                                            }
                                             storageMessage = "Карта перенесена · ${moved.length() / (1024 * 1024)} МБ"
                                         } else if (settings.mapDisabled) {
                                             settings.updateMapStorageId(option.id)
