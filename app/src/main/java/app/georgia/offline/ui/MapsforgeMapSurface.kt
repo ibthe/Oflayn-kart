@@ -668,7 +668,7 @@ private class MapOverlays(
                 val line = Polyline(paint(0xFF14A8A0.toInt(), Style.STROKE, 4.5f * density), AndroidGraphicFactory.INSTANCE)
                 state.trackPoints.forEach { line.latLongs.add(it) }
                 trackLine = line
-                layers.add(line)
+                layers.add(1, line)
             }
         }
 
