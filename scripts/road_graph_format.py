@@ -606,7 +606,7 @@ class Graph:
             edge, direction = incoming_arc >> 1, incoming_arc & 1
             u = self.edges[edge][1] if direction == 0 else self.edges[edge][0]
             for final_arc, extra in targets.get(u, ()):
-                if self.turn_allowed(profile, incoming_arc, final_arc) and g + extra < best_total:
+                if (final_arc < 0 or self.turn_allowed(profile, incoming_arc, final_arc)) and g + extra < best_total:
                     best_total, best_state, best_final_arc = g + extra, incoming_arc, final_arc
             for pos in range(self.arc_start[u], self.arc_start[u + 1]):
                 outgoing_arc = self.arcs[pos]
@@ -727,17 +727,24 @@ def _nearest_vertex(self: "Graph", profile: int, lat: float, lon: float) -> int 
 
 def _route_vertices(self: "Graph", profile: int, source: int, target: int):
     """Shortest travel time and road distance between two vertices, or None."""
+    if source == target:
+        return 0.0, 0.0
+    seeds = {}
+    for pos in range(self.arc_start[source], self.arc_start[source + 1]):
+        arc = self.arcs[pos]
+        edge, direction = arc >> 1, arc & 1
+        if self.usable(profile, edge, direction):
+            seeds[arc] = self.edge_seconds(profile, edge, direction)
     la, lo = self.vertex(target)
-    total, end, parent = self._astar(profile, {source: 0.0}, {target: 0.0}, (la, lo))
-    if end is None:
+    total, end_state, _final_arc, parent = self._astar(profile, seeds, {target: [(-1, 0.0)]}, (la, lo))
+    if end_state is None:
         return None
-    distance, v = 0.0, end
-    while parent[v] is not None:
-        u, arc = parent[v]
-        distance += self.edge_length_m(arc >> 1)
-        v = u
+    distance = 0.0
+    state = end_state
+    while state is not None:
+        distance += self.edge_length_m(state >> 1)
+        state = parent[state]
     return total, distance
-
 
 Graph.nearest_vertex = _nearest_vertex
 Graph.route_vertices = _route_vertices
