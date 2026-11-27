@@ -29,6 +29,8 @@ DEM_TESTS = ROOT / "scripts/test_build_dem.py"
 APK_VERIFIER = ROOT / "scripts/verify_apk_bundle.py"
 CONTOUR_BUILDER = ROOT / "scripts/build_contours.py"
 CONTOUR_TESTS = ROOT / "scripts/test_build_contours.py"
+CONTOUR_MAP_BUILDER = ROOT / "scripts/build_contours_map.sh"
+CONTOUR_MAP_VERIFIER = ROOT / "scripts/verify_contours_map.py"
 DEM_REPOSITORY = ROOT / "app/src/main/java/app/georgia/offline/data/DemRepository.kt"
 MAP_SURFACE = ROOT / "app/src/main/java/app/georgia/offline/ui/MapsforgeMapSurface.kt"
 
@@ -47,7 +49,7 @@ def fail(message: str) -> int:
 
 
 def main() -> int:
-    required = (MAP_SCRIPT, PBF_PREP_SCRIPT, WRITER_SCRIPT, WORKFLOW, DATA_SOURCES, SMOKE_FIXTURE, BUNDLE_MANIFEST, POI_BUILDER, POI_VERIFIER, POI_TESTS, POI_SMOKE_TEST, POI_SMOKE_FIXTURE, PBF_CACHE_TEST, APP_BUILD, POI_REPOSITORY, POI_UI, DEM_BUILDER, DEM_VERIFIER, DEM_TESTS, APK_VERIFIER, DEM_REPOSITORY, MAP_SURFACE, CONTOUR_BUILDER, CONTOUR_TESTS)
+    required = (MAP_SCRIPT, PBF_PREP_SCRIPT, WRITER_SCRIPT, WORKFLOW, DATA_SOURCES, SMOKE_FIXTURE, BUNDLE_MANIFEST, POI_BUILDER, POI_VERIFIER, POI_TESTS, POI_SMOKE_TEST, POI_SMOKE_FIXTURE, PBF_CACHE_TEST, APP_BUILD, POI_REPOSITORY, POI_UI, DEM_BUILDER, DEM_VERIFIER, DEM_TESTS, APK_VERIFIER, DEM_REPOSITORY, MAP_SURFACE, CONTOUR_BUILDER, CONTOUR_TESTS, CONTOUR_MAP_BUILDER, CONTOUR_MAP_VERIFIER)
     for path in required:
         if not path.is_file():
             return fail(f"required build file is missing: {path.relative_to(ROOT)}")
@@ -69,6 +71,8 @@ def main() -> int:
     map_surface = MAP_SURFACE.read_text(encoding="utf-8")
     contour_builder = CONTOUR_BUILDER.read_text(encoding="utf-8")
     contour_tests = CONTOUR_TESTS.read_text(encoding="utf-8")
+    contour_map_builder = CONTOUR_MAP_BUILDER.read_text(encoding="utf-8")
+    contour_map_verifier = CONTOUR_MAP_VERIFIER.read_text(encoding="utf-8")
     data_sources = DATA_SOURCES.read_text(encoding="utf-8")
     try:
         bundle_manifest = json.loads(BUNDLE_MANIFEST.read_text(encoding="utf-8"))
@@ -302,6 +306,15 @@ def main() -> int:
         return fail("CI must install ContourPy and run the synthetic contour tests.")
     if "extract_tile_contours" not in contour_tests or "no-data handling" not in contour_tests:
         return fail("Contour tests must cover contour geometry and missing DEM cells.")
+
+
+    if "osmosis --rx" not in contour_map_builder or "--mw" not in contour_map_builder:
+        return fail("Contour OSM geometry must be packaged as a separate Mapsforge map.")
+    for token in ("mapFileSha256", "runtimeNetworkAccessRequired", "existing-manifest"):
+        if token not in contour_map_verifier:
+            return fail(f"Contour map verification is missing: {token}.")
+    if "build_contours_map.sh" not in workflow or "georgia-contours.map" not in workflow:
+        return fail("CI must build/cache the separate contour map before APK assembly.")
 
     if "continue-on-error: true" in workflow:
         return fail("map preparation must fail fast; do not hide failed prerequisites.")
