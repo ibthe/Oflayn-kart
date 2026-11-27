@@ -43,6 +43,8 @@ class AppFlowUiTest {
 
         composeRule.onNodeWithText("Ещё", substring = false).performClick()
         awaitCount("Ещё", 2)
+        awaitText("Хранение")
+        awaitText("Внутренняя память")
         composeRule.waitForIdle()
         composeRule.onAllNodesWithText("Утилиты", substring = false).assertCountEquals(1)
 
