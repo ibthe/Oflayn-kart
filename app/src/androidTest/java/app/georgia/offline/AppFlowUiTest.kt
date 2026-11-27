@@ -1,8 +1,6 @@
 package app.georgia.offline
 
 import androidx.compose.ui.test.assertCountEquals
-import androidx.compose.ui.test.assertDoesNotExist
-import androidx.compose.ui.test.assertExists
 import androidx.compose.ui.test.junit4.createAndroidComposeRule
 import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.onNodeWithText
@@ -21,11 +19,11 @@ class AppFlowUiTest {
     @Test
     fun stylePickerAndTabTransitionsKeepPanelsExclusive() {
         awaitText("Стиль: Классика")
-        composeRule.onNodeWithText("Найти место на этой области карты").assertExists()
+        composeRule.onAllNodesWithText("Найти место на этой области карты").assertCountEquals(1)
 
         // Expanding the style picker must not leave the search panel stacked beneath it.
         composeRule.onNodeWithText("Стиль: Классика").performClick()
-        composeRule.onNodeWithText("Найти место на этой области карты").assertDoesNotExist()
+        composeRule.onAllNodesWithText("Найти место на этой области карты").assertCountEquals(0)
         composeRule.onNodeWithText("Oflayn Natural", substring = false).performClick()
         awaitText("Стиль: Oflayn Natural")
         composeRule.onNodeWithText("Найти место на этой области карты").assertExists()
