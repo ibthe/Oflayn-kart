@@ -242,7 +242,7 @@ fun GeorgiaOfflineApp(settings: LocalSettings) {
                         label = "tabs"
                     ) { tab ->
                         when (tab) {
-                            AppTab.MAP -> MapScreen(Modifier.padding(padding), settings, navigation, tracker, routeSession, speaker, selectedTrackPoints) { selectedTrackPoints = emptyList() }
+                            AppTab.MAP -> MapScreen(Modifier.padding(padding), settings, navigation, tracker, routeSession, speaker, selectedTrackPoints, trackRecorder.recording, trackRecorder.points.size, { selectedTrackPoints = emptyList() }) { selectedTab = AppTab.TOOLS.name }
                             AppTab.DISCOVER -> DiscoverScreen(Modifier.padding(padding), settings, tracker) { name, latitude, longitude ->
                                 routeSession.reset()
                                 navigation.startRouteTo(NavigationTarget(name, latitude, longitude))
@@ -523,7 +523,7 @@ private fun openExternalNavigator(context: android.content.Context, target: Navi
 }
 
 @Composable
-private fun MapScreen(modifier: Modifier, settings: LocalSettings, navigation: NavigationState, tracker: LocationTracker, session: RouteSession, speaker: Speaker, selectedTrackPoints: List<LatLong>, onClearTrack: () -> Unit) {
+private fun MapScreen(modifier: Modifier, settings: LocalSettings, navigation: NavigationState, tracker: LocationTracker, session: RouteSession, speaker: Speaker, selectedTrackPoints: List<LatLong>, isRecordingTrack: Boolean, recordedTrackPointCount: Int, onClearTrack: () -> Unit, onOpenTrackTools: () -> Unit) {
     val context = LocalContext.current
     val coroutineScope = rememberCoroutineScope()
     // A full-map CI build packages offline/georgia.map in the APK. Keep imported
@@ -816,6 +816,9 @@ private fun MapScreen(modifier: Modifier, settings: LocalSettings, navigation: N
                         }
                         if (selectedTrackPoints.isNotEmpty()) {
                             MapChip(onClick = onClearTrack) { Text("Скрыть GPX-трек") }
+                        }
+                        if (isRecordingTrack) {
+                            MapChip(onClick = onOpenTrackTools) { Text("Запись трека · $recordedTrackPointCount") }
                         }
                     }
                 } else {
