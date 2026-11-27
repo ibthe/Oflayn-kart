@@ -112,7 +112,14 @@ private fun DeviceStatusPanel(context: Context) {
                 "Заряд батареи",
                 status.batteryPercent?.let { "${it}%" } ?: "нет данных"
             )
-            MetricRow("Питание", when (status.charging) { true -> "зарядка"; false -> "от батареи"; null -> "нет данных" })
+            MetricRow(
+                "Питание",
+                when (status.charging) {
+                    true -> "зарядка"
+                    false -> "от батареи"
+                    null -> "нет данных"
+                }
+            )
             MetricRow(
                 "Сеть",
                 when (status.internetAvailable) {
