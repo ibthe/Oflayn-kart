@@ -15,7 +15,7 @@ import sqlite3
 import sys
 import tempfile
 import time
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Iterable
@@ -390,6 +390,130 @@ def insert_poi(conn: sqlite3.Connection, poi: PoiInput) -> None:
     ))
 
 
+
+def _poi_name_keys(poi: PoiInput) -> set[str]:
+    keys = set()
+    for value in (poi.name, poi.name_en, poi.name_ru, poi.name_ka):
+        normalized = normalise_search_text(value or "")
+        if normalized and normalized != normalise_search_text(CATEGORY_LABELS.get(poi.category, poi.category)):
+            keys.add(normalized)
+    return keys
+
+
+def _distance_meters(a: PoiInput, b: PoiInput) -> float:
+    lat1, lat2 = math.radians(a.latitude), math.radians(b.latitude)
+    dlat = lat2 - lat1
+    dlon = math.radians(b.longitude - a.longitude)
+    haversine = math.sin(dlat / 2.0) ** 2 + math.cos(lat1) * math.cos(lat2) * math.sin(dlon / 2.0) ** 2
+    return 6_371_000.0 * 2.0 * math.asin(min(1.0, math.sqrt(haversine)))
+
+
+def deduplicate_pois(pois: Iterable[PoiInput], max_distance_m: float = 18.0) -> tuple[list[PoiInput], int]:
+    """Merge same-name, same-category node/area representations of one POI.
+
+    Polygon relations are preferred over ways, and ways over nodes, while
+    contact/address tags and multilingual names are merged from every member.
+    Different categories or same-name businesses farther apart remain distinct.
+    """
+    priority = {"relation": 0, "way": 1, "node": 2}
+    ordered = sorted(pois, key=lambda poi: (priority.get(poi.osm_type, 3), poi.poi_id))
+    clusters: dict[int, list[PoiInput]] = {}
+    index: dict[tuple[str, str, str, int, int], set[int]] = {}
+    next_cluster_id = 0
+    cell_size = 0.0001
+    neighbor_range = range(-3, 4)
+
+    for poi in ordered:
+        name_keys = _poi_name_keys(poi)
+        if not name_keys:
+            clusters[next_cluster_id] = [poi]
+            next_cluster_id += 1
+            continue
+        cell_lat = math.floor(poi.latitude / cell_size)
+        cell_lon = math.floor(poi.longitude / cell_size)
+        candidates: set[int] = set()
+        for name_key in name_keys:
+            for lat_offset in neighbor_range:
+                for lon_offset in neighbor_range:
+                    candidates.update(index.get((
+                        poi.category, poi.subcategory, name_key,
+                        cell_lat + lat_offset, cell_lon + lon_offset
+                    ), set()))
+        matching = [
+            cluster_id for cluster_id in candidates
+            if cluster_id in clusters
+            and any(_distance_meters(poi, member) <= max_distance_m for member in clusters[cluster_id])
+        ]
+
+        if matching:
+            winner_id = min(matching)
+            clusters[winner_id].append(poi)
+            for other_id in matching:
+                if other_id != winner_id and other_id in clusters:
+                    clusters[winner_id].extend(clusters.pop(other_id))
+            cluster_id = winner_id
+        else:
+            cluster_id = next_cluster_id
+            clusters[cluster_id] = [poi]
+            next_cluster_id += 1
+
+        for name_key in name_keys:
+            index.setdefault((
+                poi.category, poi.subcategory, name_key, cell_lat, cell_lon
+            ), set()).add(cluster_id)
+
+    merged: list[PoiInput] = []
+    for members in clusters.values():
+        members.sort(key=lambda poi: (priority.get(poi.osm_type, 3), poi.poi_id))
+        winner = members[0]
+        merged_tags: dict[str, str] = {}
+        for member in members:
+            try:
+                tags = json.loads(member.tags_json)
+            except (TypeError, json.JSONDecodeError):
+                tags = {}
+            for key, value in tags.items():
+                if value and not merged_tags.get(key):
+                    merged_tags[key] = value
+
+        def first_value(field: str) -> str:
+            return next((getattr(member, field) for member in members if getattr(member, field)), "")
+
+        category_fallback = CATEGORY_LABELS.get(winner.category, winner.category)
+        explicit_name = next(
+            (member.name for member in members
+             if member.name and normalise_search_text(member.name) != normalise_search_text(category_fallback)),
+            category_fallback,
+        )
+        merged.append(replace(
+            winner,
+            name=explicit_name,
+            name_en=first_value("name_en"),
+            name_ru=first_value("name_ru"),
+            name_ka=first_value("name_ka"),
+            tags_json=json.dumps(merged_tags, ensure_ascii=False, sort_keys=True, separators=(",", ":")),
+        ))
+
+    removed = len(ordered) - len(merged)
+    return merged, removed
+
+
+def deduplicate_database(conn: sqlite3.Connection) -> int:
+    rows = conn.execute("""
+        SELECT poi_id, osm_type, osm_id, category, subcategory, name,
+               name_en, name_ru, name_ka, latitude, longitude, tags_json
+        FROM poi
+    """).fetchall()
+    inputs = [PoiInput(*row) for row in rows]
+    deduplicated, removed = deduplicate_pois(inputs)
+    if removed:
+        conn.execute("DELETE FROM poi")
+        for poi in deduplicated:
+            insert_poi(conn, poi)
+        conn.commit()
+    return removed
+
+
 def point_in_bbox(lat: float, lon: float, bbox: tuple[float, float, float, float]) -> bool:
     min_lat, min_lon, max_lat, max_lon = bbox
     return min_lat <= lat <= max_lat and min_lon <= lon <= max_lon
@@ -562,6 +686,8 @@ def build_from_pbf(input_file: Path, output_file: Path, bbox: tuple[float, float
     scan_elapsed = time.monotonic() - scan_started
     progress.report(stats, final=True)
     conn.commit()
+    duplicates_removed = deduplicate_database(conn)
+    stats["duplicatesRemoved"] = duplicates_removed
 
     category_counts = {
         row[0]: row[1] for row in conn.execute(
@@ -581,7 +707,9 @@ def build_from_pbf(input_file: Path, output_file: Path, bbox: tuple[float, float
         "poiCount": str(count),
         "sourceFile": input_file.name,
         "bbox": ",".join(str(part) for part in bbox),
-        "relationsIncluded": "false",
+        "relationsIncluded": "true" if stats["relationsWritten"] > 0 else "false",
+        "relationsWritten": str(stats["relationsWritten"]),
+        "duplicatesRemoved": str(duplicates_removed),
     }
     conn.executemany("INSERT OR REPLACE INTO metadata(key,value) VALUES (?,?)", metadata.items())
     conn.commit()
@@ -597,7 +725,8 @@ def build_from_pbf(input_file: Path, output_file: Path, bbox: tuple[float, float
         "categoryCounts": category_counts,
         "stats": stats,
         "scanElapsedSeconds": round(scan_elapsed, 1),
-        "relationsIncluded": True,
+        "relationsIncluded": stats["relationsWritten"] > 0,
+        "duplicatesRemoved": duplicates_removed,
         "bbox": ",".join(str(part) for part in bbox),
     }
 
