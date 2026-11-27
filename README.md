@@ -81,6 +81,7 @@ Workflow `.github/workflows/android-ci.yml`:
 
 ## Известные ограничения и следующие этапы
 
+- Опциональный офлайн-спутниковый слой: импорт ZIP-пакета XYZ, проверка лицензии/атрибуции, защита от zip-slip, хранение отдельно от векторной карты и настройка прозрачности. Данные снимков пользователь предоставляет отдельно; приложение не обращается к tile-серверам.
 - Полный аудит покрытия POI по стране и поисковой релевантности ещё предстоит; алгоритм дедупликации node/way/relation и relation smoke-тест уже реализованы.
 - Дорожный граф учитывает signed incline, разные штрафы движения вверх/вниз, node-via no_*/only_* restrictions, multi-member no_entry/no_exit, except masks и same-way U-turns. Via-way/conditional restrictions и grade estimation из DEM для дорог без incline tags остаются следующими улучшениями.
 - Путеводитель и базовые safety-функции расширены; остаются проверка на реальных устройствах, via-way/conditional routing restrictions и полноценная верификация покрытия POI.
