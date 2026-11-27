@@ -166,6 +166,7 @@ def classify_way(tags: dict) -> RoadInfo | None:
         bike_ok = False
     if smoothness == "impassable":
         offroad_ok = False
+        foot_ok = False
 
     # Direction of travel.
     oneway = tags.get("oneway")
