@@ -137,7 +137,7 @@ object RasterPackageRepository {
                                 if (read < 0) break
                                 tileBytes += read
                                 totalBytes += read
-                                ensureStorageSpace(storageRoot, totalBytes)
+                                ensureStorageSpace(availableAtStart, totalBytes)
                                 check(tileBytes <= MAX_TILE_BYTES && totalBytes <= MAX_TOTAL_BYTES) {
                                     "Размер тайла или архива превышает безопасный предел."
                                 }
