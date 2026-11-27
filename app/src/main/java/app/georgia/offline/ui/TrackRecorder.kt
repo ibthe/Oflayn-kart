@@ -19,6 +19,9 @@ class TrackRecorder {
     var note by mutableStateOf("")
     var hasRecovery by mutableStateOf(false)
         private set
+    @Volatile
+    var checkpointGeneration: Long = 0L
+        private set
     private var recoveryName = "Мой трек"
     private var lastElapsedRealtimeNanos = 0L
     private var lastCheckpointNanos = 0L
@@ -26,6 +29,7 @@ class TrackRecorder {
 
     fun start() {
         if (!hasRecovery) {
+            checkpointGeneration++
             points.clear()
             startedAtEpochMillis = System.currentTimeMillis()
             recoveryName = "Мой трек"
@@ -38,6 +42,7 @@ class TrackRecorder {
     }
 
     fun restore(track: GpxTrack) {
+        checkpointGeneration++
         points.clear()
         track.segments.forEach { points.addAll(it) }
         startedAtEpochMillis = track.createdAtEpochMillis
@@ -94,6 +99,7 @@ class TrackRecorder {
 
     fun finish(name: String = recoveryName, description: String? = note): GpxTrack? {
         recording = false
+        checkpointGeneration++
         if (points.size < 2) {
             points.clear()
             return null
@@ -111,6 +117,7 @@ class TrackRecorder {
 
     fun cancel() {
         recording = false
+        checkpointGeneration++
         points.clear()
         note = ""
         hasRecovery = false
