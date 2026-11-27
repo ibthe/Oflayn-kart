@@ -12,7 +12,7 @@ from dem_sampler import DemSampler, NODATA, TILE_PIXELS
 
 
 class DemSamplerTest(unittest.TestCase):
-    def write_tile(self, directory: Path, values: np.ndarray, name: str = "N41E044.dem.gz") -> Path:
+    def write_tile(self, directory: Path, values: np.ndarray, name: str = "N41E044.dem.gzip") -> Path:
         path = directory / name
         with gzip.open(path, "wb", compresslevel=1) as stream:
             stream.write(values.astype("<i2", copy=False).tobytes(order="C"))
@@ -41,7 +41,7 @@ class DemSamplerTest(unittest.TestCase):
     def test_rejects_truncated_dem_tile(self):
         with tempfile.TemporaryDirectory() as temporary:
             directory = Path(temporary)
-            with gzip.open(directory / "N41E044.dem.gz", "wb") as stream:
+            with gzip.open(directory / "N41E044.dem.gzip", "wb") as stream:
                 stream.write(b"short")
             with self.assertRaises(ValueError):
                 DemSampler(directory).sample(41.5, 44.5)
