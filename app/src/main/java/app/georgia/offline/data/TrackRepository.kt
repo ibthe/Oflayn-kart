@@ -7,7 +7,8 @@ data class SavedTrackInfo(
     val id: String,
     val name: String,
     val pointCount: Int,
-    val modifiedAtEpochMillis: Long
+    val modifiedAtEpochMillis: Long,
+    val description: String? = null
 )
 
 /** Stores GPX files privately on the device; no network or account access is used. */
@@ -35,7 +36,7 @@ class TrackRepository(private val directory: File) {
             .mapNotNull { file ->
                 runCatching {
                     val track = file.inputStream().use { GpxCodec.parse(it, file.nameWithoutExtension) }
-                    SavedTrackInfo(file.nameWithoutExtension, track.name, track.pointCount, file.lastModified())
+                    SavedTrackInfo(file.nameWithoutExtension, track.name, track.pointCount, file.lastModified(), track.description)
                 }.getOrNull()
             }
             .sortedByDescending { it.modifiedAtEpochMillis }
