@@ -248,6 +248,7 @@ fun GeorgiaOfflineApp(settings: LocalSettings) {
                                 settings,
                                 tracker,
                                 trackRecorder,
+                                trackRepository,
                                 recoveryLoaded = recoveryLoaded,
                                 onShowTrack = { points ->
                                     selectedTrackPoints = points.map { LatLong(it.latitude, it.longitude) }
