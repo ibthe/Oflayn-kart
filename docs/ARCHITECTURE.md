@@ -48,6 +48,11 @@ APK assets
 - Bundled maps are installed and user-imported maps are validated on the selected volume. Imported maps are copied and validated before settings switch to the new path; the previous copy is deleted only after the new path is saved.
 - SD storage is app-specific (`Android/data/.../files/maps`), needs no broad storage permission, and is removed by Android when the app is uninstalled. A removed card makes its map unavailable until reconnected or the user selects another volume.
 
+## Offline regional guidebook
+
+- `GuidebookRepository` provides static, offline summaries for eight Georgian regions, with highlights, recommended seasons and mountain-road cautions.
+- The guidebook explicitly avoids presenting static notes as live road status; users are directed to verify official restrictions before departure.
+
 ## Offline trip planner
 
 - `TripPlanRepository` stores POI IDs, day/order metadata and per-stop notes locally in an atomic app-private file; an itinerary is limited to 20 stops.
