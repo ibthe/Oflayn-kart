@@ -102,6 +102,7 @@ import kotlinx.coroutines.withContext
 import java.io.File
 import app.georgia.offline.data.LocalSettings
 import app.georgia.offline.data.DemRepository
+import app.georgia.offline.data.TerrainRepository
 import app.georgia.offline.data.MapFileRepository
 import app.georgia.offline.data.MapStorageOption
 import app.georgia.offline.data.PoiRepository
