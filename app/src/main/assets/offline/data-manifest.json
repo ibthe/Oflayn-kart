@@ -63,7 +63,7 @@
     "geometryCoverage": "OSM nodes, closed ways and multipolygon relations; same-name/same-category cross-geometry duplicates within 18 m are merged, preferring relation geometry; fresh full-country coverage validation remains pending.",
     "nameCoverage": "Only name variants present in OSM are stored; missing variants are not automatically translated.",
     "source": "Same verified country OSM PBF as the Mapsforge map.",
-    "indexVersion": 4,
+    "indexVersion": 3,
     "deduplication": "Same-name, same-category node/way/relation records within 18 m are merged; relation geometry is preferred and multilingual names/contact tags are combined."
   },
   "poiIndexedDetailTags": [
