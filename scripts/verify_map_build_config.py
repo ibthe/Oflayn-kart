@@ -523,6 +523,12 @@ def main() -> int:
     for token in ("test_samples_north_up_tile_and_uses_local_median", "test_missing_and_nodata_cells_return_none"):
         if token not in dem_sampler_tests:
             return fail(f"DEM sampling regression coverage is missing: {token}.")
+    for token in ("incline_tagged", "dem_grade_edges", "demGradeEdges"):
+        if token not in road_format:
+            return fail(f"Road graph DEM grade metadata is missing: {token}.")
+    for token in ("test_dem_grade_is_derived_when_osm_incline_is_missing", "test_explicit_osm_incline_is_never_overwritten_by_dem"):
+        if token not in road_tests:
+            return fail(f"DEM-derived road grade regression coverage is missing: {token}.")
     if "--dem-dir" not in road_builder or "dem_sampler=dem_sampler" not in road_builder:
         return fail("Road graph generation must consume the verified offline DEM package.")
     for token in ("test_dem_sampler.py", "--dem-dir app/src/main/assets/dem", "georgia-roads-v7"):
