@@ -995,12 +995,14 @@ private fun MapScreen(modifier: Modifier, settings: LocalSettings, navigation: N
                                 GeoMath.formatDistance(GeoMath.distanceMeters(it.latitude, it.longitude, poi.latitude, poi.longitude)) + " от вас"
                             },
                             saved = alreadySaved,
+                            inTrip = poi.poiId in tripPlanIds,
                             onRoute = {
                                 session.reset()
                                 navigation.startRouteTo(NavigationTarget(poiName, poi.latitude, poi.longitude))
                                 selectedMapPoi = null
                             },
                             onSave = { settings.addPlace(poiName, poi.latitude, poi.longitude) },
+                            onAddToTrip = { onAddToTrip(poi) },
                             onClose = { selectedMapPoi = null }
                         )
                     } else if (selectedPlace != null) {
@@ -1268,8 +1270,10 @@ private fun MapPoiCard(
     name: String,
     distanceText: String?,
     saved: Boolean,
+    inTrip: Boolean,
     onRoute: () -> Unit,
     onSave: () -> Unit,
+    onAddToTrip: () -> Unit,
     onClose: () -> Unit
 ) {
     var expanded by remember(poi.poiId) { mutableStateOf(false) }
@@ -1370,6 +1374,9 @@ private fun MapPoiCard(
                 ) {
                     Text(if (saved) "В избранном" else "В избранное", maxLines = 1, softWrap = false)
                 }
+            }
+            TextButton(onClick = onAddToTrip, enabled = !inTrip) {
+                Text(if (inTrip) "Уже в плане поездки" else "Добавить в план поездки")
             }
         }
     }
