@@ -56,11 +56,13 @@ class GpxCodecTest {
                 TrackPoint(42.0, 44.0, 1800.0, 1_767_264_000_000L),
                 TrackPoint(42.1, 44.1)
             )),
-            createdAtEpochMillis = 1_767_264_000_000L
+            createdAtEpochMillis = 1_767_264_000_000L,
+            description = "Смотровая площадка & старый маршрут"
         )
         val encoded = GpxCodec.write(source)
         val decoded = GpxCodec.parse(ByteArrayInputStream(encoded.toByteArray()))
         assertEquals(source.name, decoded.name)
+        assertEquals(source.description, decoded.description)
         assertEquals(source.pointCount, decoded.pointCount)
         assertEquals(1800.0, decoded.segments[0][0].elevationMeters!!, 0.0)
         assertEquals(source.segments[0][0].timeEpochMillis, decoded.segments[0][0].timeEpochMillis)
