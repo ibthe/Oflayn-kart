@@ -1411,11 +1411,13 @@ private fun SettingsScreen(modifier: Modifier, settings: LocalSettings, onShowOn
     var mapImportMessage by remember { mutableStateOf<String?>(null) }
     var mapImportError by remember { mutableStateOf(false) }
     var storageOptions by remember { mutableStateOf<List<MapStorageOption>>(emptyList()) }
+    var storageOptionsLoaded by remember { mutableStateOf(false) }
     var isMovingMap by remember { mutableStateOf(false) }
     var storageMessage by remember { mutableStateOf<String?>(null) }
     var storageError by remember { mutableStateOf(false) }
     LaunchedEffect(context) {
         storageOptions = withContext(Dispatchers.IO) { MapFileRepository.availableStorageOptions(context) }
+        storageOptionsLoaded = true
     }
     val mapPicker = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
         if (uri != null) {
@@ -1523,7 +1525,7 @@ private fun SettingsScreen(modifier: Modifier, settings: LocalSettings, onShowOn
             Text("Место хранения офлайн-карт", style = MaterialTheme.typography.titleSmall)
             val selectedStorageId = settings.mapStorageId ?: MapFileRepository.INTERNAL_STORAGE_ID
             val selectedStorageAvailable = storageOptions.any { it.id == selectedStorageId }
-            if (!selectedStorageAvailable) {
+            if (storageOptionsLoaded && !selectedStorageAvailable) {
                 Text(
                     "Выбранная SD-карта не подключена. Подключи её или выбери внутреннюю память.",
                     style = MaterialTheme.typography.bodySmall,
@@ -1538,16 +1540,14 @@ private fun SettingsScreen(modifier: Modifier, settings: LocalSettings, onShowOn
                         label = "${option.label} · ${"%.1f".format(java.util.Locale.US, freeGb)} ГБ свободно",
                         selected = selectedStorageId == option.id,
                         onClick = {
-                            if (selectedStorageId != option.id && !isMovingMap && !isImportingMap) {
+                            if (selectedStorageId != option.id && storageOptionsLoaded && !isMovingMap && !isImportingMap) {
                                 coroutineScope.launch {
-                                    val currentFile = settings.mapFilePath?.let(::File)
-                                    val userMap = currentFile?.isFile == true && !settings.mapFileIsBundled
-                                    if (userMap && currentFile != null) {
-                                        isMovingMap = true
-                                    }
+                                    isMovingMap = true
                                     storageError = false
-                                    storageMessage = if (userMap) "Переношу карту и проверяю копию…" else "Новое место хранения выбрано."
+                                    storageMessage = "Подготавливаю выбранный накопитель…"
                                     try {
+                                        val currentFile = settings.mapFilePath?.let(::File)
+                                        val userMap = currentFile?.isFile == true && !settings.mapFileIsBundled
                                         if (userMap && currentFile != null) {
                                             val moved = withContext(Dispatchers.IO) {
                                                 MapFileRepository.moveImportedMap(context, currentFile, option.id)
@@ -1555,9 +1555,20 @@ private fun SettingsScreen(modifier: Modifier, settings: LocalSettings, onShowOn
                                             settings.updateMapStorageId(option.id)
                                             settings.setMapFilePath(moved.absolutePath, bundled = false)
                                             storageMessage = "Карта перенесена · ${moved.length() / (1024 * 1024)} МБ"
-                                        } else {
+                                        } else if (settings.mapDisabled) {
                                             settings.updateMapStorageId(option.id)
-                                            storageMessage = "Место выбрано. Встроенная карта будет подготовлена на нём."
+                                            storageMessage = "Место выбрано. Карта установится после включения офлайн-карты."
+                                        } else {
+                                            val bundled = withContext(Dispatchers.IO) {
+                                                MapFileRepository.installBundledMap(context, option.id)
+                                            }
+                                            settings.updateMapStorageId(option.id)
+                                            if (bundled != null) {
+                                                settings.setMapFilePath(bundled.absolutePath, bundled = true)
+                                                storageMessage = "Встроенная карта подготовлена · ${bundled.length() / (1024 * 1024)} МБ"
+                                            } else {
+                                                storageMessage = "Место выбрано, но встроенная карта в этой сборке отсутствует."
+                                            }
                                         }
                                     } catch (error: Exception) {
                                         storageError = true
