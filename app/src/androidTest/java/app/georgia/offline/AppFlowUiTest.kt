@@ -71,7 +71,7 @@ class AppFlowUiTest {
         composeRule.onAllNodesWithText("Подробнее", substring = false).onFirst().performClick()
         awaitText("Маршруты и последовательности")
         awaitText("Полезные сервисы и подготовка")
-        awaitText("Найти")
+        awaitCount("Найти", 4)
 
         composeRule.onNodeWithText("Карта", substring = false).performClick()
         awaitText("Стиль: Классика")
