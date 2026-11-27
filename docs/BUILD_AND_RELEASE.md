@@ -34,7 +34,7 @@ GitHub Actions использует интернет только во врем�
 
 ## Локальная сборка
 
-Требуются Android Studio, Android SDK Platform 36, Build Tools 36.0.0 и JDK 21. Локальная сборка из чистого исходного ZIP не содержит бинарные `georgia.map`, `georgia-poi.sqlite` и DEM tiles, потому что эти большие данные генерируются и проверяются в CI. При обновлении приложения встроенный файл сравнивается с SHA-256 из `georgia-map-build.json`; он заменяется только если данные изменились. Пользовательская карта, импортированная вручную, не перезаписывается. Для полной локальной сборки сначала установи Osmosis и PyOsmium (`sudo apt-get install osmosis python3-pyosmium`), затем выполни `scripts/install_mapsforge_writer.sh` и `scripts/build_georgia_map.sh`, затем: `gradle :app:testDebugUnitTest :app:assembleDebug`.
+Требуются Android Studio, Android SDK Platform 36, Build Tools 36.0.0 и JDK 21. Локальная сборка из чистого исходного ZIP не содержит бинарные `georgia.map`, `georgia-poi.sqlite` и DEM tiles, потому что эти большие данные генерируются и проверяются в CI. При обновлении приложения встроенный файл сравнивается с SHA-256 из `georgia-map-build.json`; он заменяется только если данные изменились. Пользовательская карта, импортированная вручную, не перезаписывается. Для полной локальной сборки сначала установи Osmosis, PyOsmium и Rasterio (`sudo apt-get install osmosis python3-pyosmium python3-rasterio`), затем выполни `scripts/install_mapsforge_writer.sh` и `scripts/build_georgia_map.sh`. Подготовь DEM: `python3 scripts/build_dem.py --output app/src/main/assets/dem` и проверь его: `python3 scripts/verify_dem.py app/src/main/assets/dem`. После подготовки всех assets выполни `gradle :app:testDebugUnitTest :app:assembleDebug`.
 
 ## Локальная база объектов POI
 
