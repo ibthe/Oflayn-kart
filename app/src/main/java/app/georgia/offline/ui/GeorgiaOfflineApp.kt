@@ -598,7 +598,7 @@ private fun MapScreen(modifier: Modifier, settings: LocalSettings, navigation: N
                     }
                     if (bundled != null) {
                         if (settings.mapFileIsBundled && savedFile?.isFile == true && savedFile.canonicalFile != bundled.canonicalFile) {
-                            savedFile.delete()
+                            MapFileRepository.deletePreviousMap(savedFile, bundled)
                         }
                         settings.setMapFilePath(bundled.absolutePath, bundled = true)
                     }
