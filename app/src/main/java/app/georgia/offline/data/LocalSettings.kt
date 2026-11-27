@@ -61,6 +61,10 @@ class LocalSettings(context: Context) {
     var mapDisabled by mutableStateOf(preferences.getBoolean("map_disabled", false))
         private set
 
+    /** Storage volume ID for large offline maps; null means app-private internal storage. */
+    var mapStorageId by mutableStateOf(preferences.getString("map_storage_id", null))
+        private set
+
     var carLatitude by mutableStateOf(preferences.getString("car_latitude", null)?.toDoubleOrNull())
         private set
 
@@ -105,6 +109,12 @@ class LocalSettings(context: Context) {
         if (value !in MAP_THEMES) return
         mapTheme = value
         preferences.edit().putString("map_theme", value).apply()
+    }
+
+    fun updateMapStorageId(value: String?) {
+        if (mapStorageId == value) return
+        mapStorageId = value
+        preferences.edit().putString("map_storage_id", value).apply()
     }
 
     /** Stores the active Mapsforge map path and whether it came from the APK bundle. */
