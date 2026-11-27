@@ -6,7 +6,6 @@ import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
 import androidx.test.ext.junit.runners.AndroidJUnit4
-import app.georgia.offline.MainActivity
 import org.junit.Rule
 import org.junit.Test
 import org.junit.runner.RunWith
@@ -26,7 +25,7 @@ class AppFlowUiTest {
         composeRule.onAllNodesWithText("Найти место на этой области карты").assertCountEquals(0)
         composeRule.onNodeWithText("Oflayn Natural", substring = false).performClick()
         awaitText("Стиль: Oflayn Natural")
-        composeRule.onNodeWithText("Найти место на этой области карты").assertExists()
+        composeRule.onAllNodesWithText("Найти место на этой области карты").assertCountEquals(1)
 
         // At the end of each transition, only the target page title remains beside its tab label.
         composeRule.onNodeWithText("Места", substring = false).performClick()
