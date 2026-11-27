@@ -70,6 +70,7 @@ class RouteSession {
     var profile by mutableStateOf(RoutingProfile.CAR)
     var route by mutableStateOf<Route?>(null)
     var elevationProfile by mutableStateOf<ElevationProfile?>(null)
+    var elevationLoading by mutableStateOf(false)
     var busy by mutableStateOf(false)
     var message by mutableStateOf<String?>(null)
     var navigating by mutableStateOf(false)
@@ -90,6 +91,7 @@ class RouteSession {
         busy = false
         route = null
         elevationProfile = null
+        elevationLoading = false
         message = null
         navigating = false
         followingTrack = false
@@ -113,6 +115,7 @@ class RouteSession {
         requestId++
         route = trackRoute
         elevationProfile = null
+        elevationLoading = false
         message = null
         busy = false
         followingTrack = true
@@ -142,6 +145,7 @@ class RouteSession {
             message = null
             route = null
             elevationProfile = null
+            elevationLoading = false
             along = 0.0
             segmentHint = 0
             announced.clear()
@@ -176,6 +180,7 @@ class RouteSession {
         if (found != null) {
             route = found
             elevationProfile = null
+            elevationLoading = false
             message = null
             along = 0.0
             segmentHint = 0
