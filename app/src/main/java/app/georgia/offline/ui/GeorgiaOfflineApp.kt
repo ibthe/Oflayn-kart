@@ -1657,6 +1657,12 @@ private fun SettingsScreen(modifier: Modifier, settings: LocalSettings, onShowOn
             style = MaterialTheme.typography.bodySmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant
         )
+        Text(
+            "Высоты: Copernicus DEM GLO-90, 90 м, © European Union / Copernicus Programme. Это модель поверхности, которая может включать растительность и здания; она не измеряет точную высоту дорожного покрытия.",
+            modifier = Modifier.padding(horizontal = Space.xs, vertical = Space.xs),
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant
+        )
     }
 }
 
