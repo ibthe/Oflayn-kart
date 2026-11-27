@@ -546,7 +546,7 @@ private fun MapStylePicker(
                     Text("Спутниковый слой", style = MaterialTheme.typography.labelLarge)
                     if (rasterPackage == null) {
                         Text(
-                            "Импортируй совместимый офлайн-пакет ZIP. Приложение не загружает снимки из интернета.",
+                            "Импортируй ZIP формата Oflayn raster pack v1 (XYZ, 256×256 PNG/JPG). Приложение не загружает снимки из интернета.",
                             style = MaterialTheme.typography.bodySmall,
                             color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
@@ -557,6 +557,7 @@ private fun MapStylePicker(
                         Row(verticalAlignment = Alignment.CenterVertically) {
                             Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
                                 Text(rasterPackage.name, style = MaterialTheme.typography.bodySmall, fontWeight = FontWeight.SemiBold)
+                                Text("${rasterPackage.minZoom}–${rasterPackage.maxZoom} · ${rasterPackage.tileCount} тайлов", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                                 Text(
                                     "${rasterPackage.attribution} · ${rasterPackage.license}",
                                     style = MaterialTheme.typography.labelSmall,
