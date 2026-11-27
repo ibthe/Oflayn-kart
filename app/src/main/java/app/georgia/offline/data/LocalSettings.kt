@@ -21,7 +21,7 @@ class LocalSettings(context: Context) {
     var language by mutableStateOf(readLanguage())
         private set
 
-    /** Kept for code that still asks "which languages are shown": always exactly the chosen one. */
+    /** Compatibility view for the map language resolver; the current UI selects exactly one language. */
     val enabledLanguages: Set<String> get() = setOf(language)
 
     /** Chosen colour family id. */
