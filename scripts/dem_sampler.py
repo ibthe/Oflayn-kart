@@ -28,7 +28,7 @@ class DemSampler:
         key = (latitude, longitude)
         if key in self._tiles:
             return self._tiles[key]
-        path = self.directory / f"{self.tile_key(latitude, longitude)}.dem.gz"
+        path = self.directory / f"{self.tile_key(latitude, longitude)}.dem.gzip"
         if not path.is_file():
             self._tiles[key] = None
             return None
