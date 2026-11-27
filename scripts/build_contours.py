@@ -70,7 +70,7 @@ def extract_tile_contours(
     y = latitude + (np.arange(rows, dtype=np.float64) + 0.5) / rows
     minimum = int(data.min())
     maximum = int(data.max())
-    first_level = math.ceil(max(0, minimum) / interval_m) * interval_m
+    first_level = max(interval_m, math.ceil(max(0, minimum) / interval_m) * interval_m)
     last_level = math.floor(maximum / interval_m) * interval_m
     if first_level > last_level:
         return []
