@@ -81,6 +81,17 @@ class PoiDatabaseTests(unittest.TestCase):
         self.assertAlmostEqual(lon, 1.0)
         self.assertEqual(polygon_centroid([(1.0, 1.0), (1.0, 1.0), (1.0, 1.0)]), (1.0, 1.0))
 
+    def test_multipolygon_centroid_weights_outer_rings_by_area(self):
+        large = [(0.0, 0.0), (0.0, 4.0), (4.0, 4.0), (4.0, 0.0)]
+        small = [(10.0, 10.0), (10.0, 11.0), (11.0, 11.0), (11.0, 10.0)]
+        lat, lon = multipolygon_centroid([large, small])
+        self.assertGreater(lat, 1.0)
+        self.assertLess(lat, 2.0)
+        self.assertGreater(lon, 1.0)
+        self.assertLess(lon, 2.0)
+        self.assertIsNone(multipolygon_centroid([]))
+        self.assertIsNone(multipolygon_centroid([[(1.0, 1.0), (1.0, 1.0)]]))
+
     def test_bbox(self):
         bbox = (41.0, 39.95, 43.65, 46.8)
         self.assertTrue(point_in_bbox(42.0, 44.0, bbox))
