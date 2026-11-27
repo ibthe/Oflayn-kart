@@ -501,7 +501,11 @@ fun RoutePlannerCard(
                     else MaterialTheme.colorScheme.onSurfaceVariant
                 )
             }
-            session.elevationProfile?.let { ElevationProfileCard(it) }
+            when {
+                session.elevationLoading -> Text("Загружаю профиль высот…", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                session.elevationProfile != null -> ElevationProfileCard(session.elevationProfile!!)
+                route != null -> Text("Профиль высот недоступен для этого участка.", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            }
             if (origin != null && route != null) {
                 Text(
                     "Это просмотр маршрута от выбранной точки. Чтобы вести по нему, постройте маршрут от своего положения.",
