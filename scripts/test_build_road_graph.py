@@ -77,23 +77,23 @@ class ClassificationTest(unittest.TestCase):
         self.assertTrue(info.fwd & rg.PROFILE_FOOT)
 
     def test_smoothness_penalties_and_vehicle_restrictions(self):
-        bad = rg.classify_way({"highway": "track", "smoothness": "bad"})
+        bad = rg.classify_way({"highway": "residential", "smoothness": "bad"})
         self.assertTrue(bad.flags & rg.FLAG_ROUGH)
         self.assertTrue(bad.fwd & rg.PROFILE_CAR)
         self.assertTrue(bad.fwd & rg.PROFILE_OFFROAD)
 
-        horrible = rg.classify_way({"highway": "track", "smoothness": "horrible"})
+        horrible = rg.classify_way({"highway": "residential", "smoothness": "horrible"})
         self.assertFalse(horrible.fwd & rg.PROFILE_CAR)
         self.assertFalse(horrible.fwd & rg.PROFILE_BIKE)
         self.assertTrue(horrible.fwd & rg.PROFILE_OFFROAD)
         self.assertTrue(horrible.fwd & rg.PROFILE_FOOT)
 
-        very_horrible = rg.classify_way({"highway": "track", "smoothness": "very_horrible"})
+        very_horrible = rg.classify_way({"highway": "residential", "smoothness": "very_horrible"})
         self.assertTrue(very_horrible.flags & rg.FLAG_SEVERE)
         self.assertTrue(very_horrible.fwd & rg.PROFILE_OFFROAD)
         self.assertFalse(very_horrible.fwd & rg.PROFILE_CAR)
 
-        self.assertIsNone(rg.classify_way({"highway": "track", "smoothness": "impassable"}))
+        self.assertIsNone(rg.classify_way({"highway": "residential", "smoothness": "impassable"}))
 
     def test_smoothness_reduces_route_speed(self):
         paved = rg.speed_mps(rg.PROFILE_OFFROAD, 15, 0)
