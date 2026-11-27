@@ -450,6 +450,14 @@ fun RoutePlannerCard(
             session.message?.let {
                 Text(it, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.error)
             }
+            route?.warnings?.forEach { warning ->
+                Text(
+                    warning,
+                    style = MaterialTheme.typography.bodySmall,
+                    color = if (warning.contains("очень сложные")) MaterialTheme.colorScheme.error
+                    else MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
             if (origin != null && route != null) {
                 Text(
                     "Это просмотр маршрута от выбранной точки. Чтобы вести по нему, постройте маршрут от своего положения.",
@@ -564,12 +572,16 @@ fun NavigationFooter(
         border = BorderStroke(1.dp, MaterialTheme.colorScheme.edgeBrush()),
         shadowElevation = 12.dp
     ) {
-        Row(
+        Column(
             Modifier.padding(horizontal = Space.s, vertical = Space.xs),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(Space.xs)
+            verticalArrangement = Arrangement.spacedBy(Space.xxs)
         ) {
-            Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
+            Row(
+                Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(Space.xs)
+            ) {
+                Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
                 Text(
                     if (gpsStatus != null) "—" else GeoMath.formatDistance(remaining),
                     style = MaterialTheme.typography.titleMedium,
@@ -611,7 +623,18 @@ fun NavigationFooter(
                     softWrap = false
                 )
             }
-            GradientButton(text = "Завершить", onClick = onStop)
+                GradientButton(text = "Завершить", onClick = onStop)
+            }
+            if (route.warnings.isNotEmpty()) {
+                Text(
+                    route.warnings.joinToString(" "),
+                    style = MaterialTheme.typography.labelSmall,
+                    color = if (route.warnings.any { it.contains("очень сложные") }) MaterialTheme.colorScheme.error
+                    else MaterialTheme.colorScheme.onSurfaceVariant,
+                    maxLines = 2,
+                    overflow = TextOverflow.Ellipsis
+                )
+            }
         }
     }
 }
