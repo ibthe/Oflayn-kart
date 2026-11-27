@@ -32,17 +32,21 @@ Geofabrik Georgia extract здесь означает страну Грузию 
 
 - POI извлекаются из того же проверенного OSM country PBF, который используется для Mapsforge карты.
 - PyOsmium: https://github.com/osmcode/pyosmium — BSD 2-Clause, build-time only. В CI устанавливается Ubuntu package `python3-pyosmium`; модуль не входит в Android APK.
-- Первая версия извлекает OSM nodes и closed ways с выбранными значениями `amenity`, `tourism`, `historic`, `natural`, `place`, `shop`, `leisure`, `waterway` и `emergency`. Relation-only POI пока не включаются.
+- Экстрактор извлекает OSM nodes, closed ways и multipolygon relations с выбранными значениями `amenity`, `tourism`, `historic`, `natural`, `place`, `shop`, `leisure`, `waterway` и `emergency`. Для relation-only объектов вычисляется геометрический центр; smoke fixture проверяет relation, мультиязычные имена и координаты.
 - Сохраняются стандартные `name` и варианты `name:en`, `name:ru`, `name:ka`, если они присутствуют. Ни перевод, ни проверка качества исходных названий автоматически не выполняются.
 - База SQLite хранит координаты, категорию, подкатегорию и исходные OSM tags; CI записывает SHA-256, размер и число строк в `georgia-map-build.json`.
 - Поиск индексирует адресные поля, телефон, сайт, часы работы, кухню, доступность, оператора и бренд. Эти данные необязательны и отображаются только если заполнены в OSM; часы не интерпретируются как подтверждённый статус «открыто сейчас».
 
 
-## Высоты и рельеф (запланировано)
+## Высоты и рельеф
 
-- Copernicus DEM GLO-30 / GLO-90: https://dataspace.copernicus.eu/explore-data/data-collections/copernicus-contributing-missions/collections-description/COP-DEM
-- Альтернатива/дополнение: USGS SRTM 1 arc-second: https://www.usgs.gov/faqs/where-can-i-get-global-elevation-data
-- Производные контуры и hillshade должны сохранять attribution исходного набора.
+- Используется **Copernicus WorldDEM-90 / Copernicus DEM GLO-90**, глобальная цифровая модель поверхности с разрешением около 90 м: https://dataspace.copernicus.eu/explore-data/data-collections/copernicus-contributing-missions/collections-description/COP-DEM
+- Публичное зеркало COG: https://registry.opendata.aws/copernicus-dem/ и bucket `copernicus-dem-90m` в AWS `eu-central-1`.
+- Для границ офлайн-карты Грузии собираются 24 одноградусных COG tiles. CI преобразует каждый тайл в gzip-сжатую сетку 1200×1200 int16 little-endian с sentinel `-32768`, записывает SHA-256 в manifest и проверяет размер/целостность до упаковки APK.
+- Runtime `DemRepository` загружает тайлы по требованию и держит в LRU-кэше не более четырёх. Профиль маршрута рассчитывается примерно через каждые 100 м.
+- Это **DSM**, а не bare-earth DTM: модель может включать здания и растительность и не задаёт точную высоту дорожного покрытия. Высоты отнесены к EGM2008.
+- Attribution: `Produced using Copernicus WorldDEM-90 © DLR e.V. 2010–2014 and © Airbus Defence and Space GmbH 2014–2018, provided under COPERNICUS by the European Union and ESA; all rights reserved.`
+- Контурные линии и hillshade пока не включены; производные данные должны сохранять attribution исходного набора.
 
 ## Спутниковый слой (запланировано)
 
