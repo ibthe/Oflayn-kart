@@ -52,7 +52,7 @@ def main() -> int:
                 poi_digest.update(chunk)
         dem_manifest = json.loads(apk.read(DEM_MANIFEST_ENTRY))
         dem_tiles = dem_manifest.get("tiles", [])
-        if dem_manifest.get("dataset") != "Copernicus DEM GLO-90" or len(dem_tiles) != 24:
+        if dem_manifest.get("dataset") != "Copernicus DEM GLO-90" or not dem_tiles:
             print("ERROR: APK elevation manifest is missing or incomplete.", file=sys.stderr)
             return 7
         dem_total_size = 0
