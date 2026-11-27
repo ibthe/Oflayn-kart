@@ -214,7 +214,7 @@ fun GeorgiaOfflineApp(settings: LocalSettings) {
                         label = "tabs"
                     ) { tab ->
                         when (tab) {
-                            AppTab.MAP -> MapScreen(Modifier.padding(padding), settings, navigation, tracker, routeSession, speaker)
+                            AppTab.MAP -> MapScreen(Modifier.padding(padding), settings, navigation, tracker, routeSession, speaker, selectedTrackPoints) { selectedTrackPoints = emptyList() }
                             AppTab.DISCOVER -> DiscoverScreen(Modifier.padding(padding), settings, tracker) { name, latitude, longitude ->
                                 routeSession.reset()
                                 navigation.startRouteTo(NavigationTarget(name, latitude, longitude))
@@ -466,7 +466,7 @@ private fun openExternalNavigator(context: android.content.Context, target: Navi
 }
 
 @Composable
-private fun MapScreen(modifier: Modifier, settings: LocalSettings, navigation: NavigationState, tracker: LocationTracker, session: RouteSession, speaker: Speaker) {
+private fun MapScreen(modifier: Modifier, settings: LocalSettings, navigation: NavigationState, tracker: LocationTracker, session: RouteSession, speaker: Speaker, selectedTrackPoints: List<LatLong>, onClearTrack: () -> Unit) {
     val context = LocalContext.current
     val coroutineScope = rememberCoroutineScope()
     // A full-map CI build packages offline/georgia.map in the APK. Keep imported
@@ -648,6 +648,7 @@ private fun MapScreen(modifier: Modifier, settings: LocalSettings, navigation: N
                 zoomInToken = zoomInToken,
                 zoomOutToken = zoomOutToken,
                 routePoints = if (navigation.pointSelection == null) session.route?.points else null,
+                trackPoints = selectedTrackPoints,
                 viaPoints = session.route?.steps
                     ?.filter { it.maneuver == app.georgia.offline.routing.Maneuver.WAYPOINT }
                     ?.map { LatLong(it.lat, it.lon) }
@@ -756,7 +757,7 @@ private fun MapScreen(modifier: Modifier, settings: LocalSettings, navigation: N
                             MapStylePicker(settings, expanded = mapStyleExpanded, onExpandedChange = { mapStyleExpanded = it })
                         }
                         if (selectedTrackPoints.isNotEmpty()) {
-                            MapChip(onClick = { selectedTrackPoints = emptyList() }) { Text("Скрыть GPX-трек") }
+                            MapChip(onClick = onClearTrack) { Text("Скрыть GPX-трек") }
                         }
                     }
                 } else {
