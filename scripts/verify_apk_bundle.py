@@ -143,7 +143,7 @@ def main() -> int:
     print(
         f"OK: {APK_PATH.name} contains georgia.map ({map_size:,} bytes) and "
         f"georgia-poi.sqlite ({poi_size:,} bytes, {build_manifest['poiCount']:,} POIs) and "
-        f"Copernicus GLO-90 DEM ({len(dem_tiles)} tiles, {dem_total_size:,} compressed bytes) and HGT hillshade ({hgt_total_size:,} bytes)."
+        f"Copernicus GLO-90 DEM ({len(dem_tiles)} tiles, {dem_total_size:,} compressed bytes), HGT hillshade ({hgt_total_size:,} bytes), and contour map ({len(contour_bytes):,} bytes, {contour_manifest.get('contourWays', 0):,} ways)."
     )
     return 0
 
