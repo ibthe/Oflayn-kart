@@ -220,6 +220,45 @@ class GraphBuildTest(unittest.TestCase):
         self.assertEqual(len(shaped), 1)
         self.assertEqual(sorted(data.names), ["Cross street", "Main street", "One way road"])
 
+    def test_dem_grade_is_derived_when_osm_incline_is_missing(self):
+        road = way([10, 11], [(41.7000, 44.8000), (41.7010, 44.8000)], name="DEM slope", way_id=901)
+
+        class FakeDem:
+            def sample(self, latitude, longitude):
+                return 100.0 if latitude < 41.7005 else 120.0
+
+        data = rg.build_graph([road], dem_sampler=FakeDem())
+        edge = data.edges[0]
+        self.assertEqual(1, data.dem_grade_edges)
+        self.assertGreaterEqual(edge[9], 17)
+        self.assertLessEqual(edge[9], 19)
+        self.assertEqual(edge[10], -edge[9])
+        self.assertTrue(edge[5] & rg.FLAG_STEEP)
+
+    def test_explicit_osm_incline_is_never_overwritten_by_dem(self):
+        road = way([10, 11], [(41.7000, 44.8000), (41.7010, 44.8000)],
+                   name="Tagged slope", incline="5%", way_id=902)
+
+        class FakeDem:
+            def sample(self, latitude, longitude):
+                return 100.0 if latitude < 41.7005 else 250.0
+
+        data = rg.build_graph([road], dem_sampler=FakeDem())
+        edge = data.edges[0]
+        self.assertEqual(0, data.dem_grade_edges)
+        self.assertEqual((5, -5), (edge[9], edge[10]))
+
+    def test_dem_grade_is_not_invented_when_samples_are_missing(self):
+        road = way([10, 11], [(41.7000, 44.8000), (41.7010, 44.8000)], name="No DEM", way_id=903)
+
+        class MissingDem:
+            def sample(self, latitude, longitude):
+                return None
+
+        data = rg.build_graph([road], dem_sampler=MissingDem())
+        self.assertEqual(0, data.dem_grade_edges)
+        self.assertEqual((0, 0), (data.edges[0][9], data.edges[0][10]))
+
     def test_binary_roundtrip_preserves_directional_incline(self):
         steep_way = way([10, 11], [A, B], name="Steep road", incline="12%")
         data = rg.build_graph([steep_way])
