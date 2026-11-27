@@ -112,6 +112,10 @@ def main() -> int:
     road_builder = ROAD_BUILDER.read_text(encoding="utf-8")
     apk_verifier = APK_VERIFIER.read_text(encoding="utf-8")
     dem_repository = DEM_REPOSITORY.read_text(encoding="utf-8")
+    if 'context.assets.open("dem/$key.dem")' not in dem_repository:
+        return fail("Android DEM loading must use the APK asset name after AAPT2 strips the .gz suffix.")
+    if 'source_dem_file.removesuffix(".gz")' not in apk_verifier:
+        return fail("APK verification must account for AAPT2 removing the .gz asset suffix.")
     map_surface = MAP_SURFACE.read_text(encoding="utf-8")
     app_ui = APP_UI.read_text(encoding="utf-8")
     contour_builder = CONTOUR_BUILDER.read_text(encoding="utf-8")
