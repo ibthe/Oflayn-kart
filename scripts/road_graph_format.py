@@ -134,7 +134,7 @@ def _incline_percent(tags: dict) -> float:
                 return float(raw[:-1].strip())
             if raw.endswith("°"):
                 return math.tan(math.radians(float(raw[:-1].strip()))) * 100.0
-            if re.fullmatch(r"[+-]?\\d+(?:\\.\\d+)?", raw):
+            if re.fullmatch(r"[+-]?\d+(?:\.\d+)?", raw):
                 return float(raw)
         except ValueError:
             continue
