@@ -56,9 +56,11 @@ def main() -> None:
         assert generated["contourWays"] == len(xml_root.findall("way"))
         assert generated["contourNodes"] == len(xml_root.findall("node"))
         assert len(xml_root.findall("way")) == 3
+        assert all(element.get("timestamp") == contours.OSM_ENTITY_TIMESTAMP for element in xml_root.findall("node"))
+        assert all(element.get("timestamp") == contours.OSM_ENTITY_TIMESTAMP for element in xml_root.findall("way"))
         assert json.loads(manifest_file.read_text(encoding="utf-8"))["osmSha256"] == generated["osmSha256"]
 
-    print("OK: contour tile naming, geometry, major lines, no-data handling and OSM XML generation.")
+    print("OK: contour tile naming, geometry, major lines, no-data handling and timestamped OSM XML generation.")
 
 
 if __name__ == "__main__":
