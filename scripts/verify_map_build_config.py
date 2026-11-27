@@ -112,10 +112,10 @@ def main() -> int:
     road_builder = ROAD_BUILDER.read_text(encoding="utf-8")
     apk_verifier = APK_VERIFIER.read_text(encoding="utf-8")
     dem_repository = DEM_REPOSITORY.read_text(encoding="utf-8")
-    if 'context.assets.open("dem/$key.dem")' not in dem_repository:
-        return fail("Android DEM loading must use the APK asset name after AAPT2 strips the .gz suffix.")
-    if 'source_dem_file.removesuffix(".gz")' not in apk_verifier:
-        return fail("APK verification must account for AAPT2 removing the .gz asset suffix.")
+    if 'context.assets.open("dem/$key.dem.gzip")' not in dem_repository:
+        return fail("Android DEM loading must use the preserved .gzip asset path.")
+    if 'dem_entry = f"assets/dem/{source_dem_file}"' not in apk_verifier:
+        return fail("APK verification must use the exact preserved DEM asset path.")
     map_surface = MAP_SURFACE.read_text(encoding="utf-8")
     app_ui = APP_UI.read_text(encoding="utf-8")
     contour_builder = CONTOUR_BUILDER.read_text(encoding="utf-8")
@@ -372,7 +372,7 @@ def main() -> int:
     for token in ("MemoryCachingHgtReaderTileSource", "DemFolderFS", "MapsforgeThemes.HILLSHADING", "interruptAndDestroy"):
         if token not in map_surface:
             return fail(f"Mapsforge hillshade layer is missing: {token}.")
-    if '"zip"' not in app_build or '"gz"' not in app_build:
+    if '"zip"' not in app_build or '"gzip"' not in app_build or '"gz"' in app_build:
         return fail("precompressed DEM and HGT assets must be stored without a second compression pass.")
     if "python3 scripts/test_build_dem.py" not in workflow or "python3 scripts/verify_dem.py" not in workflow:
         return fail("CI must run DEM/HGT encoding tests and verify the generated elevation package.")
