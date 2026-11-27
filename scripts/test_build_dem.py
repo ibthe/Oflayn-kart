@@ -22,6 +22,10 @@ def main() -> None:
     assert DEM.tile_range((41.0, 44.0, 42.0, 45.0)) == [(41, 44)]
     assert DEM.tile_name(41, 44) == "Copernicus_DSM_COG_30_N41_00_E044_00_DEM"
     assert DEM.tile_key(41, 44) == "N41E044"
+    assert DEM.is_missing_tile_error(RuntimeError("HTTP response code: 404"))
+    assert DEM.is_missing_tile_error(RuntimeError("HTTP Not Found"))
+    assert not DEM.is_missing_tile_error(RuntimeError("HTTP response code: 403"))
+    assert not DEM.is_missing_tile_error(RuntimeError("connection timed out"))
     assert DEM.tile_name(-1, -2) == "Copernicus_DSM_COG_30_S01_00_W002_00_DEM"
 
     values = np.array([[100.4, -5.2, np.nan, 50000.0]], dtype=np.float64)
