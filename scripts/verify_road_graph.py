@@ -23,7 +23,7 @@ def main() -> int:
         print("ERROR: road graph is missing or unexpectedly small.", file=sys.stderr)
         return 3
     graph = rg.Graph.load(path)
-    print(f"[roads-verify] vertices={graph.V:,}, edges={graph.E:,}, size={path.stat().st_size:,} bytes")
+    print(f"[roads-verify] vertices={graph.V:,}, edges={graph.E:,}, turn restrictions={len(graph.turn_records):,}, size={path.stat().st_size:,} bytes")
     if graph.V < 20_000 or graph.E < 30_000:
         print("ERROR: road graph is much smaller than a country-wide network.", file=sys.stderr)
         return 4
