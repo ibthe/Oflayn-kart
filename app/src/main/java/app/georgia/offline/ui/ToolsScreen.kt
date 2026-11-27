@@ -302,9 +302,6 @@ private fun TrackRecorderPanel(context: Context, tracker: LocationTracker, recor
                 OutlinedButton(onClick = { importLauncher.launch(arrayOf("application/gpx+xml", "application/xml", "text/xml")) }) {
                     Text("Импорт GPX")
                 }
-                OutlinedButton(onClick = { pendingExportId = null; message = "Выберите трек ниже для экспорта." }) {
-                    Text("Экспорт GPX")
-                }
             }
             message?.let {
                 Text(it, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
