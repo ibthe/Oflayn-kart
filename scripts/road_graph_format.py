@@ -35,7 +35,7 @@ HEADER_SIZE = 64
 EDGE_STRUCT = struct.Struct("<iiiiHBBBBHi")
 EDGE_SIZE = EDGE_STRUCT.size  # 28
 assert EDGE_SIZE == 28
-TURN_STRUCT = struct.Struct("<iiBBH")  # outgoing arc, profile mask, kind, reserved
+TURN_STRUCT = struct.Struct("<iBBH")  # outgoing arc, profile mask, kind, reserved
 TURN_NO = 0
 TURN_ONLY = 1
 
