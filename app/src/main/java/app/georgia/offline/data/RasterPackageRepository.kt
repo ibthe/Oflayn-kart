@@ -64,6 +64,7 @@ object RasterPackageRepository {
         val storageRoot = storage.directory.parentFile ?: context.filesDir
         val packageRoot = File(storageRoot, "raster-packages")
         check(packageRoot.isDirectory || packageRoot.mkdirs()) { "Не удалось создать папку спутниковых пакетов." }
+        val availableAtStart = storageRoot.usableSpace
         val temporary = File(packageRoot, ".${UUID.randomUUID()}.part")
         check(temporary.mkdirs()) { "Не удалось подготовить временную папку пакета." }
 
@@ -100,7 +101,7 @@ object RasterPackageRepository {
                             val read = zip.read(buffer)
                             if (read < 0) break
                             totalBytes += read
-                            ensureStorageSpace(storageRoot, totalBytes)
+                            ensureStorageSpace(availableAtStart, totalBytes)
                             check(bytes.size().toLong() + read <= MAX_MANIFEST_BYTES && totalBytes <= MAX_TOTAL_BYTES) {
                                 "Манифест или архив слишком велик."
                             }
@@ -250,10 +251,9 @@ object RasterPackageRepository {
         return removed
     }
 
-    private fun ensureStorageSpace(storageRoot: File, writtenBytes: Long) {
-        val available = storageRoot.usableSpace
-        if (available > 0L) {
-            check(writtenBytes + STORAGE_RESERVE_BYTES <= available) {
+    private fun ensureStorageSpace(initialAvailableBytes: Long, writtenBytes: Long) {
+        if (initialAvailableBytes > 0L) {
+            check(writtenBytes + STORAGE_RESERVE_BYTES <= initialAvailableBytes) {
                 "Недостаточно свободного места для импорта спутникового пакета."
             }
         }
