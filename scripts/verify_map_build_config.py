@@ -403,6 +403,9 @@ def main() -> int:
     if "uphillIsSlowerThanDownhillAndFlatForEveryProfile" not in routing_profile_tests:
         return fail("Android routing profile grade-cost regression tests are missing.")
 
+    if "georgia-roads-v5-" not in workflow or 'python3 scripts/verify_road_graph.py "$roads"' not in workflow:
+        return fail("CI must invalidate legacy road graphs and validate restored graph format before bundling.")
+
     if "continue-on-error: true" in workflow:
         return fail("map preparation must fail fast; do not hide failed prerequisites.")
 
