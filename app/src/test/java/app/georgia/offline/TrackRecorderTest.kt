@@ -38,6 +38,18 @@ class TrackRecorderTest {
     }
 
     @Test
+    fun completedRecordingInvalidatesOutstandingCheckpoints() {
+        val recorder = TrackRecorder()
+        recorder.start()
+        recorder.addFix(TrackPoint(41.7, 44.8), 1_000_000_000L)
+        recorder.addFix(TrackPoint(41.71, 44.81), 12_000_000_000L)
+        val generation = recorder.checkpointGeneration
+        recorder.checkpointIfDue(12_000_000_000L)
+        recorder.finish()
+        assertTrue(recorder.checkpointGeneration > generation)
+    }
+
+    @Test
     fun recordingWithLessThanTwoPointsIsNotSaved() {
         val recorder = TrackRecorder()
         recorder.start()
