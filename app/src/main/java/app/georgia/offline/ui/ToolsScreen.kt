@@ -310,60 +310,68 @@ private fun TrackRecorderPanel(context: Context, tracker: LocationTracker, recor
             if (savedTracks.isNotEmpty()) {
                 Text("Сохранённые треки", style = MaterialTheme.typography.titleSmall)
                 savedTracks.forEach { track ->
-                    Row(
+                    Column(
                         Modifier.fillMaxWidth(),
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(Space.xxs)
+                        verticalArrangement = Arrangement.spacedBy(Space.xxs)
                     ) {
-                        Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                        Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
                             Text(track.name, style = MaterialTheme.typography.bodyMedium, maxLines = 1)
                             Text("${track.pointCount} точек", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                         }
-                        androidx.compose.material3.TextButton(
-                            onClick = {
-                                scope.launch {
-                                    try {
-                                        val gpx = withContext(Dispatchers.IO) { repository.load(track.id) }
-                                        onFollowTrack(gpx)
-                                    } catch (error: Exception) {
-                                        message = error.message ?: "Не удалось открыть GPX-трек."
+                        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(Space.xxs)) {
+                            androidx.compose.material3.TextButton(
+                                onClick = {
+                                    scope.launch {
+                                        try {
+                                            val points = withContext(Dispatchers.IO) { repository.load(track.id).segments.flatten() }
+                                            onShowTrack(points)
+                                            message = "Трек показан на карте."
+                                        } catch (error: Exception) {
+                                            message = error.message ?: "Не удалось открыть трек."
+                                        }
                                     }
-                                }
-                            }
-                        ) { Text("Возврат") }
-                        androidx.compose.material3.TextButton(
-                            onClick = {
-                                scope.launch {
-                                    try {
-                                        val points = withContext(Dispatchers.IO) { repository.load(track.id).segments.flatten() }
-                                        onShowTrack(points)
-                                        message = "Трек показан на карте."
-                                    } catch (error: Exception) {
-                                        message = error.message ?: "Не удалось открыть трек."
+                                },
+                                modifier = Modifier.weight(1f)
+                            ) { Text("На карте", maxLines = 1) }
+                            androidx.compose.material3.TextButton(
+                                onClick = {
+                                    scope.launch {
+                                        try {
+                                            val gpx = withContext(Dispatchers.IO) { repository.load(track.id) }
+                                            onFollowTrack(gpx)
+                                        } catch (error: Exception) {
+                                            message = error.message ?: "Не удалось открыть GPX-трек."
+                                        }
                                     }
-                                }
-                            }
-                        ) { Text("На карте") }
-                        androidx.compose.material3.TextButton(
-                            onClick = {
-                                pendingExportId = track.id
-                                exportLauncher.launch("${track.name.replace(Regex("[^A-Za-zА-Яа-я0-9_-]"), "_").take(40)}.gpx")
-                            }
-                        ) { Text("Экспорт") }
-                        androidx.compose.material3.TextButton(
-                            onClick = {
-                                scope.launch {
-                                    try {
-                                        withContext(Dispatchers.IO) { repository.delete(track.id) }
-                                        savedTracks = withContext(Dispatchers.IO) { repository.list() }
-                                        message = "Трек удалён."
-                                    } catch (error: Exception) {
-                                        message = error.message ?: "Не удалось удалить трек."
+                                },
+                                modifier = Modifier.weight(1f)
+                            ) { Text("Возврат", maxLines = 1) }
+                        }
+                        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(Space.xxs)) {
+                            androidx.compose.material3.TextButton(
+                                onClick = {
+                                    pendingExportId = track.id
+                                    exportLauncher.launch("${track.name.replace(Regex("[^A-Za-zА-Яа-я0-9_-]"), "_").take(40)}.gpx")
+                                },
+                                modifier = Modifier.weight(1f)
+                            ) { Text("Экспорт", maxLines = 1) }
+                            androidx.compose.material3.TextButton(
+                                onClick = {
+                                    scope.launch {
+                                        try {
+                                            withContext(Dispatchers.IO) { repository.delete(track.id) }
+                                            savedTracks = withContext(Dispatchers.IO) { repository.list() }
+                                            message = "Трек удалён."
+                                        } catch (error: Exception) {
+                                            message = error.message ?: "Не удалось удалить трек."
+                                        }
                                     }
-                                }
-                            }
-                        ) { Text("Удалить") }
+                                },
+                                modifier = Modifier.weight(1f)
+                            ) { Text("Удалить", maxLines = 1) }
+                        }
                     }
+                    HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
                 }
             }
             Text(
