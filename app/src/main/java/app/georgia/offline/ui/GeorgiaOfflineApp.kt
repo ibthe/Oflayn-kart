@@ -258,7 +258,9 @@ fun GeorgiaOfflineApp(settings: LocalSettings) {
                                 trackRecorder.points.size,
                                 tripPlanIds,
                                 onAddToTrip = { poi ->
-                                    if (tripPlanRepository.add(poi.poiId)) {
+                                    if (tripPlanIds.size >= 20) {
+                                        android.widget.Toast.makeText(context, "В плане может быть не более 20 мест", android.widget.Toast.LENGTH_SHORT).show()
+                                    } else if (tripPlanRepository.add(poi.poiId)) {
                                         tripPlanRevision++
                                         android.widget.Toast.makeText(context, "Добавлено в план поездки", android.widget.Toast.LENGTH_SHORT).show()
                                     } else {
@@ -997,6 +999,7 @@ private fun MapScreen(modifier: Modifier, settings: LocalSettings, navigation: N
                             },
                             saved = alreadySaved,
                             inTrip = poi.poiId in tripPlanIds,
+                            planFull = tripPlanIds.size >= 20,
                             onRoute = {
                                 session.reset()
                                 navigation.startRouteTo(NavigationTarget(poiName, poi.latitude, poi.longitude))
@@ -1272,6 +1275,7 @@ private fun MapPoiCard(
     distanceText: String?,
     saved: Boolean,
     inTrip: Boolean,
+    planFull: Boolean,
     onRoute: () -> Unit,
     onSave: () -> Unit,
     onAddToTrip: () -> Unit,
@@ -1376,8 +1380,8 @@ private fun MapPoiCard(
                     Text(if (saved) "В избранном" else "В избранное", maxLines = 1, softWrap = false)
                 }
             }
-            TextButton(onClick = onAddToTrip, enabled = !inTrip) {
-                Text(if (inTrip) "Уже в плане поездки" else "Добавить в план поездки")
+            TextButton(onClick = onAddToTrip, enabled = !inTrip && !planFull) {
+                Text(if (inTrip) "Уже в плане поездки" else if (planFull) "План заполнен" else "Добавить в план поездки")
             }
         }
     }
