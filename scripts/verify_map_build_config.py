@@ -46,6 +46,8 @@ ROUTING_REPOSITORY = ROOT / "app/src/main/java/app/georgia/offline/routing/Routi
 ROAD_ROUTER = ROOT / "app/src/main/java/app/georgia/offline/routing/Router.kt"
 ROUTING_PROFILE = ROOT / "app/src/main/java/app/georgia/offline/routing/RoutingProfile.kt"
 ROAD_TESTS = ROOT / "scripts/test_build_road_graph.py"
+ROAD_TURN_SMOKE = ROOT / "scripts/test_road_turn_restriction_smoke.py"
+ROAD_TURN_FIXTURE = ROOT / "scripts/fixtures/road-turn-restriction-smoke.osm"
 ROUTING_PROFILE_TESTS = ROOT / "app/src/test/java/app/georgia/offline/routing/RoutingProfileTest.kt"
 TINY_ROAD_GRAPH = ROOT / "app/src/test/resources/tiny-roads.bin"
 TINY_TURN_GRAPH = ROOT / "app/src/test/resources/tiny-turns.bin"
@@ -66,7 +68,7 @@ def fail(message: str) -> int:
 
 
 def main() -> int:
-    required = (MAP_SCRIPT, PBF_PREP_SCRIPT, WRITER_SCRIPT, WORKFLOW, DATA_SOURCES, SMOKE_FIXTURE, BUNDLE_MANIFEST, POI_BUILDER, POI_VERIFIER, POI_TESTS, POI_SMOKE_TEST, POI_SMOKE_FIXTURE, PBF_CACHE_TEST, APP_BUILD, POI_REPOSITORY, POI_UI, DEM_BUILDER, DEM_VERIFIER, DEM_TESTS, APK_VERIFIER, DEM_REPOSITORY, MAP_SURFACE, CONTOUR_BUILDER, CONTOUR_TESTS, CONTOUR_MAP_BUILDER, CONTOUR_MAP_VERIFIER, TERRAIN_REPOSITORY, CONTOUR_THEME_LIGHT, CONTOUR_THEME_DARK, ANDROID_MANIFEST, TOOLS_SCREEN, MAP_ZOOM_POLICY, MAP_ZOOM_TESTS, ROAD_FORMAT, ROAD_GRAPH_READER, ROUTING_REPOSITORY, ROAD_ROUTER, ROUTING_PROFILE, ROAD_TESTS, ROUTING_PROFILE_TESTS, TINY_ROAD_GRAPH, TINY_TURN_GRAPH, TINY_ONLY_TURN_GRAPH)
+    required = (MAP_SCRIPT, PBF_PREP_SCRIPT, WRITER_SCRIPT, WORKFLOW, DATA_SOURCES, SMOKE_FIXTURE, BUNDLE_MANIFEST, POI_BUILDER, POI_VERIFIER, POI_TESTS, POI_SMOKE_TEST, POI_SMOKE_FIXTURE, PBF_CACHE_TEST, APP_BUILD, POI_REPOSITORY, POI_UI, DEM_BUILDER, DEM_VERIFIER, DEM_TESTS, APK_VERIFIER, DEM_REPOSITORY, MAP_SURFACE, CONTOUR_BUILDER, CONTOUR_TESTS, CONTOUR_MAP_BUILDER, CONTOUR_MAP_VERIFIER, TERRAIN_REPOSITORY, CONTOUR_THEME_LIGHT, CONTOUR_THEME_DARK, ANDROID_MANIFEST, TOOLS_SCREEN, MAP_ZOOM_POLICY, MAP_ZOOM_TESTS, ROAD_FORMAT, ROAD_GRAPH_READER, ROUTING_REPOSITORY, ROAD_ROUTER, ROUTING_PROFILE, ROAD_TESTS, ROAD_TURN_SMOKE, ROAD_TURN_FIXTURE, ROUTING_PROFILE_TESTS, TINY_ROAD_GRAPH, TINY_TURN_GRAPH, TINY_ONLY_TURN_GRAPH)
     for path in required:
         if not path.is_file():
             return fail(f"required build file is missing: {path.relative_to(ROOT)}")
@@ -104,6 +106,7 @@ def main() -> int:
     road_router = ROAD_ROUTER.read_text(encoding="utf-8")
     routing_profile = ROUTING_PROFILE.read_text(encoding="utf-8")
     road_tests = ROAD_TESTS.read_text(encoding="utf-8")
+    road_turn_smoke = ROAD_TURN_SMOKE.read_text(encoding="utf-8")
     routing_profile_tests = ROUTING_PROFILE_TESTS.read_text(encoding="utf-8")
     tiny_road_graph = TINY_ROAD_GRAPH.read_bytes()
     tiny_turn_graph = TINY_TURN_GRAPH.read_bytes()
@@ -434,6 +437,16 @@ def main() -> int:
             return fail(f"Kotlin {label} fixture must use road graph format version 3.")
         if int.from_bytes(fixture[48:52], "little") <= 0:
             return fail(f"Kotlin {label} fixture must contain encoded turn restrictions.")
+    if "scripts/test_road_turn_restriction_smoke.py" not in workflow or "test_road_turn_restriction_smoke.py" not in road_turn_smoke:
+        return fail("CI must execute the PyOsmium OSM relation extraction smoke test.")
+    try:
+        turn_fixture = ET.parse(ROAD_TURN_FIXTURE).getroot()
+    except ET.ParseError as exc:
+        return fail(f"OSM turn restriction smoke fixture is invalid XML: {exc}")
+    if turn_fixture.tag != "osm" or len(turn_fixture.findall("relation")) != 1:
+        return fail("OSM turn restriction smoke fixture must contain exactly one relation.")
+    if "restriction" not in [tag.get("k") for tag in turn_fixture.findall("relation")[0].findall("tag")]:
+        return fail("OSM turn restriction smoke fixture must include a restriction tag.")
     if "scripts/make_road_graph_fixture.py" not in workflow:
         return fail("CI must regenerate the versioned Kotlin road graph fixtures before unit tests.")
 
