@@ -881,13 +881,7 @@ private class MapOverlays(
         if (state.followUser && here != null) {
             view.setCenter(here)
             val speedKmh = if (location?.hasSpeed() == true) location.speed * 3.6f else 0f
-            val desiredZoom = when {
-                speedKmh >= 90f -> 11
-                speedKmh >= 60f -> 12
-                speedKmh >= 35f -> 13
-                speedKmh >= 15f -> 14
-                else -> 16
-            }
+            val desiredZoom = speedBasedZoomLevel(speedKmh).toInt()
             if (followZoomLevel != desiredZoom) {
                 followZoomLevel = desiredZoom
                 view.setZoomLevel(desiredZoom.toByte())
