@@ -84,6 +84,7 @@ fun MapsforgeMapSurface(
     zoomInToken: Int = 0,
     zoomOutToken: Int = 0,
     routePoints: DoubleArray? = null,
+    trackPoints: List<LatLong> = emptyList(),
     viaPoints: List<LatLong> = emptyList(),
     routeColor: Int = 0xFF2F6FED.toInt(),
     followUser: Boolean = false,
@@ -388,7 +389,7 @@ fun MapsforgeMapSurface(
                 }
                 overlays.sync(
                     view,
-                    OverlayState(userLocation, destination, recenterToken, zoomInToken, zoomOutToken, routePoints, viaPoints, followUser, fitToken, places, selectedPlaceId, selectedPoi, searchResultPoints, origin, focusToken)
+                    OverlayState(userLocation, destination, recenterToken, zoomInToken, zoomOutToken, routePoints, trackPoints, viaPoints, followUser, fitToken, places, selectedPlaceId, selectedPoi, searchResultPoints, origin, focusToken)
                 )
                 // Wait until Mapsforge has applied a pan/zoom before reading the visible corners.
                 view.postDelayed({
@@ -477,6 +478,7 @@ private class OverlayState(
     val zoomInToken: Int,
     val zoomOutToken: Int,
     val routePoints: DoubleArray?,
+    val trackPoints: List<LatLong>,
     val viaPoints: List<LatLong>,
     val followUser: Boolean,
     val fitToken: Int,
@@ -517,6 +519,8 @@ private class MapOverlays(
     private var line: Polyline? = null
     private var routeCasing: Polyline? = null
     private var routeLine: Polyline? = null
+    private var trackLine: Polyline? = null
+    private var lastTrackKey = ""
     private var lastRoute: DoubleArray? = null
     private var handledRecenter = 0
     private var handledZoomIn = 0
@@ -652,6 +656,20 @@ private class MapOverlays(
             if (view.model.mapViewPosition.zoomLevel.toInt() < 13) view.setZoomLevel(14.toByte())
         } else if (selectedPlace == null) {
             focusedPlace = null
+        }
+
+        // Imported or recorded GPX track, kept visually distinct from the active route.
+        val trackKey = state.trackPoints.joinToString("|") { "${it.latitude},${it.longitude}" }
+        if (trackKey != lastTrackKey) {
+            lastTrackKey = trackKey
+            trackLine?.let { layers.remove(it) }
+            trackLine = null
+            if (state.trackPoints.size >= 2) {
+                val line = Polyline(paint(0xFF14A8A0.toInt(), Style.STROKE, 4.5f * density), AndroidGraphicFactory.INSTANCE)
+                state.trackPoints.forEach { line.latLongs.add(it) }
+                trackLine = line
+                layers.add(line)
+            }
         }
 
         // Road route: a white casing under a coloured line, inserted below the markers.
