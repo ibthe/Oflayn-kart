@@ -93,6 +93,7 @@ private fun readDeviceStatus(context: Context): DeviceStatus {
 @Composable
 private fun DeviceStatusPanel(context: Context) {
     var status by remember { mutableStateOf(readDeviceStatus(context)) }
+    val batteryPercent = status.batteryPercent
     Panel(padding = 0.dp) {
         Column(
             Modifier.fillMaxWidth().padding(Space.card),
@@ -128,7 +129,7 @@ private fun DeviceStatusPanel(context: Context) {
                     null -> "статус недоступен"
                 }
             )
-            if (status.batteryPercent != null && status.batteryPercent <= 20 && status.charging != true) {
+            if (batteryPercent != null && batteryPercent <= 20 && status.charging != true) {
                 Text(
                     "Низкий заряд. Для длительной поездки подключите питание или включите энергосбережение.",
                     color = MaterialTheme.colorScheme.error,
