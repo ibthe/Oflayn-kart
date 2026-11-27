@@ -53,6 +53,12 @@ APK assets
 - Local `.map` import uses Android Storage Access Framework and validates Mapsforge header plus Georgia bounding-box intersection.
 - `MapFileRepository.installBundledMap` copies the CI-generated APK asset to app-private storage on first run.
 
+## Road graph and routing profiles
+
+- `scripts/road_graph_format.py` is the binary graph specification shared with Kotlin. The compact graph stores directed access masks, road class, unpaved/roundabout/smoothness flags and names.
+- The four profiles are car, cautious 4×4, bicycle and foot. OSM `access`, vehicle-specific access, one-way, `surface`, `tracktype` and `smoothness` tags affect graph eligibility and estimated travel speed.
+- `horrible`/`very_horrible` smoothness excludes ordinary cars and bicycles; `very_horrible` remains available only to cautious 4×4 and foot with a strong speed penalty; `impassable` is excluded for all profiles. Routes surface warnings instead of presenting rough roads as ordinary roads. Turn restrictions and grade-aware routing remain outstanding.
+
 ## Georgia map generation (0.4.0)
 
 - `scripts/install_mapsforge_writer.sh` checks Osmosis, clones the pinned Mapsforge 0.25.0 source tag, builds the `mapsforge-map-writer:fatJar` task and installs the plugin for the current CI user.
@@ -63,11 +69,12 @@ APK assets
 
 ## POI database and local search (0.5.3)
 
-- The same verified country PBF is parsed by PyOsmium using `locations=True` and `sparse_file_array` (disk-backed node-location index).
-- POI records include OSM nodes and closed ways, categories, coordinates, OSM tags and `name` / `name:en` / `name:ru` / `name:ka` values where present. Relation-only POIs are not yet included.
+- The same verified country PBF is parsed by PyOsmium using `locations=True` and `sparse_file_array` (disk-backed node-location index). A relation-aware `area()` callback triggers PyOsmium's two-pass multipolygon assembly and adds relation-derived POIs while closed way areas remain indexed once.
+- POI records include OSM nodes, closed ways and multipolygon relations, categories, coordinates, OSM tags and `name` / `name:en` / `name:ru` / `name:ka` values where present. Relation-derived area centroids are weighted by outer-ring area and use original relation IDs; full-country duplicate and coverage validation remains required.
 - `PoiRepository` validates the generated SQLite asset with SHA-256, copies it to app-private storage, and runs local parameterized SQL search. Selected name variants can be shown together in the results list.
 - The POI search index also includes public OSM address, phone, website, opening-hours, cuisine, wheelchair-access and operator/brand tags. The detail card displays only fields actually present in the source.
 - The index intentionally uses ordinary SQLite `instr()` over a normalized text field rather than requiring FTS5 on every Android system.
+- Relation areas are assembled by PyOsmium's area callback; this performs a second PBF pass and uses the disk-backed node-location index. The POI metadata records whether relation extraction is enabled.
 - Public address/contact/business tags (address, phone, website, opening hours, cuisine, wheelchair, internet, operator and brand) are searchable and shown on a POI card when present. `opening_hours` is displayed as source text, not interpreted as live opening status.
 
 
