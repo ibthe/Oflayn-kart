@@ -29,12 +29,60 @@ def parse_bbox(value: str) -> tuple[float, float, float, float]:
     return parts  # type: ignore[return-value]
 
 
-def collect_ways(input_file: Path, bbox: tuple[float, float, float, float]) -> tuple[list, dict]:
+def _restriction_records(tags: dict, members: list, stats: dict) -> list:
+    if tags.get("type") != "restriction":
+        return []
+    from_ways = [ref for kind, role, ref in members if kind == "w" and role == "from"]
+    to_ways = [ref for kind, role, ref in members if kind == "w" and role == "to"]
+    via_nodes = [ref for kind, role, ref in members if kind == "n" and role == "via"]
+    via_ways = [ref for kind, role, ref in members if kind == "w" and role == "via"]
+    stats["restrictionRelations"] += 1
+    if via_ways:
+        stats["unsupportedViaWayRestrictions"] += 1
+        return []
+    if len(from_ways) != 1 or len(to_ways) != 1 or len(via_nodes) != 1:
+        stats["unsupportedRestrictionRelations"] += 1
+        return []
+    except_values = {part.strip().lower() for part in str(tags.get("except", "")).replace(";", ",").split(",") if part.strip()}
+    except_mask = 0
+    if "motorcar" in except_values: except_mask |= rg.PROFILE_CAR
+    if "motor_vehicle" in except_values: except_mask |= rg.PROFILE_CAR | rg.PROFILE_OFFROAD | rg.PROFILE_MOTORCYCLE
+    if "vehicle" in except_values: except_mask |= rg.PROFILE_CAR | rg.PROFILE_OFFROAD | rg.PROFILE_MOTORCYCLE | rg.PROFILE_BIKE
+    if "motorcycle" in except_values: except_mask |= rg.PROFILE_MOTORCYCLE
+    if "4wd" in except_values: except_mask |= rg.PROFILE_OFFROAD
+    if "bicycle" in except_values: except_mask |= rg.PROFILE_BIKE
+    if "foot" in except_values: except_mask |= rg.PROFILE_FOOT
+    keys = {
+        rg.PROFILE_CAR: ("restriction:motorcar", "restriction:motor_vehicle", "restriction:vehicle", "restriction"),
+        rg.PROFILE_OFFROAD: ("restriction:motorcar", "restriction:motor_vehicle", "restriction:vehicle", "restriction"),
+        rg.PROFILE_MOTORCYCLE: ("restriction:motorcycle", "restriction:motor_vehicle", "restriction:vehicle", "restriction"),
+        rg.PROFILE_BIKE: ("restriction:bicycle", "restriction:vehicle", "restriction"),
+        rg.PROFILE_FOOT: ("restriction:foot", "restriction"),
+    }
+    result = []
+    for profile, candidates in keys.items():
+        if except_mask & profile: continue
+        value = next((tags[key] for key in candidates if tags.get(key)), None)
+        if value is None: continue
+        value = str(value).strip().lower()
+        if value.startswith("no_"): kind = rg.TURN_NO
+        elif value.startswith("only_"): kind = rg.TURN_ONLY
+        else: continue
+        result.append(rg.TurnRestriction(from_ways[0], to_ways[0], via_nodes[0], profile, kind))
+    if result: stats["nodeRestrictions"] += len(result)
+    else: stats["unsupportedRestrictionRelations"] += 1
+    return result
+
+
+def collect_ways(input_file: Path, bbox: tuple[float, float, float, float]) -> tuple[list, list, dict]:
     import osmium  # imported lazily so the format tests run without PyOsmium
 
     min_lat, min_lon, max_lat, max_lon = bbox
-    stats = {"waysSeen": 0, "roadWays": 0, "runs": 0, "nodeRefs": 0, "skippedMissingNodes": 0}
+    stats = {"waysSeen": 0, "roadWays": 0, "runs": 0, "nodeRefs": 0, "skippedMissingNodes": 0,
+             "restrictionRelations": 0, "nodeRestrictions": 0, "unsupportedViaWayRestrictions": 0,
+             "unsupportedRestrictionRelations": 0}
     ways: list = []
+    restrictions: list = []
     started = time.monotonic()
     last_report = [started]
 
@@ -56,7 +104,7 @@ def collect_ways(input_file: Path, bbox: tuple[float, float, float, float]) -> t
 
             def flush() -> None:
                 if len(refs) >= 2:
-                    ways.append(rg.WayRecord(info, refs.tolist(), lats.tolist(), lons.tolist()))
+                    ways.append(rg.WayRecord(info, refs.tolist(), lats.tolist(), lons.tolist(), way.id))
                     stats["runs"] += 1
                     stats["nodeRefs"] += len(refs)
                 del refs[:], lats[:], lons[:]
@@ -72,6 +120,11 @@ def collect_ways(input_file: Path, bbox: tuple[float, float, float, float]) -> t
                 lons.append(round(location.lon * 1e6))
             flush()
 
+        def relation(self, relation) -> None:
+            tags = {tag.k: tag.v for tag in relation.tags}
+            members = [(member.type, member.role, member.ref) for member in relation.members]
+            restrictions.extend(_restriction_records(tags, members, stats))
+
     index_dir = Path(os.environ.get("RUNNER_TEMP") or tempfile.gettempdir())
     index_file = index_dir / "georgia-road-node-locations.idx"
     index_file.unlink(missing_ok=True)
@@ -81,7 +134,7 @@ def collect_ways(input_file: Path, bbox: tuple[float, float, float, float]) -> t
         index_file.unlink(missing_ok=True)
     stats["scanSeconds"] = round(time.monotonic() - started, 1)
     print(f"[roads] scan complete: {stats}", flush=True)
-    return ways, stats
+    return ways, restrictions, stats
 
 
 def main() -> int:
@@ -95,11 +148,11 @@ def main() -> int:
         print("ERROR: input OSM PBF is missing or unexpectedly small.", file=sys.stderr)
         return 2
     try:
-        ways, stats = collect_ways(args.input_pbf, parse_bbox(args.bbox))
+        ways, restrictions, stats = collect_ways(args.input_pbf, parse_bbox(args.bbox))
         if not ways:
             raise RuntimeError("no routable roads were found in the PBF")
         started = time.monotonic()
-        data = rg.build_graph(ways)
+        data = rg.build_graph(ways, restrictions)
         del ways
         print(f"[roads] graph built: vertices={len(data.vlat):,}, edges={len(data.edges):,}, "
               f"elapsed={time.monotonic() - started:.1f}s", flush=True)
