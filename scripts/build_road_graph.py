@@ -40,7 +40,7 @@ def _restriction_records(tags: dict, members: list, stats: dict) -> list:
     if via_ways:
         stats["unsupportedViaWayRestrictions"] += 1
         return []
-    if len(from_ways) != 1 or len(to_ways) != 1 or len(via_nodes) != 1:
+    if not from_ways or not to_ways or len(via_nodes) != 1:
         stats["unsupportedRestrictionRelations"] += 1
         return []
     except_values = {part.strip().lower() for part in str(tags.get("except", "")).replace(";", ",").split(",") if part.strip()}
@@ -68,7 +68,10 @@ def _restriction_records(tags: dict, members: list, stats: dict) -> list:
         if value.startswith("no_"): kind = rg.TURN_NO
         elif value.startswith("only_"): kind = rg.TURN_ONLY
         else: continue
-        result.append(rg.TurnRestriction(from_ways[0], to_ways[0], via_nodes[0], profile, kind))
+        value = str(value)
+        for from_way in from_ways:
+            for to_way in to_ways:
+                result.append(rg.TurnRestriction(from_way, to_way, via_nodes[0], profile, kind, value))
     if result: stats["nodeRestrictions"] += len(result)
     else: stats["unsupportedRestrictionRelations"] += 1
     return result
