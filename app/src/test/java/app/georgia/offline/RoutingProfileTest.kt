@@ -1,0 +1,31 @@
+package app.georgia.offline
+
+import app.georgia.offline.routing.RoadGraph
+import app.georgia.offline.routing.RoutingProfile
+import org.junit.Assert.assertFalse
+import org.junit.Assert.assertTrue
+import org.junit.Test
+
+class RoutingProfileTest {
+    @Test
+    fun roughAndSevereSurfaceFlagsReduceEstimatedSpeed() {
+        val paved = RoutingProfile.OFFROAD.speedMps(15, 0)
+        val rough = RoutingProfile.OFFROAD.speedMps(15, RoadGraph.FLAG_ROUGH)
+        val severe = RoutingProfile.OFFROAD.speedMps(15, RoadGraph.FLAG_SEVERE)
+        assertTrue(paved > rough)
+        assertTrue(rough > severe)
+    }
+
+    @Test
+    fun smoothnessFlagsNeverProduceZeroOrNegativeSpeed() {
+        for (profile in RoutingProfile.entries) {
+            assertTrue(profile.speedMps(15, RoadGraph.FLAG_SEVERE) > 0.0)
+        }
+    }
+
+    @Test
+    fun newQualityFlagsDoNotOverlapExistingFlags() {
+        assertFalse(RoadGraph.FLAG_ROUGH and RoadGraph.FLAG_UNPAVED != 0)
+        assertFalse(RoadGraph.FLAG_SEVERE and RoadGraph.FLAG_ROUNDABOUT != 0)
+    }
+}
