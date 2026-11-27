@@ -73,6 +73,9 @@ jobs:
       - name: Test offline road graph builder and reference router
         run: python3 scripts/test_build_road_graph.py
 
+      - name: Generate tiny routing fixtures for Android tests
+        run: python3 scripts/make_road_graph_fixture.py
+
       - name: Test verified OSM PBF cache and retry behavior
         run: python3 scripts/test_prepare_georgia_pbf.py
 
