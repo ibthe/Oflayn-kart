@@ -107,7 +107,7 @@ APK assets
 
 - `scripts/road_graph_format.py` is the binary graph specification shared with Kotlin. The compact graph stores directed access masks, road class, unpaved/roundabout/smoothness flags and names.
 - The five profiles are car, motorcycle, cautious 4×4, bicycle and foot. OSM `access`, vehicle-specific access, one-way, `surface`, `tracktype` and `smoothness` tags affect graph eligibility and estimated travel speed.
-- `horrible`/`very_horrible` smoothness excludes ordinary cars and bicycles; `very_horrible` remains available only to cautious 4×4 and foot with a strong speed penalty; `impassable` is excluded for all profiles. Routes surface warnings instead of presenting rough roads as ordinary roads. Turn restrictions and grade-aware routing remain outstanding.
+- `horrible`/`very_horrible` smoothness excludes ordinary cars and bicycles; `very_horrible` remains available only to cautious 4×4 and foot with a strong speed penalty; `impassable` is excluded for all profiles. Routes surface warnings instead of presenting rough roads as ordinary roads. Coarse incline-aware speed penalties are applied from OSM `incline` tags; full directional grade modelling and turn restrictions remain outstanding.
 
 ## Georgia map generation (0.4.0)
 
