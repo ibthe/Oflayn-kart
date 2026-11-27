@@ -147,9 +147,9 @@ jobs:
         uses: actions/cache/restore@v4
         with:
           path: app/src/main/assets/offline/georgia-roads.bin
-          key: georgia-roads-v1-${{ runner.os }}-restore-only
+          key: georgia-roads-v2-${{ runner.os }}-restore-only
           restore-keys: |
-            georgia-roads-v1-${{ runner.os }}-
+            georgia-roads-v2-${{ runner.os }}-
 
       - name: Check restored road graph
         id: roads-state
@@ -201,7 +201,7 @@ jobs:
         uses: actions/cache/save@v4
         with:
           path: app/src/main/assets/offline/georgia-roads.bin
-          key: georgia-roads-v1-${{ runner.os }}-${{ github.run_id }}
+          key: georgia-roads-v2-${{ runner.os }}-${{ github.run_id }}
 
       - name: Build Mapsforge map-writer plugin
         if: ${{ success() && (steps.map-state.outputs.exists != 'true' || github.event_name == 'schedule' || inputs.refresh_map == true) }}
