@@ -22,7 +22,6 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import app.georgia.offline.domain.GeoFormatting
 import app.georgia.offline.ui.theme.Space
-import java.util.Locale
 
 @Composable
 fun EmergencyPanel(context: Context, location: Location?) {
