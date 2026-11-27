@@ -46,6 +46,7 @@ ROAD_ROUTER = ROOT / "app/src/main/java/app/georgia/offline/routing/Router.kt"
 ROUTING_PROFILE = ROOT / "app/src/main/java/app/georgia/offline/routing/RoutingProfile.kt"
 ROAD_TESTS = ROOT / "scripts/test_build_road_graph.py"
 ROUTING_PROFILE_TESTS = ROOT / "app/src/test/java/app/georgia/offline/routing/RoutingProfileTest.kt"
+TINY_ROAD_GRAPH = ROOT / "app/src/test/resources/tiny-roads.bin"
 
 EXPECTED_MIRROR = "https://download.openstreetmap.fr/extracts/asia/georgia.osm.pbf"
 EXPECTED_MIRROR_MD5 = "https://download.openstreetmap.fr/extracts/asia/georgia.osm.pbf.md5"
@@ -62,7 +63,7 @@ def fail(message: str) -> int:
 
 
 def main() -> int:
-    required = (MAP_SCRIPT, PBF_PREP_SCRIPT, WRITER_SCRIPT, WORKFLOW, DATA_SOURCES, SMOKE_FIXTURE, BUNDLE_MANIFEST, POI_BUILDER, POI_VERIFIER, POI_TESTS, POI_SMOKE_TEST, POI_SMOKE_FIXTURE, PBF_CACHE_TEST, APP_BUILD, POI_REPOSITORY, POI_UI, DEM_BUILDER, DEM_VERIFIER, DEM_TESTS, APK_VERIFIER, DEM_REPOSITORY, MAP_SURFACE, CONTOUR_BUILDER, CONTOUR_TESTS, CONTOUR_MAP_BUILDER, CONTOUR_MAP_VERIFIER, TERRAIN_REPOSITORY, CONTOUR_THEME_LIGHT, CONTOUR_THEME_DARK, ANDROID_MANIFEST, TOOLS_SCREEN, MAP_ZOOM_POLICY, MAP_ZOOM_TESTS, ROAD_FORMAT, ROAD_GRAPH_READER, ROAD_ROUTER, ROUTING_PROFILE, ROAD_TESTS, ROUTING_PROFILE_TESTS)
+    required = (MAP_SCRIPT, PBF_PREP_SCRIPT, WRITER_SCRIPT, WORKFLOW, DATA_SOURCES, SMOKE_FIXTURE, BUNDLE_MANIFEST, POI_BUILDER, POI_VERIFIER, POI_TESTS, POI_SMOKE_TEST, POI_SMOKE_FIXTURE, PBF_CACHE_TEST, APP_BUILD, POI_REPOSITORY, POI_UI, DEM_BUILDER, DEM_VERIFIER, DEM_TESTS, APK_VERIFIER, DEM_REPOSITORY, MAP_SURFACE, CONTOUR_BUILDER, CONTOUR_TESTS, CONTOUR_MAP_BUILDER, CONTOUR_MAP_VERIFIER, TERRAIN_REPOSITORY, CONTOUR_THEME_LIGHT, CONTOUR_THEME_DARK, ANDROID_MANIFEST, TOOLS_SCREEN, MAP_ZOOM_POLICY, MAP_ZOOM_TESTS, ROAD_FORMAT, ROAD_GRAPH_READER, ROAD_ROUTER, ROUTING_PROFILE, ROAD_TESTS, ROUTING_PROFILE_TESTS, TINY_ROAD_GRAPH)
     for path in required:
         if not path.is_file():
             return fail(f"required build file is missing: {path.relative_to(ROOT)}")
@@ -100,6 +101,7 @@ def main() -> int:
     routing_profile = ROUTING_PROFILE.read_text(encoding="utf-8")
     road_tests = ROAD_TESTS.read_text(encoding="utf-8")
     routing_profile_tests = ROUTING_PROFILE_TESTS.read_text(encoding="utf-8")
+    tiny_road_graph = TINY_ROAD_GRAPH.read_bytes()
     data_sources = DATA_SOURCES.read_text(encoding="utf-8")
     try:
         bundle_manifest = json.loads(BUNDLE_MANIFEST.read_text(encoding="utf-8"))
@@ -405,6 +407,10 @@ def main() -> int:
 
     if "georgia-roads-v5-" not in workflow or 'python3 scripts/verify_road_graph.py "$roads"' not in workflow:
         return fail("CI must invalidate legacy road graphs and validate restored graph format before bundling.")
+
+
+    if len(tiny_road_graph) < 64 or tiny_road_graph[:4] != b"GRT1" or int.from_bytes(tiny_road_graph[4:8], "little") != 2:
+        return fail("Kotlin routing test fixture must use road graph format version 2.")
 
     if "continue-on-error: true" in workflow:
         return fail("map preparation must fail fast; do not hide failed prerequisites.")
