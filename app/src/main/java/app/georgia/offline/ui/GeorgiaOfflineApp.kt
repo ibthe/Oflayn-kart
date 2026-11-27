@@ -783,7 +783,7 @@ private fun MapScreen(modifier: Modifier, settings: LocalSettings, navigation: N
                             MapStylePicker(settings, expanded = mapStyleExpanded, onExpandedChange = { mapStyleExpanded = it })
                         }
                         if (selectedTrackPoints.isNotEmpty()) {
-                            MapChip(onClick = { selectedTrackPoints = emptyList() }) { Text("Скрыть GPX-трек") }
+                            MapChip(onClick = onClearTrack) { Text("Скрыть GPX-трек") }
                         }
                         if (showMapSearch && !mapStyleExpanded) {
                             MapViewportSearchBox(
