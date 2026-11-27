@@ -40,6 +40,11 @@ ANDROID_MANIFEST = ROOT / "app/src/main/AndroidManifest.xml"
 TOOLS_SCREEN = ROOT / "app/src/main/java/app/georgia/offline/ui/ToolsScreen.kt"
 MAP_ZOOM_POLICY = ROOT / "app/src/main/java/app/georgia/offline/ui/MapZoomPolicy.kt"
 MAP_ZOOM_TESTS = ROOT / "app/src/test/java/app/georgia/offline/ui/MapZoomPolicyTest.kt"
+ROAD_FORMAT = ROOT / "scripts/road_graph_format.py"
+ROAD_GRAPH_READER = ROOT / "app/src/main/java/app/georgia/offline/routing/RoadGraph.kt"
+ROAD_ROUTER = ROOT / "app/src/main/java/app/georgia/offline/routing/Router.kt"
+ROUTING_PROFILE = ROOT / "app/src/main/java/app/georgia/offline/routing/RoutingProfile.kt"
+ROAD_TESTS = ROOT / "scripts/test_build_road_graph.py"
 
 EXPECTED_MIRROR = "https://download.openstreetmap.fr/extracts/asia/georgia.osm.pbf"
 EXPECTED_MIRROR_MD5 = "https://download.openstreetmap.fr/extracts/asia/georgia.osm.pbf.md5"
@@ -56,7 +61,7 @@ def fail(message: str) -> int:
 
 
 def main() -> int:
-    required = (MAP_SCRIPT, PBF_PREP_SCRIPT, WRITER_SCRIPT, WORKFLOW, DATA_SOURCES, SMOKE_FIXTURE, BUNDLE_MANIFEST, POI_BUILDER, POI_VERIFIER, POI_TESTS, POI_SMOKE_TEST, POI_SMOKE_FIXTURE, PBF_CACHE_TEST, APP_BUILD, POI_REPOSITORY, POI_UI, DEM_BUILDER, DEM_VERIFIER, DEM_TESTS, APK_VERIFIER, DEM_REPOSITORY, MAP_SURFACE, CONTOUR_BUILDER, CONTOUR_TESTS, CONTOUR_MAP_BUILDER, CONTOUR_MAP_VERIFIER, TERRAIN_REPOSITORY, CONTOUR_THEME_LIGHT, CONTOUR_THEME_DARK, ANDROID_MANIFEST, TOOLS_SCREEN, MAP_ZOOM_POLICY, MAP_ZOOM_TESTS)
+    required = (MAP_SCRIPT, PBF_PREP_SCRIPT, WRITER_SCRIPT, WORKFLOW, DATA_SOURCES, SMOKE_FIXTURE, BUNDLE_MANIFEST, POI_BUILDER, POI_VERIFIER, POI_TESTS, POI_SMOKE_TEST, POI_SMOKE_FIXTURE, PBF_CACHE_TEST, APP_BUILD, POI_REPOSITORY, POI_UI, DEM_BUILDER, DEM_VERIFIER, DEM_TESTS, APK_VERIFIER, DEM_REPOSITORY, MAP_SURFACE, CONTOUR_BUILDER, CONTOUR_TESTS, CONTOUR_MAP_BUILDER, CONTOUR_MAP_VERIFIER, TERRAIN_REPOSITORY, CONTOUR_THEME_LIGHT, CONTOUR_THEME_DARK, ANDROID_MANIFEST, TOOLS_SCREEN, MAP_ZOOM_POLICY, MAP_ZOOM_TESTS, ROAD_FORMAT, ROAD_GRAPH_READER, ROAD_ROUTER, ROUTING_PROFILE, ROAD_TESTS)
     for path in required:
         if not path.is_file():
             return fail(f"required build file is missing: {path.relative_to(ROOT)}")
@@ -88,6 +93,11 @@ def main() -> int:
     tools_screen = TOOLS_SCREEN.read_text(encoding="utf-8")
     map_zoom_policy = MAP_ZOOM_POLICY.read_text(encoding="utf-8")
     map_zoom_tests = MAP_ZOOM_TESTS.read_text(encoding="utf-8")
+    road_format = ROAD_FORMAT.read_text(encoding="utf-8")
+    road_graph_reader = ROAD_GRAPH_READER.read_text(encoding="utf-8")
+    road_router = ROAD_ROUTER.read_text(encoding="utf-8")
+    routing_profile = ROUTING_PROFILE.read_text(encoding="utf-8")
+    road_tests = ROAD_TESTS.read_text(encoding="utf-8")
     data_sources = DATA_SOURCES.read_text(encoding="utf-8")
     try:
         bundle_manifest = json.loads(BUNDLE_MANIFEST.read_text(encoding="utf-8"))
@@ -376,6 +386,18 @@ def main() -> int:
             return fail(f"Speed-based zoom policy is missing threshold {token}.")
     if "routeOverviewWaitsSevenSecondsBeforeCloserZoom" not in map_zoom_tests or "speedZoomPullsBackAtEachRidingSpeedThreshold" not in map_zoom_tests:
         return fail("Map zoom policy regression tests are missing.")
+
+
+    if "FORMAT_VERSION = 2" not in road_format or "const val FORMAT_VERSION = 2" not in road_graph_reader:
+        return fail("Road graph builder and Android reader must agree on directional-incline format version 2.")
+    for token in ("def _incline_pair", "incline_forward", "incline_backward", "edge_incline_percent"):
+        if token not in road_format:
+            return fail(f"Road graph format is missing directional incline support: {token}.")
+    if "edgeInclinePercent" not in road_graph_reader or "edgeInclinePercent" not in road_router or "inclinePercent" not in routing_profile:
+        return fail("Android routing must consume signed incline for the actual travel direction.")
+    for token in ("test_incline_values_preserve_forward_and_backward_direction", "test_directional_grade_changes_route_speed", "test_binary_roundtrip_preserves_directional_incline"):
+        if token not in road_tests:
+            return fail(f"Directional grade regression test is missing: {token}.")
 
     if "continue-on-error: true" in workflow:
         return fail("map preparation must fail fast; do not hide failed prerequisites.")
