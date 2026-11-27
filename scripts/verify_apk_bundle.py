@@ -76,10 +76,11 @@ def main() -> int:
         dem_total_size = 0
         hgt_total_size = 0
         for tile in dem_tiles:
-            # AAPT2 removes the trailing .gz from pre-compressed asset names while preserving bytes.
             source_dem_file = tile.get("file", "")
-            packaged_dem_file = source_dem_file.removesuffix(".gz")
-            dem_entry = f"assets/dem/{packaged_dem_file}"
+            if not source_dem_file.endswith(".dem.gzip"):
+                print(f"ERROR: unexpected compressed DEM asset name in manifest: {source_dem_file!r}.", file=sys.stderr)
+                return 7
+            dem_entry = f"assets/dem/{source_dem_file}"
             if dem_entry not in entries:
                 available_dem = sorted(name for name in entries if name.startswith("assets/dem/"))
                 print(f"ERROR: APK is missing DEM tile {dem_entry}; available DEM entries: {available_dem[:30]!r}.", file=sys.stderr)
@@ -114,7 +115,7 @@ def main() -> int:
             try:
                 with zipfile.ZipFile(io.BytesIO(hgt_bytes)) as hgt_archive:
                     hgt_names = hgt_archive.namelist()
-                    if hgt_names != [f"{tile.get('file', '').removesuffix('.dem.gz')}.hgt"]:
+                    if hgt_names != [f"{tile.get('file', '').removesuffix('.dem.gzip')}.hgt"]:
                         raise ValueError("Unexpected HGT archive entry.")
                     hgt_raw = hgt_archive.read(hgt_names[0])
             except (OSError, zipfile.BadZipFile, ValueError):
