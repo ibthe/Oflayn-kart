@@ -61,12 +61,12 @@ object TrackRouteBuilder {
             RouteStep(Maneuver.ARRIVE, "Вы вернулись к началу трека", distanceMeters, last.first, last.second)
         )
         val averageSpeed = (profile.maxSpeedMps * 0.35).coerceAtLeast(0.5)
-        return Route(
-            profile,
-            geometry,
-            distanceMeters / averageSpeed,
-            steps,
-            listOf("Возврат идёт по записанной линии GPX. Обычные поворотные подсказки для этого трека недоступны.")
-        )
+        val warnings = buildList {
+            add("Возврат идёт по записанной линии GPX. Обычные поворотные подсказки для этого трека недоступны.")
+            if (track.segments.count { it.size >= 2 } > 1) {
+                add("Выбран ближайший непрерывный сегмент; разрывы записи не соединяются.")
+            }
+        }
+        return Route(profile, geometry, distanceMeters / averageSpeed, steps, warnings)
     }
 }
