@@ -571,7 +571,7 @@ fun NavigationFooter(
         ) {
             Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
                 Text(
-                    GeoMath.formatDistance(remaining),
+                    if (gpsStatus != null) "—" else GeoMath.formatDistance(remaining),
                     style = MaterialTheme.typography.titleMedium,
                     maxLines = 1
                 )
