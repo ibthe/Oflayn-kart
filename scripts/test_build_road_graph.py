@@ -190,6 +190,18 @@ class RestrictionParsingTest(unittest.TestCase):
         self.assertEqual({record.profile_mask for record in records},
                          {rg.PROFILE_CAR, rg.PROFILE_OFFROAD, rg.PROFILE_MOTORCYCLE})
 
+    def test_no_entry_and_no_exit_multiple_members_expand_all_pairs(self):
+        members = [
+            ("w", "from", 100), ("w", "from", 101), ("n", "via", 2),
+            ("w", "to", 200), ("w", "to", 201),
+        ]
+        records = road_builder._restriction_records(
+            {"type": "restriction", "restriction": "no_entry"}, members, self.stats
+        )
+        self.assertEqual(len(records), 20)
+        self.assertEqual({record.from_way for record in records}, {100, 101})
+        self.assertEqual({record.to_way for record in records}, {200, 201})
+
     def test_via_way_is_counted_as_unsupported_not_silently_misapplied(self):
         members = [("w", "from", 100), ("w", "via", 300), ("w", "to", 200)]
         records = road_builder._restriction_records(
@@ -333,6 +345,32 @@ class RoutingTest(unittest.TestCase):
         result = graph.route(rg.PROFILE_CAR, A[0], A[1], S[0], S[1])
         self.assertIsNotNone(result)
         self.assertLess(result["distance_m"], 2_500.0)
+
+    def test_same_way_no_u_turn_blocks_only_the_reverse_arc(self):
+        ways = [
+            way([1, 2, 3], [A, B, C], name="Main", way_id=100),
+            way([4, 2, 5], [N, B, S], name="Cross", way_id=200),
+        ]
+        restriction = rg.TurnRestriction(100, 100, 2, rg.PROFILE_CAR, rg.TURN_NO, "no_u_turn")
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / "u-turn.bin"
+            rg.write_graph(path, rg.build_graph(ways, [restriction]))
+            graph = rg.Graph.load(path)
+        self.assertFalse(graph.turn_allowed(rg.PROFILE_CAR, 0, 1))
+        self.assertTrue(graph.turn_allowed(rg.PROFILE_CAR, 0, 2))
+
+    def test_same_way_only_u_turn_blocks_continuing_straight(self):
+        ways = [
+            way([1, 2, 3], [A, B, C], name="Main", way_id=100),
+            way([4, 2, 5], [N, B, S], name="Cross", way_id=200),
+        ]
+        restriction = rg.TurnRestriction(100, 100, 2, rg.PROFILE_CAR, rg.TURN_ONLY, "only_u_turn")
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / "only-u-turn.bin"
+            rg.write_graph(path, rg.build_graph(ways, [restriction]))
+            graph = rg.Graph.load(path)
+        self.assertTrue(graph.turn_allowed(rg.PROFILE_CAR, 0, 1))
+        self.assertFalse(graph.turn_allowed(rg.PROFILE_CAR, 0, 2))
 
     def test_snap_too_far_returns_none(self):
         self.assertIsNone(self.graph.route(rg.PROFILE_CAR, 42.5, 44.8, 41.7, 44.81, max_snap_m=2000))
