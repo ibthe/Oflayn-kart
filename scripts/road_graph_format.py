@@ -110,6 +110,7 @@ class RoadInfo:
     name: str | None = None
     incline_forward: int = 0
     incline_backward: int = 0
+    incline_tagged: bool = False
 
 
 @dataclass
@@ -294,7 +295,8 @@ def classify_way(tags: dict) -> RoadInfo | None:
     if max(abs(incline_forward), abs(incline_backward)) >= 8:
         flags |= FLAG_STEEP
     name = tags.get("name:ru") or tags.get("name") or tags.get("name:en") or tags.get("ref")
-    return RoadInfo(cls, flags, fwd, back, name, incline_forward, incline_backward)
+    incline_tagged = any(_parse_incline_value(tags.get(key)) is not None for key in ("incline", "incline:forward", "incline:backward"))
+    return RoadInfo(cls, flags, fwd, back, name, incline_forward, incline_backward, incline_tagged)
 
 
 # --------------------------------------------------------------------------- graph building
@@ -306,9 +308,10 @@ class GraphData:
     edges: list = field(default_factory=list)  # (from, to, lenDm, shape, cls, flags, fwd, back, nameIdx, inclineFwd, inclineBack)
     names: list = field(default_factory=list)
     turn_restrictions: list = field(default_factory=list)  # (incomingArc, outgoingArc, profileMask, kind)
+    dem_grade_edges: int = 0
 
 
-def build_graph(ways, restrictions=()) -> GraphData:
+def build_graph(ways, restrictions=(), dem_sampler=None) -> GraphData:
     """Split road ways at junctions and endpoints into edges between graph vertices."""
     ways = list(ways)
     counts: Counter = Counter()
@@ -347,7 +350,24 @@ def build_graph(ways, restrictions=()) -> GraphData:
                 v = vertex(way.refs[i], way.lats[i], way.lons[i])
                 if length > 0.0 or u != v:
                     edge_index = len(data.edges)
-                    data.edges.append((u, v, int(round(length * 10)), shape, info.cls, info.flags, info.fwd, info.back, name_idx, info.incline_forward, info.incline_backward))
+                    edge_flags = info.flags
+                    incline_forward = info.incline_forward
+                    incline_backward = info.incline_backward
+                    if dem_sampler is not None and not info.incline_tagged:
+                        sample = dem_sampler.sample if hasattr(dem_sampler, "sample") else dem_sampler
+                        elevation_start = sample(way.lats[start] / 1e6, way.lons[start] / 1e6)
+                        elevation_end = sample(way.lats[i] / 1e6, way.lons[i] / 1e6)
+                        if elevation_start is not None and elevation_end is not None and length >= 25.0:
+                            grade = (elevation_end - elevation_start) / length * 100.0
+                            if abs(grade) < 2.0:
+                                grade = 0.0
+                            grade = max(-30.0, min(30.0, grade))
+                            incline_forward = int(round(grade))
+                            incline_backward = -incline_forward
+                            if abs(incline_forward) >= 8:
+                                edge_flags |= FLAG_STEEP
+                            data.dem_grade_edges += 1
+                    data.edges.append((u, v, int(round(length * 10)), shape, info.cls, edge_flags, info.fwd, info.back, name_idx, incline_forward, incline_backward))
                     way_arcs.setdefault(way.way_id, []).append((edge_index, way.refs[start], way.refs[i]))
                 start = i
                 length = 0.0
