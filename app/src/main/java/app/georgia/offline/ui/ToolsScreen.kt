@@ -39,6 +39,7 @@ import app.georgia.offline.data.GpxCodec
 import app.georgia.offline.data.TrackRepository
 import app.georgia.offline.data.SavedTrackInfo
 import app.georgia.offline.data.TrackPoint
+import app.georgia.offline.data.TrackRepository
 import app.georgia.offline.data.GpxTrack
 import app.georgia.offline.domain.GeoFormatting
 import app.georgia.offline.domain.Qibla
@@ -48,7 +49,7 @@ import kotlin.math.abs
 import kotlin.math.roundToInt
 
 @Composable
-fun ToolsScreen(modifier: Modifier = Modifier, settings: LocalSettings, tracker: LocationTracker, trackRecorder: TrackRecorder, recoveryLoaded: Boolean, onShowTrack: (List<TrackPoint>) -> Unit, onFollowTrack: (GpxTrack) -> Unit) {
+fun ToolsScreen(modifier: Modifier = Modifier, settings: LocalSettings, tracker: LocationTracker, trackRecorder: TrackRecorder, trackRepository: TrackRepository, recoveryLoaded: Boolean, onShowTrack: (List<TrackPoint>) -> Unit, onFollowTrack: (GpxTrack) -> Unit) {
     val context = LocalContext.current
     val currentLocation = tracker.location?.takeIf { tracker.hasFreshFix() }
     val compass = rememberCompass(currentLocation)
@@ -59,7 +60,7 @@ fun ToolsScreen(modifier: Modifier = Modifier, settings: LocalSettings, tracker:
         PageTitle("Утилиты", "Датчики телефона. Всё работает без интернета.")
 
         GpsPanel(settings, tracker, currentLocation, context)
-        TrackRecorderPanel(context, tracker, trackRecorder, recoveryLoaded, onShowTrack, onFollowTrack)
+        TrackRecorderPanel(context, tracker, trackRecorder, trackRepository, recoveryLoaded, onShowTrack, onFollowTrack)
 
         // ----- Compass -----
         Panel(padding = 0.dp) {
@@ -203,8 +204,7 @@ fun ToolsScreen(modifier: Modifier = Modifier, settings: LocalSettings, tracker:
 }
 
 @Composable
-private fun TrackRecorderPanel(context: Context, tracker: LocationTracker, recorder: TrackRecorder, recoveryLoaded: Boolean, onShowTrack: (List<TrackPoint>) -> Unit, onFollowTrack: (GpxTrack) -> Unit) {
-    val repository = remember(context) { TrackRepository(File(context.filesDir, "tracks")) }
+private fun TrackRecorderPanel(context: Context, tracker: LocationTracker, recorder: TrackRecorder, repository: TrackRepository, recoveryLoaded: Boolean, onShowTrack: (List<TrackPoint>) -> Unit, onFollowTrack: (GpxTrack) -> Unit) {
     val scope = rememberCoroutineScope()
     var savedTracks by remember { mutableStateOf(emptyList<SavedTrackInfo>()) }
     var message by remember { mutableStateOf<String?>(null) }
