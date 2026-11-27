@@ -126,6 +126,27 @@ class ClassificationTest(unittest.TestCase):
             self.assertGreater(normal, steep)
             self.assertGreater(steep, 0.0)
 
+    def test_incline_values_preserve_forward_and_backward_direction(self):
+        generic = rg.classify_way({"highway": "residential", "incline": "12%"})
+        self.assertEqual((generic.incline_forward, generic.incline_backward), (12, -12))
+        directional = rg.classify_way({
+            "highway": "residential",
+            "incline": "5%",
+            "incline:forward": "8%",
+            "incline:backward": "-3%",
+        })
+        self.assertEqual((directional.incline_forward, directional.incline_backward), (8, -3))
+        down = rg.classify_way({"highway": "residential", "incline": "down"})
+        self.assertEqual((down.incline_forward, down.incline_backward), (-10, 10))
+
+    def test_directional_grade_changes_route_speed(self):
+        for profile in rg.PROFILES.values():
+            flat = rg.speed_mps(profile, 12, 0, 0)
+            uphill = rg.speed_mps(profile, 12, 0, 12)
+            downhill = rg.speed_mps(profile, 12, 0, -12)
+            self.assertGreater(flat, downhill)
+            self.assertGreater(downhill, uphill)
+
     def test_motorcycle_speed_is_positive_and_penalizes_rough_surfaces(self):
         paved = rg.speed_mps(rg.PROFILE_MOTORCYCLE, 12, 0)
         rough = rg.speed_mps(rg.PROFILE_MOTORCYCLE, 12, rg.FLAG_ROUGH)
@@ -153,6 +174,16 @@ class GraphBuildTest(unittest.TestCase):
         shaped = [edge for edge in data.edges if edge[3]]
         self.assertEqual(len(shaped), 1)
         self.assertEqual(sorted(data.names), ["Cross street", "Main street", "One way road"])
+
+    def test_binary_roundtrip_preserves_directional_incline(self):
+        steep_way = way([10, 11], [A, B], name="Steep road", incline="12%")
+        data = rg.build_graph([steep_way])
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / "roads.bin"
+            rg.write_graph(path, data)
+            graph = rg.Graph.load(path)
+        self.assertEqual(graph.edge_incline_percent(0, 0), 12)
+        self.assertEqual(graph.edge_incline_percent(0, 1), -12)
 
     def test_binary_roundtrip(self):
         data = rg.build_graph(sample_ways())
