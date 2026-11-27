@@ -755,6 +755,9 @@ private fun MapScreen(modifier: Modifier, settings: LocalSettings, navigation: N
                         if (showMapStylePicker) {
                             MapStylePicker(settings, expanded = mapStyleExpanded, onExpandedChange = { mapStyleExpanded = it })
                         }
+                        if (selectedTrackPoints.isNotEmpty()) {
+                            MapChip(onClick = { selectedTrackPoints = emptyList() }) { Text("Скрыть GPX-трек") }
+                        }
                     }
                 } else {
                     Column(
@@ -777,6 +780,9 @@ private fun MapScreen(modifier: Modifier, settings: LocalSettings, navigation: N
                         }
                         if (showMapStylePicker) {
                             MapStylePicker(settings, expanded = mapStyleExpanded, onExpandedChange = { mapStyleExpanded = it })
+                        }
+                        if (selectedTrackPoints.isNotEmpty()) {
+                            MapChip(onClick = { selectedTrackPoints = emptyList() }) { Text("Скрыть GPX-трек") }
                         }
                         if (showMapSearch && !mapStyleExpanded) {
                             MapViewportSearchBox(
