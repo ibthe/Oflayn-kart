@@ -1503,6 +1503,15 @@ private fun SettingsScreen(modifier: Modifier, settings: LocalSettings, onShowOn
     var isMovingMap by remember { mutableStateOf(false) }
     var storageMessage by remember { mutableStateOf<String?>(null) }
     var storageError by remember { mutableStateOf(false) }
+    var bundledHillshadeBytes by remember { mutableStateOf(0L) }
+    var installedHillshadeBytes by remember { mutableStateOf(0L) }
+    LaunchedEffect(context, settings.mapTheme) {
+        val sizes = withContext(Dispatchers.IO) {
+            DemRepository.bundledHillshadeBytes(context) to DemRepository.installedHillshadeBytes(context)
+        }
+        bundledHillshadeBytes = sizes.first
+        installedHillshadeBytes = sizes.second
+    }
     LaunchedEffect(context) {
         storageOptions = withContext(Dispatchers.IO) { MapFileRepository.availableStorageOptions(context) }
         storageOptionsLoaded = true
@@ -1706,6 +1715,22 @@ private fun SettingsScreen(modifier: Modifier, settings: LocalSettings, onShowOn
             }
             Text(
                 "На SD-карту помещаются большие офлайн-карты в папку приложения. Если карта извлечена, она станет недоступна до подключения.",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+            HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
+            Text("Офлайн-рельеф Copernicus GLO-90", style = MaterialTheme.typography.titleSmall)
+            Text(
+                if (bundledHillshadeBytes > 0L) {
+                    "Пакет в приложении: ${"%.1f".format(java.util.Locale.US, bundledHillshadeBytes / (1024.0 * 1024.0))} МБ · Во внутренней памяти: ${"%.1f".format(java.util.Locale.US, installedHillshadeBytes / (1024.0 * 1024.0))} МБ"
+                } else {
+                    "Пакет рельефа отсутствует в этой сборке."
+                },
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+            Text(
+                "HGT-данные копируются во внутреннюю память при выборе стиля Oflayn Natural. Они используются для затенения рельефа и не требуют интернета.",
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant
             )
