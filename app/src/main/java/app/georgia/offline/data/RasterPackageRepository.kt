@@ -72,7 +72,9 @@ object RasterPackageRepository {
             var tileCount = 0
             var entryCount = 0
             val zoomLevels = HashSet<Int>()
-            val seenPaths = HashSet<String>()
+            val tileExtensions = HashSet<String>()
+            var manifestSeen = false
+            var sawTile = false
             val allowedExtension = setOf("png", "jpg")
 
             val input = context.contentResolver.openInputStream(uri)
@@ -91,8 +93,9 @@ object RasterPackageRepository {
                         zip.closeEntry()
                         continue
                     }
-                    check(seenPaths.add(name)) { "В архиве повторяется файл: $name" }
                     if (name == "manifest.json") {
+                        check(!manifestSeen) { "В архиве повторяется manifest.json." }
+                        manifestSeen = true
                         val bytes = ByteArrayOutputStream()
                         val buffer = ByteArray(8192)
                         while (true) {
@@ -114,6 +117,9 @@ object RasterPackageRepository {
                         ) { "Координаты тайла вне допустимого диапазона: $name" }
                         zoomLevels += tile.zoom
                         val destination = File(temporary, name)
+                        check(!destination.exists()) { "В архиве повторяется файл: $name" }
+                        tileExtensions += tile.extension
+                        sawTile = true
                         val canonicalRoot = temporary.canonicalFile
                         check(destination.canonicalFile.path.startsWith(canonicalRoot.path + File.separator)) {
                             "Путь тайла выходит за пределы пакета."
@@ -161,10 +167,9 @@ object RasterPackageRepository {
             check(tileCount == manifest.tileCount) {
                 "Количество тайлов не совпадает с манифестом: найдено $tileCount, заявлено ${manifest.tileCount}."
             }
-            check(seenPaths.any { it.startsWith("tiles/") }) { "Пакет не содержит тайлов." }
-            check(seenPaths.filter { it.startsWith("tiles/") }.all {
-                it.endsWith(".${manifest.extension}")
-            }) { "Расширение файлов не совпадает с манифестом." }
+            check(sawTile && tileExtensions.size == 1 && tileExtensions.single() == manifest.extension) {
+                "Пакет не содержит тайлов или расширение файлов не совпадает с манифестом."
+            }
 
             File(temporary, "manifest.json").writeBytes(rawManifest)
             val id = UUID.randomUUID().toString()
@@ -268,7 +273,7 @@ object RasterPackageRepository {
         val dot = filename.lastIndexOf('.')
         if (dot <= 0) return null
         val y = filename.substring(0, dot).toIntOrNull() ?: return null
-        val extension = filename.substring(dot + 1).lowercase()
+        val extension = filename.substring(dot + 1)
         if (extension !in extensions) return null
         return TilePath(zoom, x, y, extension)
     }
