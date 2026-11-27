@@ -92,6 +92,11 @@ class PoiSearchRankingTest {
                 corridorMeters = 2_500.0
             )
             assertEquals(listOf("near-start", "near-end"), results.map { it.poiId })
+
+            // Dense road geometry must still create a bounded number of SQLite query windows.
+            val denseRoute = List(2_000) { index -> 41.7 to (44.8 + index * 0.00001) }
+            val denseResults = PoiRepository.searchAlongRoute(databaseFile, "", denseRoute)
+            assertEquals(listOf("near-start", "near-end"), denseResults.map { it.poiId })
         } finally {
             database.close()
             databaseFile.delete()
