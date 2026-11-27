@@ -49,9 +49,6 @@ class LocalSettings(context: Context) {
     )
         private set
 
-    var storageTreeUri by mutableStateOf(preferences.getString("storage_tree_uri", null))
-        private set
-
     var mapFilePath by mutableStateOf(preferences.getString("map_file_path", null))
         private set
 
