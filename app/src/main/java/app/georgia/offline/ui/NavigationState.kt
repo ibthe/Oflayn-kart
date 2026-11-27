@@ -61,9 +61,17 @@ class NavigationState {
      */
     fun chooseMapPoint(name: String, latitude: Double, longitude: Double) {
         val point = NavigationTarget(name, latitude, longitude)
+        val editingExistingPlan = routeMenuVisible && target != null
         when (pointSelection) {
             RoutePointRole.START -> origin = point
-            RoutePointRole.DESTINATION, null -> target = point
+            RoutePointRole.DESTINATION -> target = point
+            null -> {
+                target = point
+                // A long-press from the normal map starts a fresh destination flow.
+                // When the planner is already open, changing its destination keeps
+                // the explicitly arranged intermediate stops.
+                if (!editingExistingPlan) viaPoints.clear()
+            }
         }
         pointSelection = null
         selectedPlaceId = null
