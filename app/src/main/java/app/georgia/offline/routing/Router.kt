@@ -36,11 +36,13 @@ class Router(private val graph: RoadGraph) {
         val steps = ArrayList<RouteStep>()
         var duration = 0.0
         var distanceOffset = 0.0
+        val warnings = linkedSetOf<String>()
         for (legIndex in 0 until points.lastIndex) {
             val from = points[legIndex]
             val to = points[legIndex + 1]
             val result = route(profile, from.first, from.second, to.first, to.second)
             val leg = result.route ?: return RouteResult.failed(result.failure ?: RouteFailure.NO_PATH)
+            warnings.addAll(leg.warnings)
             val firstPoint = if (legIndex == 0) 0 else 1
             for (i in firstPoint until leg.pointCount) {
                 geometry.add(leg.lat(i))
@@ -69,7 +71,7 @@ class Router(private val graph: RoadGraph) {
                 ))
             }
         }
-        return RouteResult.found(Route(profile, geometry.toDoubleArray(), duration, steps))
+        return RouteResult.found(Route(profile, geometry.toDoubleArray(), duration, steps, warnings.toList()))
     }
 
     @Synchronized
@@ -258,7 +260,19 @@ class Router(private val graph: RoadGraph) {
             for (i in first until piece.points.size / 2) all.add(piece.points[2 * i], piece.points[2 * i + 1])
         }
         val steps = buildSteps(profile, pieces)
-        return RouteResult.found(Route(profile, all.toArray(), seconds, steps))
+        val usedFlags = pieces.fold(0) { flags, piece -> flags or graph.edgeFlags(piece.edge) }
+        val warnings = buildList {
+            if (usedFlags and RoadGraph.FLAG_UNPAVED != 0) {
+                add("Маршрут включает грунтовые или неасфальтированные участки.")
+            }
+            if (usedFlags and RoadGraph.FLAG_ROUGH != 0) {
+                add("Есть участки с плохим качеством покрытия.")
+            }
+            if (usedFlags and RoadGraph.FLAG_SEVERE != 0) {
+                add("Есть очень сложные участки. Даже 4×4 не гарантирует фактическую проходимость.")
+            }
+        }
+        return RouteResult.found(Route(profile, all.toArray(), seconds, steps, warnings))
     }
 
     private fun speed(profile: RoutingProfile, e: Int): Double = profile.speedMps(graph.edgeClass(e), graph.edgeFlags(e))
