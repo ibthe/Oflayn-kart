@@ -74,7 +74,8 @@ internal fun DiscoverScreen(
     tripPlanRepository: TripPlanRepository,
     tripPlanRevision: Int,
     onNavigate: (String, Double, Double) -> Unit,
-    onPlanRoute: (List<PoiRepository.PoiRecord>) -> Unit
+    onPlanRoute: (List<PoiRepository.PoiRecord>) -> Unit,
+    onTripPlanChanged: () -> Unit
 ) {
     val context = LocalContext.current
     val language = settings.language
@@ -174,6 +175,7 @@ internal fun DiscoverScreen(
                 onRemove = { id ->
                     tripPlanRepository.remove(id)
                     tripStops = tripPlanRepository.list()
+                    onTripPlanChanged()
                 }
             )
         } else {
@@ -249,6 +251,7 @@ internal fun DiscoverScreen(
                             if (tripPlanRepository.add(poi.poiId)) {
                                 tripStops = tripPlanRepository.list()
                                 tripPois = (tripPois + poi).distinctBy { it.poiId }
+                                onTripPlanChanged()
                                 statusMessage = "Добавлено в план поездки."
                             } else {
                                 statusMessage = "Это место уже есть в плане."
