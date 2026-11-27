@@ -199,7 +199,7 @@ fun MapsforgeMapSurface(
                                 pendingHillDataStore = hillDataStore
                                 val hillCache = AndroidUtil.createTileCache(
                                     viewContext,
-                                    "georgia-offline-hillshade-cache",
+                                    "georgia-offline-hillshade-${hillshadeDirectory.name}",
                                     model.displayModel.tileSize,
                                     1f,
                                     model.frameBufferModel.overdrawFactor
