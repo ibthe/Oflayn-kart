@@ -101,6 +101,7 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import java.io.File
 import app.georgia.offline.data.LocalSettings
+import app.georgia.offline.data.DemRepository
 import app.georgia.offline.data.MapFileRepository
 import app.georgia.offline.data.MapStorageOption
 import app.georgia.offline.data.PoiRepository
@@ -148,6 +149,23 @@ fun GeorgiaOfflineApp(settings: LocalSettings) {
         if (recovery != null) trackRecorder.restore(recovery)
         recoveryLoaded = true
     }
+    // Recording follows fresh foreground GPS fixes and survives tab switches.
+    val fix = tracker.location?.takeIf { tracker.hasFreshFix() }
+    LaunchedEffect(fix, trackRecorder.recording) {
+        if (trackRecorder.recording && fix != null) {
+            trackRecorder.addFix(fix)
+            trackRecorder.checkpointIfDue(fix.elapsedRealtimeNanos)?.let { checkpoint ->
+                val generation = trackRecorder.checkpointGeneration
+                coroutineScope.launch(Dispatchers.IO) {
+                    trackRepository.saveRecovery(checkpoint) {
+                        trackRecorder.checkpointGeneration == generation
+                    }
+                }
+            }
+        }
+    }
+    // Route state and its lifecycle belong to the app, not to the currently selected tab.
+    val routeSession = remember { RouteSession() }
     LaunchedEffect(routeSession.route) {
         val activeRoute = routeSession.route
         if (activeRoute == null) {
@@ -171,23 +189,6 @@ fun GeorgiaOfflineApp(settings: LocalSettings) {
             }
         }
     }
-    // Recording follows fresh foreground GPS fixes and survives tab switches.
-    val fix = tracker.location?.takeIf { tracker.hasFreshFix() }
-    LaunchedEffect(fix, trackRecorder.recording) {
-        if (trackRecorder.recording && fix != null) {
-            trackRecorder.addFix(fix)
-            trackRecorder.checkpointIfDue(fix.elapsedRealtimeNanos)?.let { checkpoint ->
-                val generation = trackRecorder.checkpointGeneration
-                coroutineScope.launch(Dispatchers.IO) {
-                    trackRepository.saveRecovery(checkpoint) {
-                        trackRecorder.checkpointGeneration == generation
-                    }
-                }
-            }
-        }
-    }
-    // Route state and its lifecycle belong to the app, not to the currently selected tab.
-    val routeSession = remember { RouteSession() }
     val speaker = remember { Speaker(context) }
     DisposableEffect(Unit) { onDispose { speaker.shutdown() } }
     val hostView = LocalView.current
