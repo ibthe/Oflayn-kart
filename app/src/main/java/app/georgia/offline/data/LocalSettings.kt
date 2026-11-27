@@ -21,8 +21,9 @@ class LocalSettings(context: Context) {
     var language by mutableStateOf(readLanguage())
         private set
 
-    /** Compatibility view for the map language resolver; the current UI selects exactly one language. */
-    val enabledLanguages: Set<String> get() = setOf(language)
+    /** Languages rendered on the map are independent from the language used in place lists. */
+    var mapLanguages by mutableStateOf(readMapLanguages())
+        private set
 
     /** Chosen colour family id. */
     var palette by mutableStateOf(
@@ -70,6 +71,16 @@ class LocalSettings(context: Context) {
         if (code !in SUPPORTED_LANGUAGES) return
         language = code
         preferences.edit().putString("language", code).apply()
+    }
+
+    fun updateMapLanguage(code: String, enabled: Boolean) {
+        if (code !in SUPPORTED_LANGUAGES) return
+        val updated = mapLanguages.toMutableSet().apply {
+            if (enabled) add(code) else remove(code)
+        }
+        if (updated == mapLanguages) return
+        mapLanguages = updated
+        preferences.edit().putStringSet("map_languages", updated).apply()
     }
 
     fun updatePalette(value: String) {
@@ -218,6 +229,12 @@ class LocalSettings(context: Context) {
         preferences.getString("language", null)?.takeIf { it in SUPPORTED_LANGUAGES }?.let { return it }
         // Versions before 0.8 let several languages be switched on at once; keep the first of them.
         return listOf("ru", "en", "ka").firstOrNull { preferences.getBoolean("language_$it", true) } ?: "ru"
+    }
+
+    private fun readMapLanguages(): Set<String> {
+        val stored = preferences.getStringSet("map_languages", null)
+        if (stored != null) return stored.filterTo(linkedSetOf()) { it in SUPPORTED_LANGUAGES }
+        return setOf(readLanguage())
     }
 
     private fun readThemeMode(): String {
