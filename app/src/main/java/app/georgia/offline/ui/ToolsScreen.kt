@@ -76,9 +76,13 @@ private fun readDeviceStatus(context: Context): DeviceStatus {
         batteryStatus == BatteryManager.BATTERY_STATUS_FULL
     val internetAvailable = runCatching {
         val connectivity = context.getSystemService(Context.CONNECTIVITY_SERVICE) as? ConnectivityManager
-        val network = connectivity?.activeNetwork
-        val capabilities = network?.let { connectivity.getNetworkCapabilities(it) }
-        capabilities?.hasCapability(NetworkCapabilities.NET_CAPABILITY_VALIDATED) == true
+        if (connectivity == null) {
+            null
+        } else {
+            val network = connectivity.activeNetwork
+            val capabilities = network?.let(connectivity::getNetworkCapabilities)
+            capabilities?.hasCapability(NetworkCapabilities.NET_CAPABILITY_VALIDATED) == true
+        }
     }.getOrNull()
     return DeviceStatus(percent, charging, internetAvailable)
 }
