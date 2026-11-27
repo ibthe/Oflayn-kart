@@ -26,7 +26,7 @@ class TrackRepository(private val directory: File) {
         return id
     }
 
-    fun load(id: String): GpxTrack = GpxCodec.parse(fileFor(id).inputStream())
+    fun load(id: String): GpxTrack = fileFor(id).inputStream().use { GpxCodec.parse(it) }
 
     fun list(): List<SavedTrackInfo> {
         if (!directory.isDirectory) return emptyList()
@@ -34,7 +34,7 @@ class TrackRepository(private val directory: File) {
             .orEmpty()
             .mapNotNull { file ->
                 runCatching {
-                    val track = GpxCodec.parse(file.inputStream(), file.nameWithoutExtension)
+                    val track = file.inputStream().use { GpxCodec.parse(it, file.nameWithoutExtension) }
                     SavedTrackInfo(file.nameWithoutExtension, track.name, track.pointCount, file.lastModified())
                 }.getOrNull()
             }
