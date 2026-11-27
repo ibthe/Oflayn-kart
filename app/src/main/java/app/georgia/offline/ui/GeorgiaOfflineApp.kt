@@ -1668,7 +1668,7 @@ private fun SettingsScreen(modifier: Modifier, settings: LocalSettings, onShowOn
             color = MaterialTheme.colorScheme.onSurfaceVariant
         )
         Text(
-            "Высоты: Copernicus WorldDEM-90, 90 м. Produced using Copernicus WorldDEM-90 © DLR e.V. 2010–2014 and © Airbus Defence and Space GmbH 2014–2018, provided under COPERNICUS by the European Union and ESA; all rights reserved. Модель включает здания и растительность и не измеряет точную высоту дорожного покрытия.",
+            "Высоты: Copernicus WorldDEM-90, 90 м. Produced using Copernicus WorldDEM-90 © DLR e.V. 2010–2014 and © Airbus Defence and Space GmbH 2014–2018, provided under COPERNICUS by the European Union and ESA; all rights reserved. Высоты указаны относительно геоида EGM2008. Модель включает здания и растительность и не измеряет точную высоту дорожного покрытия.",
             modifier = Modifier.padding(horizontal = Space.xs, vertical = Space.xs),
             style = MaterialTheme.typography.bodySmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant
