@@ -76,7 +76,10 @@ def main() -> int:
         dem_total_size = 0
         hgt_total_size = 0
         for tile in dem_tiles:
-            dem_entry = f"assets/dem/{tile.get('file', '')}"
+            # AAPT2 removes the trailing .gz from pre-compressed asset names while preserving bytes.
+            source_dem_file = tile.get("file", "")
+            packaged_dem_file = source_dem_file.removesuffix(".gz")
+            dem_entry = f"assets/dem/{packaged_dem_file}"
             if dem_entry not in entries:
                 available_dem = sorted(name for name in entries if name.startswith("assets/dem/"))
                 print(f"ERROR: APK is missing DEM tile {dem_entry}; available DEM entries: {available_dem[:30]!r}.", file=sys.stderr)
