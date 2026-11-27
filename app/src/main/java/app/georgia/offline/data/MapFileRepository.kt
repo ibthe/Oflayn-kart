@@ -27,7 +27,20 @@ data class MapStorageOption(
 object MapFileRepository {
     const val INTERNAL_STORAGE_ID = "internal"
 
-    fun availableStorageOptions(context: Context): List<MapStorageOption> {
+    fun availableStorageOptions(context: Context): List<MapStorageOption> =
+        availableStorageOptions(
+            context,
+            context.getExternalFilesDirs(null),
+            Environment::isExternalStorageRemovable,
+            Environment::getExternalStorageState
+        )
+
+    internal fun availableStorageOptions(
+        context: Context,
+        externalDirectories: Array<File?>,
+        isRemovable: (File) -> Boolean,
+        storageState: (File) -> String
+    ): List<MapStorageOption> {
         val internalDirectory = File(context.filesDir, "maps")
         val options = mutableListOf(
             MapStorageOption(
@@ -39,10 +52,8 @@ object MapFileRepository {
                 removable = false
             )
         )
-        context.getExternalFilesDirs(null).filterNotNull().forEach { appDirectory ->
-            if (Environment.isExternalStorageRemovable(appDirectory) &&
-                Environment.getExternalStorageState(appDirectory) == Environment.MEDIA_MOUNTED
-            ) {
+        externalDirectories.filterNotNull().forEach { appDirectory ->
+            if (isRemovable(appDirectory) && storageState(appDirectory) == Environment.MEDIA_MOUNTED) {
                 val mapDirectory = File(appDirectory, "maps")
                 options += MapStorageOption(
                     appDirectory.absolutePath,
@@ -56,6 +67,7 @@ object MapFileRepository {
         }
         return options
     }
+
     private const val BUNDLED_ASSET = "offline/georgia.map"
     private const val BUNDLED_MANIFEST = "offline/georgia-map-build.json"
     private const val MINIMUM_MAP_BYTES = 1024L
