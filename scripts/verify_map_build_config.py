@@ -36,6 +36,8 @@ MAP_SURFACE = ROOT / "app/src/main/java/app/georgia/offline/ui/MapsforgeMapSurfa
 TERRAIN_REPOSITORY = ROOT / "app/src/main/java/app/georgia/offline/data/TerrainRepository.kt"
 CONTOUR_THEME_LIGHT = ROOT / "app/src/main/assets/themes/oflayn-contours-light.xml"
 CONTOUR_THEME_DARK = ROOT / "app/src/main/assets/themes/oflayn-contours-dark.xml"
+ANDROID_MANIFEST = ROOT / "app/src/main/AndroidManifest.xml"
+TOOLS_SCREEN = ROOT / "app/src/main/java/app/georgia/offline/ui/ToolsScreen.kt"
 
 EXPECTED_MIRROR = "https://download.openstreetmap.fr/extracts/asia/georgia.osm.pbf"
 EXPECTED_MIRROR_MD5 = "https://download.openstreetmap.fr/extracts/asia/georgia.osm.pbf.md5"
@@ -52,7 +54,7 @@ def fail(message: str) -> int:
 
 
 def main() -> int:
-    required = (MAP_SCRIPT, PBF_PREP_SCRIPT, WRITER_SCRIPT, WORKFLOW, DATA_SOURCES, SMOKE_FIXTURE, BUNDLE_MANIFEST, POI_BUILDER, POI_VERIFIER, POI_TESTS, POI_SMOKE_TEST, POI_SMOKE_FIXTURE, PBF_CACHE_TEST, APP_BUILD, POI_REPOSITORY, POI_UI, DEM_BUILDER, DEM_VERIFIER, DEM_TESTS, APK_VERIFIER, DEM_REPOSITORY, MAP_SURFACE, CONTOUR_BUILDER, CONTOUR_TESTS, CONTOUR_MAP_BUILDER, CONTOUR_MAP_VERIFIER, TERRAIN_REPOSITORY, CONTOUR_THEME_LIGHT, CONTOUR_THEME_DARK)
+    required = (MAP_SCRIPT, PBF_PREP_SCRIPT, WRITER_SCRIPT, WORKFLOW, DATA_SOURCES, SMOKE_FIXTURE, BUNDLE_MANIFEST, POI_BUILDER, POI_VERIFIER, POI_TESTS, POI_SMOKE_TEST, POI_SMOKE_FIXTURE, PBF_CACHE_TEST, APP_BUILD, POI_REPOSITORY, POI_UI, DEM_BUILDER, DEM_VERIFIER, DEM_TESTS, APK_VERIFIER, DEM_REPOSITORY, MAP_SURFACE, CONTOUR_BUILDER, CONTOUR_TESTS, CONTOUR_MAP_BUILDER, CONTOUR_MAP_VERIFIER, TERRAIN_REPOSITORY, CONTOUR_THEME_LIGHT, CONTOUR_THEME_DARK, ANDROID_MANIFEST, TOOLS_SCREEN)
     for path in required:
         if not path.is_file():
             return fail(f"required build file is missing: {path.relative_to(ROOT)}")
@@ -80,6 +82,8 @@ def main() -> int:
     contour_map_builder = CONTOUR_MAP_BUILDER.read_text(encoding="utf-8")
     contour_map_verifier = CONTOUR_MAP_VERIFIER.read_text(encoding="utf-8")
     terrain_repository = TERRAIN_REPOSITORY.read_text(encoding="utf-8")
+    android_manifest = ANDROID_MANIFEST.read_text(encoding="utf-8")
+    tools_screen = TOOLS_SCREEN.read_text(encoding="utf-8")
     data_sources = DATA_SOURCES.read_text(encoding="utf-8")
     try:
         bundle_manifest = json.loads(BUNDLE_MANIFEST.read_text(encoding="utf-8"))
@@ -347,6 +351,14 @@ def main() -> int:
             return fail(f"POI database verification is missing relation/dedup metadata: {token}.")
     if "poiDeduplication" not in map_script or "poiDuplicatesRemoved" not in map_script:
         return fail("The generated map manifest must record POI deduplication coverage.")
+
+
+    if 'android.permission.INTERNET" tools:node="remove"' not in android_manifest:
+        return fail("The app must not request INTERNET permission.")
+    if 'android.permission.ACCESS_NETWORK_STATE" />' not in android_manifest:
+        return fail("The app may read network status but must not gain network traffic access.")
+    if "DeviceStatusPanel" not in tools_screen or "BatteryManager" not in tools_screen or "NET_CAPABILITY_VALIDATED" not in tools_screen:
+        return fail("Rider tools must expose on-device battery and connectivity diagnostics.")
 
     if "continue-on-error: true" in workflow:
         return fail("map preparation must fail fast; do not hide failed prerequisites.")
