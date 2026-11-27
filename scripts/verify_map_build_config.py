@@ -47,6 +47,8 @@ ROUTING_PROFILE = ROOT / "app/src/main/java/app/georgia/offline/routing/RoutingP
 ROAD_TESTS = ROOT / "scripts/test_build_road_graph.py"
 ROUTING_PROFILE_TESTS = ROOT / "app/src/test/java/app/georgia/offline/routing/RoutingProfileTest.kt"
 TINY_ROAD_GRAPH = ROOT / "app/src/test/resources/tiny-roads.bin"
+TINY_TURN_GRAPH = ROOT / "app/src/test/resources/tiny-turns.bin"
+TINY_ONLY_TURN_GRAPH = ROOT / "app/src/test/resources/tiny-only-turns.bin"
 
 EXPECTED_MIRROR = "https://download.openstreetmap.fr/extracts/asia/georgia.osm.pbf"
 EXPECTED_MIRROR_MD5 = "https://download.openstreetmap.fr/extracts/asia/georgia.osm.pbf.md5"
@@ -63,7 +65,7 @@ def fail(message: str) -> int:
 
 
 def main() -> int:
-    required = (MAP_SCRIPT, PBF_PREP_SCRIPT, WRITER_SCRIPT, WORKFLOW, DATA_SOURCES, SMOKE_FIXTURE, BUNDLE_MANIFEST, POI_BUILDER, POI_VERIFIER, POI_TESTS, POI_SMOKE_TEST, POI_SMOKE_FIXTURE, PBF_CACHE_TEST, APP_BUILD, POI_REPOSITORY, POI_UI, DEM_BUILDER, DEM_VERIFIER, DEM_TESTS, APK_VERIFIER, DEM_REPOSITORY, MAP_SURFACE, CONTOUR_BUILDER, CONTOUR_TESTS, CONTOUR_MAP_BUILDER, CONTOUR_MAP_VERIFIER, TERRAIN_REPOSITORY, CONTOUR_THEME_LIGHT, CONTOUR_THEME_DARK, ANDROID_MANIFEST, TOOLS_SCREEN, MAP_ZOOM_POLICY, MAP_ZOOM_TESTS, ROAD_FORMAT, ROAD_GRAPH_READER, ROAD_ROUTER, ROUTING_PROFILE, ROAD_TESTS, ROUTING_PROFILE_TESTS, TINY_ROAD_GRAPH)
+    required = (MAP_SCRIPT, PBF_PREP_SCRIPT, WRITER_SCRIPT, WORKFLOW, DATA_SOURCES, SMOKE_FIXTURE, BUNDLE_MANIFEST, POI_BUILDER, POI_VERIFIER, POI_TESTS, POI_SMOKE_TEST, POI_SMOKE_FIXTURE, PBF_CACHE_TEST, APP_BUILD, POI_REPOSITORY, POI_UI, DEM_BUILDER, DEM_VERIFIER, DEM_TESTS, APK_VERIFIER, DEM_REPOSITORY, MAP_SURFACE, CONTOUR_BUILDER, CONTOUR_TESTS, CONTOUR_MAP_BUILDER, CONTOUR_MAP_VERIFIER, TERRAIN_REPOSITORY, CONTOUR_THEME_LIGHT, CONTOUR_THEME_DARK, ANDROID_MANIFEST, TOOLS_SCREEN, MAP_ZOOM_POLICY, MAP_ZOOM_TESTS, ROAD_FORMAT, ROAD_GRAPH_READER, ROAD_ROUTER, ROUTING_PROFILE, ROAD_TESTS, ROUTING_PROFILE_TESTS, TINY_ROAD_GRAPH, TINY_TURN_GRAPH, TINY_ONLY_TURN_GRAPH)
     for path in required:
         if not path.is_file():
             return fail(f"required build file is missing: {path.relative_to(ROOT)}")
@@ -102,6 +104,8 @@ def main() -> int:
     road_tests = ROAD_TESTS.read_text(encoding="utf-8")
     routing_profile_tests = ROUTING_PROFILE_TESTS.read_text(encoding="utf-8")
     tiny_road_graph = TINY_ROAD_GRAPH.read_bytes()
+    tiny_turn_graph = TINY_TURN_GRAPH.read_bytes()
+    tiny_only_turn_graph = TINY_ONLY_TURN_GRAPH.read_bytes()
     data_sources = DATA_SOURCES.read_text(encoding="utf-8")
     try:
         bundle_manifest = json.loads(BUNDLE_MANIFEST.read_text(encoding="utf-8"))
@@ -297,7 +301,7 @@ def main() -> int:
 
     if "scripts/verify_map_build_config.py" not in workflow:
         return fail("workflow must run the map builder preflight before the expensive steps.")
-    for token in ("scripts/test_build_road_graph.py", "scripts/build_road_graph.py", "scripts/verify_road_graph.py", "georgia-roads-v5-"):
+    for token in ("scripts/test_build_road_graph.py", "scripts/build_road_graph.py", "scripts/verify_road_graph.py", "georgia-roads-v6-"):
         if token not in workflow:
             return fail(f"workflow must build, verify and cache the optional road graph ({token} is missing).")
 
@@ -392,8 +396,16 @@ def main() -> int:
         return fail("Map zoom policy regression tests are missing.")
 
 
-    if "FORMAT_VERSION = 2" not in road_format or "const val FORMAT_VERSION = 2" not in road_graph_reader:
-        return fail("Road graph builder and Android reader must agree on directional-incline format version 2.")
+    if "FORMAT_VERSION = 3" not in road_format or "const val FORMAT_VERSION = 3" not in road_graph_reader:
+        return fail("Road graph builder and Android reader must agree on turn-aware format version 3.")
+    for token in ("TURN_STRUCT", "TURN_NO", "TURN_ONLY", "turn_restrictions", "def turn_allowed"):
+        if token not in road_format:
+            return fail(f"Road graph format is missing turn restriction support: {token}.")
+    if "turnAllowed" not in road_graph_reader or "TURN_RECORD_SIZE = 8" not in road_graph_reader or "graph.turnAllowed" not in road_router:
+        return fail("Android routing must enforce incoming/outgoing OSM turn transitions.")
+    for token in ("test_no_turn_restriction_forces_a_detour", "test_only_turn_restriction_keeps_the_allowed_exit", "test_via_way_is_counted_as_unsupported_not_silently_misapplied"):
+        if token not in road_tests:
+            return fail(f"OSM turn restriction regression coverage is missing: {token}.")
     for token in ("def _incline_pair", "incline_forward", "incline_backward", "edge_incline_percent"):
         if token not in road_format:
             return fail(f"Road graph format is missing directional incline support: {token}.")
@@ -405,17 +417,24 @@ def main() -> int:
     if "uphillIsSlowerThanDownhillAndFlatForEveryProfile" not in routing_profile_tests:
         return fail("Android routing profile grade-cost regression tests are missing.")
 
-    if "georgia-roads-v5-" not in workflow or 'python3 scripts/verify_road_graph.py "$roads"' not in workflow:
+    if "georgia-roads-v6-" not in workflow or 'python3 scripts/verify_road_graph.py "$roads"' not in workflow:
         return fail("CI must invalidate legacy road graphs and validate restored graph format before bundling.")
 
 
-    if len(tiny_road_graph) < 64 or tiny_road_graph[:4] != b"GRT1" or int.from_bytes(tiny_road_graph[4:8], "little") != 2:
-        return fail("Kotlin routing test fixture must use road graph format version 2.")
+    if len(tiny_road_graph) < 64 or tiny_road_graph[:4] != b"GRT1" or int.from_bytes(tiny_road_graph[4:8], "little") != 3:
+        return fail("Kotlin routing test fixture must use road graph format version 3.")
+    for label, fixture in (("no-turn", tiny_turn_graph), ("only-turn", tiny_only_turn_graph)):
+        if len(fixture) < 64 or fixture[:4] != b"GRT1" or int.from_bytes(fixture[4:8], "little") != 3:
+            return fail(f"Kotlin {label} fixture must use road graph format version 3.")
+        if int.from_bytes(fixture[48:52], "little") <= 0:
+            return fail(f"Kotlin {label} fixture must contain encoded turn restrictions.")
+    if "scripts/make_road_graph_fixture.py" not in workflow:
+        return fail("CI must regenerate the versioned Kotlin road graph fixtures before unit tests.")
 
     if "continue-on-error: true" in workflow:
         return fail("map preparation must fail fast; do not hide failed prerequisites.")
 
-    print("OK: OSM sources, resumable PBF cache, Mapsforge writer, PyOsmium extraction, local SQLite search, motorcycle/grade routing, DEM/HGT hillshading and offline APK assets are configured.")
+    print("OK: OSM sources, resumable PBF cache, Mapsforge writer, PyOsmium extraction, local SQLite search, turn-aware motorcycle/grade routing, DEM/HGT hillshading and offline APK assets are configured.")
     return 0
 
 
