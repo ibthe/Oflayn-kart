@@ -8,7 +8,7 @@ Compose UI
        ├── PoiRepository ── local SQLite substring search
        ├── OfflineRouter ── local memory-mapped A* graph (car / 4×4 / bike / foot)
        ├── ElevationProvider ── planned local DEM / hillshade
-       ├── TrackRecorder ── planned Android Location + SensorManager
+       ├── TrackRecorder ── foreground GPS fix filter + private GPX file repository
        ├── UserRepository ── planned local SQLite/Room
        └── StorageBackend ── app-private storage; SAF SD-card backend planned
 
@@ -41,6 +41,13 @@ APK assets
 - Mapsforge is the map renderer and map format. `MapsforgeMapSurface` uses a single `MapFile` for one selected map-label language or a `MultiMapDataStore` of language-specific `MapFile` readers when multiple map-label languages are enabled. Routing currently uses a compact, memory-mapped A* road graph with four travel profiles; BRouter remains a comparison candidate, not an assumed replacement.
 - Language variants are requested from the writer as `en,ru,ka`; a name variant is stored only if the corresponding OSM tag exists. There is no automatic translation. The user independently enables map-label languages; Mapsforge `MultiMapDataStore(RETURN_ALL)` combines one reader per enabled language so the renderer can place labels from all selected variants. The language used in place lists is a separate preference.
 - The SD-folder picker is present, but direct map extraction to external SAF storage is not implemented yet. An explicit map-disable setting is persisted across launches, users can restore the APK-bundled map, and the repository checks free space before copying a large asset.
+
+## GPX tracks and foreground recorder
+
+- `GpxCodec` securely parses GPX 1.1 track/route points with coordinate validation and external-entity protections, and exports standards-compliant GPX.
+- `TrackRecorder` collects only fresh foreground GPS fixes, filters poor accuracy and near-duplicate points, and keeps recording state at the app root so tab changes do not stop it.
+- `TrackRepository` stores imported and recorded GPX files in app-private storage. Import/export uses Android's Storage Access Framework document pickers.
+- Background location is intentionally not requested. Recording pauses when the app leaves the foreground; crash-safe incremental recovery and follow-track navigation remain to be implemented.
 
 ## GPS tools (0.2.0)
 
@@ -85,7 +92,7 @@ APK assets
 - Expand POI coverage to relation-only objects, geometry-aware multipolygon centroids, additional categories, amenity details and opening-hours fields; consider optional FTS after device compatibility checks.
 - Routing turn restrictions, grade-aware costs and user-facing road-quality warnings; compare current engine with BRouter.
 - DEM, contours, elevation profiles and hillshade data.
-- GPX track recording, trip planner, guidebook, expanded safety functions.
+- Follow-track navigation, crash-safe track recording recovery, trip planner, guidebook and expanded safety functions.
 - Real SD-card map storage and low-space handling.
 
 
