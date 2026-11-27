@@ -39,6 +39,19 @@ def main() -> None:
     )
     assert encoded_masked.tolist() == [10, DEM.NODATA]
 
+    hgt_values = np.full((DEM.TILE_PIXELS, DEM.TILE_PIXELS), 120.0, dtype=np.float64)
+    hgt_values[-1, -1] = 245.0
+    hgt_mask = np.zeros_like(hgt_values, dtype=bool)
+    hgt_mask[0, 0] = True
+    hgt_raw = DEM.encode_hgt(hgt_values, hgt_mask)
+    assert len(hgt_raw) == 1201 * 1201 * 2
+    hgt = np.frombuffer(hgt_raw, dtype=">i2").reshape((1201, 1201))
+    assert hgt[0, 0] == DEM.NODATA
+    assert hgt[0, 1] == 120
+    assert hgt[-1, 0] == 120
+    assert hgt[0, -1] == 120
+    assert hgt[-1, -1] == 245
+
     try:
         DEM.tile_range((43.0, 40.0, 41.0, 45.0))
     except ValueError:
@@ -46,7 +59,7 @@ def main() -> None:
     else:
         raise AssertionError("Invalid DEM bounding box was accepted.")
 
-    print("OK: Copernicus tile naming, Georgia coverage, no-data handling and int16 encoding.")
+    print("OK: Copernicus tile naming, Georgia coverage, no-data handling, DEM encoding and HGT hillshade encoding.")
 
 
 if __name__ == "__main__":
