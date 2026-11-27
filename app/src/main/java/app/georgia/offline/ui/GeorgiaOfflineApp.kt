@@ -103,6 +103,7 @@ import java.io.File
 import app.georgia.offline.data.LocalSettings
 import app.georgia.offline.data.MapFileRepository
 import app.georgia.offline.data.PoiRepository
+import app.georgia.offline.data.TrackRepository
 import app.georgia.offline.routing.TrackRouteBuilder
 import app.georgia.offline.domain.PoiLabels
 import app.georgia.offline.domain.GeoFormatting
@@ -133,11 +134,24 @@ fun GeorgiaOfflineApp(settings: LocalSettings) {
     val navigation = remember { NavigationState() }
     val tracker = rememberLocationTracker()
     val trackRecorder = remember { TrackRecorder() }
+    val trackRepository = remember(context) { TrackRepository(File(context.filesDir, "tracks")) }
+    var recoveryLoaded by remember { mutableStateOf(false) }
     var selectedTrackPoints by remember { mutableStateOf<List<LatLong>>(emptyList()) }
+    val coroutineScope = rememberCoroutineScope()
+    LaunchedEffect(Unit) {
+        val recovery = withContext(Dispatchers.IO) { trackRepository.loadRecovery() }
+        if (recovery != null) trackRecorder.restore(recovery)
+        recoveryLoaded = true
+    }
     // Recording follows fresh foreground GPS fixes and survives tab switches.
     val fix = tracker.location?.takeIf { tracker.hasFreshFix() }
     LaunchedEffect(fix, trackRecorder.recording) {
-        if (trackRecorder.recording && fix != null) trackRecorder.addFix(fix)
+        if (trackRecorder.recording && fix != null) {
+            trackRecorder.addFix(fix)
+            trackRecorder.checkpointIfDue(fix.elapsedRealtimeNanos)?.let { checkpoint ->
+                coroutineScope.launch(Dispatchers.IO) { trackRepository.saveRecovery(checkpoint) }
+            }
+        }
     }
     // Route state and its lifecycle belong to the app, not to the currently selected tab.
     val routeSession = remember { RouteSession() }
@@ -155,7 +169,6 @@ fun GeorgiaOfflineApp(settings: LocalSettings) {
     }
 
     // Keep GPS progress, voice prompts, arrival detection and rerouting alive across tab changes.
-    val coroutineScope = rememberCoroutineScope()
     LaunchedEffect(fix, routeSession.navigating, navigation.target, routeSession.followingTrack) {
         val target = navigation.target
         if (!routeSession.navigating || fix == null) return@LaunchedEffect
@@ -235,6 +248,7 @@ fun GeorgiaOfflineApp(settings: LocalSettings) {
                                 settings,
                                 tracker,
                                 trackRecorder,
+                                recoveryLoaded = recoveryLoaded,
                                 onShowTrack = { points ->
                                     selectedTrackPoints = points.map { LatLong(it.latitude, it.longitude) }
                                     routeSession.fitToken++
