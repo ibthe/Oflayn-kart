@@ -437,7 +437,7 @@ private fun PlaceRow(
                         )
                     }
                 }
-                TextButton(onClick = onAddToTrip, enabled = !inTrip) {
+                TextButton(onClick = onAddToTrip, enabled = !inTrip && !planFull) {
                     Text(if (inTrip) "В плане" else if (planFull) "План заполнен" else "Добавить в план поездки")
                 }
                 TextButton(onClick = onCopy) { Text("Копировать координаты") }
