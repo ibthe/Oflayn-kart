@@ -18,7 +18,7 @@ NODE_ID_START = 8_000_000_000_000_000
 WAY_ID_START = 8_100_000_000_000_000
 OSM_ENTITY_TIMESTAMP = "2020-01-01T00:00:00Z"
 METERS_PER_DEGREE = 111_195.0
-TILE_PATTERN = re.compile(r"([NS])(\d{2})([EW])(\d{3})\.dem\.gz$")
+TILE_PATTERN = re.compile(r"([NS])(\d{2})([EW])(\d{3})\.dem\.gzip$")
 
 
 def tile_origin(filename: str) -> tuple[int, int]:
