@@ -247,8 +247,11 @@ internal fun DiscoverScreen(
                         onRoute = { onNavigate(name, poi.latitude, poi.longitude) },
                         onSave = { settings.addPlace(name, poi.latitude, poi.longitude) },
                         inTrip = tripStops.any { it.poiId == poi.poiId },
+                        planFull = tripStops.size >= 20,
                         onAddToTrip = {
-                            if (tripPlanRepository.add(poi.poiId)) {
+                            if (tripStops.size >= 20) {
+                                statusMessage = "В плане может быть не более 20 мест."
+                            } else if (tripPlanRepository.add(poi.poiId)) {
                                 tripStops = tripPlanRepository.list()
                                 tripPois = (tripPois + poi).distinctBy { it.poiId }
                                 onTripPlanChanged()
@@ -353,6 +356,7 @@ private fun PlaceRow(
     expanded: Boolean,
     saved: Boolean,
     inTrip: Boolean,
+    planFull: Boolean,
     onToggle: () -> Unit,
     onRoute: () -> Unit,
     onSave: () -> Unit,
@@ -434,7 +438,7 @@ private fun PlaceRow(
                     }
                 }
                 TextButton(onClick = onAddToTrip, enabled = !inTrip) {
-                    Text(if (inTrip) "В плане" else "Добавить в план поездки")
+                    Text(if (inTrip) "В плане" else if (planFull) "План заполнен" else "Добавить в план поездки")
                 }
                 TextButton(onClick = onCopy) { Text("Копировать координаты") }
             }
