@@ -7,6 +7,7 @@ import gzip
 import hashlib
 import json
 import math
+import zipfile
 from pathlib import Path
 
 RAW_TILE_BYTES = 1200 * 1200 * 2
@@ -47,6 +48,7 @@ def verify(directory: Path) -> dict:
         raise ValueError("No usable Copernicus GLO-90 tiles were generated.")
     present_keys = set()
     total = 0
+    hgt_total = 0
     for tile in tiles:
         name = tile.get("file")
         if not isinstance(name, str) or not name.endswith(".dem.gz"):
@@ -66,6 +68,24 @@ def verify(directory: Path) -> dict:
             raise ValueError(f"Unexpected raw DEM tile length: {name} ({raw_length})")
         total += path.stat().st_size
 
+        hgt_name = tile.get("hgtFile")
+        expected_hgt_name = f"hgt/{key}.hgt.zip"
+        if hgt_name != expected_hgt_name:
+            raise ValueError(f"Invalid HGT tile path for {key}: {hgt_name!r}")
+        hgt_path = directory / hgt_name
+        if not hgt_path.is_file() or sha256_file(hgt_path) != tile.get("hgtSha256"):
+            raise ValueError(f"HGT hillshade archive is missing or has a checksum mismatch: {hgt_name}")
+        with zipfile.ZipFile(hgt_path) as archive:
+            names = archive.namelist()
+            if names != [f"{key}.hgt"]:
+                raise ValueError(f"Unexpected HGT archive entries in {hgt_name}: {names!r}")
+            hgt_raw = archive.read(names[0])
+        if len(hgt_raw) != 1201 * 1201 * 2 or tile.get("hgtRawBytes") != len(hgt_raw):
+            raise ValueError(f"Unexpected SRTM3 HGT size: {hgt_name}")
+        if tile.get("hgtWidth") != 1201 or tile.get("hgtHeight") != 1201:
+            raise ValueError(f"Unexpected SRTM3 HGT dimensions: {hgt_name}")
+        hgt_total += hgt_path.stat().st_size
+
     missing_keys = set()
     for item in missing:
         key = item.get("key") if isinstance(item, dict) else None
@@ -78,7 +98,7 @@ def verify(directory: Path) -> dict:
         absent = sorted(expected - present_keys - missing_keys)
         overlap = sorted(present_keys & missing_keys)
         raise ValueError(f"DEM coverage manifest is incomplete or overlapping; unclassified={absent}, overlap={overlap}")
-    return {"tiles": len(tiles), "missingTiles": len(missing), "compressedBytes": total}
+    return {"tiles": len(tiles), "missingTiles": len(missing), "compressedBytes": total, "hgtCompressedBytes": hgt_total}
 
 
 def main() -> None:
@@ -88,7 +108,8 @@ def main() -> None:
     result = verify(args.directory)
     print(
         f"OK: verified {result['tiles']} Copernicus GLO-90 tiles, "
-        f"{result['missingTiles']} unavailable cells ({result['compressedBytes']:,} bytes)."
+        f"{result['missingTiles']} unavailable cells, {result['compressedBytes']:,} DEM bytes and "
+        f"{result['hgtCompressedBytes']:,} HGT hillshade bytes."
     )
 
 
