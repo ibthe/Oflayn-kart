@@ -97,9 +97,9 @@ APK assets
 - Validate simultaneous language-label rendering, duplicate-label behavior, tile-render performance and memory use on physical Android devices; optimize with a label-only overlay if needed.
 - Validate multipolygon relation POIs on the full country PBF and deduplicate overlapping node/way/relation objects.
 - Expand POI coverage to relation-only objects, geometry-aware multipolygon centroids, additional categories, amenity details and opening-hours fields; consider optional FTS after device compatibility checks.
-- Routing turn restrictions, grade-aware costs and user-facing road-quality warnings; compare current engine with BRouter.
+- Routing turn restrictions and grade-aware costs; compare current engine with BRouter. Road-quality access masks and route warnings are implemented.
 - DEM, contours, elevation profiles and hillshade data.
-- Follow-track navigation, crash-safe track recording recovery, trip planner, guidebook and expanded safety functions.
+- Curated offline guidebook content, expanded safety functions, trip-note editing and multi-day itinerary export.
 - Real SD-card map storage and low-space handling.
 
 
