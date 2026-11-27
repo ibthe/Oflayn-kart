@@ -16,6 +16,31 @@ class TrackRepositoryTest {
     val temporary = TemporaryFolder()
 
     @Test
+    fun recoveryCheckpointIsPrivateAndCanBeCleared() {
+        val repository = TrackRepository(File(temporary.root, "tracks"))
+        val recovery = GpxTrack(
+            "Восстановление",
+            listOf(listOf(TrackPoint(41.7, 44.8), TrackPoint(41.8, 44.9)))
+        )
+        repository.saveRecovery(recovery)
+        assertTrue(repository.list().isEmpty())
+        assertEquals("Восстановление", repository.loadRecovery()?.name)
+        repository.clearRecovery()
+        assertEquals(null, repository.loadRecovery())
+    }
+
+    @Test
+    fun staleCheckpointIsNotWrittenAfterRecordingGenerationChanges() {
+        val repository = TrackRepository(File(temporary.root, "tracks"))
+        val recovery = GpxTrack(
+            "Stale",
+            listOf(listOf(TrackPoint(41.7, 44.8), TrackPoint(41.8, 44.9)))
+        )
+        repository.saveRecovery(recovery) { false }
+        assertEquals(null, repository.loadRecovery())
+    }
+
+    @Test
     fun savesListsLoadsAndDeletesLocalGpxTracks() {
         val repository = TrackRepository(File(temporary.root, "tracks"))
         val source = GpxTrack(
