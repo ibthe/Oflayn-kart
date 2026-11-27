@@ -264,6 +264,51 @@ jobs:
       - name: Verify Georgia DEM package
         run: python3 scripts/verify_dem.py app/src/main/assets/dem
 
+      - name: Restore or cache Georgia elevation contour map
+        id: contours_cache
+        uses: actions/cache@v4
+        with:
+          path: |
+            app/src/main/assets/offline/georgia-contours.map
+            app/src/main/assets/offline/georgia-contours-manifest.json
+          key: georgia-contours-v1-${{ runner.os }}-${{ hashFiles('scripts/build_contours.py', 'scripts/build_contours_map.sh', 'scripts/verify_contours_map.py') }}-${{ hashFiles('app/src/main/assets/dem/manifest.json') }}
+
+      - name: Build Mapsforge map-writer plugin for contour layer
+        if: ${{ success() && steps.contours_cache.outputs['cache-hit'] != 'true' && steps.map-state.outputs.exists == 'true' }}
+        run: bash scripts/install_mapsforge_writer.sh
+
+      - name: Generate elevation contour geometry
+        if: ${{ steps.contours_cache.outputs['cache-hit'] != 'true' }}
+        run: |
+          python3 scripts/build_contours.py \
+            --dem-dir app/src/main/assets/dem \
+            --output-osm build/georgia-contours.osm \
+            --manifest build/georgia-contours-manifest.json
+
+      - name: Build separate Mapsforge contour map
+        if: ${{ steps.contours_cache.outputs['cache-hit'] != 'true' }}
+        run: |
+          bash scripts/build_contours_map.sh \
+            build/georgia-contours.osm \
+            app/src/main/assets/offline/georgia-contours.map \
+            build/georgia-contours-manifest.json \
+            app/src/main/assets/offline/georgia-contours-manifest.json
+
+      - name: Save generated contour map cache
+        if: ${{ success() && steps.contours_cache.outputs['cache-hit'] != 'true' }}
+        uses: actions/cache/save@v4
+        with:
+          path: |
+            app/src/main/assets/offline/georgia-contours.map
+            app/src/main/assets/offline/georgia-contours-manifest.json
+          key: georgia-contours-v1-${{ runner.os }}-${{ hashFiles('scripts/build_contours.py', 'scripts/build_contours_map.sh', 'scripts/verify_contours_map.py') }}-${{ hashFiles('app/src/main/assets/dem/manifest.json') }}
+
+      - name: Verify offline contour map
+        run: |
+          python3 scripts/verify_contours_map.py \
+            --map app/src/main/assets/offline/georgia-contours.map \
+            --existing-manifest app/src/main/assets/offline/georgia-contours-manifest.json
+
       - name: Assemble debug APK with the complete offline map
         run: gradle --no-daemon --stacktrace --console=plain :app:assembleDebug
 
