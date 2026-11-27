@@ -791,18 +791,18 @@ private fun MapScreen(modifier: Modifier, settings: LocalSettings, navigation: N
                             )
                         }
                     }
-                    Text(
-                        "© OpenStreetMap",
-                        modifier = Modifier.align(Alignment.TopEnd).padding(top = Space.m, end = Space.m),
-                        style = MaterialTheme.typography.labelSmall,
-                        color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f)
-                    )
                 }
             }
             Column(
                 Modifier.align(Alignment.BottomCenter).fillMaxWidth().padding(Space.s),
                 verticalArrangement = Arrangement.spacedBy(Space.xs)
             ) {
+                Text(
+                    "© OpenStreetMap",
+                    modifier = Modifier.align(Alignment.End).padding(end = Space.s),
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f)
+                )
                 Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.Bottom) {
                     Column(verticalArrangement = Arrangement.spacedBy(Space.xs)) {
                         MapChip(modifier = Modifier.size(48.dp), onClick = { zoomInToken++ }, centered = true) {
