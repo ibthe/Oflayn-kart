@@ -285,10 +285,12 @@ jobs:
             test_apk="$(find artifacts -type f -name 'app-debug-androidTest.apk' -print -quit)"
             test -n "$app_apk" && test -n "$test_apk"
             adb install -r "$app_apk"
-            adb install -r "$test_apk"
+            adb install -t -r "$test_apk"
             adb shell pm clear app.georgia.offline.debug
+            instrumentation="$(adb shell pm list instrumentation | sed -n 's/^instrumentation:\\([^ ]*\\).*/\\1/p' | grep 'AndroidJUnitRunner' | head -n 1)"
+            test -n "$instrumentation"
             set -o pipefail
-            adb shell am instrument -w -r app.georgia.offline.debug.test/androidx.test.runner.AndroidJUnitRunner | tee artifacts/instrumentation.log
+            adb shell am instrument -w -r "$instrumentation" | tee artifacts/instrumentation.log
             grep -q "OK (" artifacts/instrumentation.log
             adb shell screencap -p /sdcard/oflayn-kart-map.png
             adb pull /sdcard/oflayn-kart-map.png artifacts/oflayn-kart-map.png
