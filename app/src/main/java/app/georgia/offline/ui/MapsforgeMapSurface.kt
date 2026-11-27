@@ -123,6 +123,7 @@ fun MapsforgeMapSurface(
         var mapViewRef by remember { mutableStateOf<MapView?>(null) }
         var mapDataStoreRef by remember { mutableStateOf<MapFile?>(null) }
         var rendererError by remember { mutableStateOf<String?>(null) }
+        var cameraRestored by remember { mutableStateOf(false) }
 
         AndroidView(
             modifier = modifier,
@@ -354,6 +355,18 @@ fun MapsforgeMapSurface(
                 }
             },
             update = { view ->
+                // The old renderer's DisposableEffect may save its camera after the
+                // replacement view is created. Apply the saved camera once it arrives.
+                if (!cameraRestored && savedCenterLatitude != null &&
+                    savedCenterLongitude != null &&
+                    savedZoomLevel in MIN_ZOOM.toInt()..MAX_ZOOM.toInt()
+                ) {
+                    view.model.mapViewPosition.mapPosition = MapPosition(
+                        LatLong(savedCenterLatitude!!, savedCenterLongitude!!),
+                        savedZoomLevel.toByte()
+                    )
+                    cameraRestored = true
+                }
                 overlays.sync(
                     view,
                     OverlayState(userLocation, destination, recenterToken, zoomInToken, zoomOutToken, routePoints, viaPoints, followUser, fitToken, places, selectedPlaceId, selectedPoi, searchResultPoints, origin, focusToken)
