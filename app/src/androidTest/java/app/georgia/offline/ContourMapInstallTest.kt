@@ -3,6 +3,7 @@ package app.georgia.offline
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
 import app.georgia.offline.data.TerrainRepository
+import org.mapsforge.map.reader.MapFile
 import kotlinx.coroutines.runBlocking
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNotNull
@@ -24,5 +25,6 @@ class ContourMapInstallTest {
         assertEquals("georgia-contours.map", file!!.name)
         assertTrue(file.isFile && file.length() > 1024L)
         assertEquals(file.length(), TerrainRepository.installedContoursBytes(context))
+        MapFile(file).close()
     }
 }
