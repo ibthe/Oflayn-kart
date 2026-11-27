@@ -590,21 +590,18 @@ private fun MapScreen(modifier: Modifier, settings: LocalSettings, navigation: N
         // An off-route recalculation must begin where the person is now. The explicit
         // origin is used only for the initial route; reusing it would send the route
         // backwards to the original starting point.
-        val start = if (rerouting) {
-            currentFix ?: return
-        } else {
-            navigation.origin?.let { android.location.Location("route-origin").apply {
-                latitude = it.latitude
-                longitude = it.longitude
-            } } ?: currentFix ?: return
-        }
+        val start = navigation.resolveRouteStart(
+            currentFix?.latitude,
+            currentFix?.longitude,
+            rerouting
+        ) ?: return
         val waypoints = if (rerouting) session.remainingWaypoints()
             else navigation.viaPoints.map { it.latitude to it.longitude }
         coroutineScope.launch {
             session.plan(
                 context,
-                start.latitude,
-                start.longitude,
+                start.first,
+                start.second,
                 goal.latitude,
                 goal.longitude,
                 rerouting,
