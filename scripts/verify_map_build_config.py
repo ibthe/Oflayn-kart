@@ -54,6 +54,7 @@ TINY_TURN_GRAPH = ROOT / "app/src/test/resources/tiny-turns.bin"
 TINY_ONLY_TURN_GRAPH = ROOT / "app/src/test/resources/tiny-only-turns.bin"
 GUIDEBOOK_REPOSITORY = ROOT / "app/src/main/java/app/georgia/offline/data/GuidebookRepository.kt"
 GUIDEBOOK_TESTS = ROOT / "app/src/test/java/app/georgia/offline/GuidebookRepositoryTest.kt"
+GUIDEBOOK_SOURCES = ROOT / "docs/GUIDEBOOK_CONTENT_SOURCES.md"
 SAFETY_REPOSITORY = ROOT / "app/src/main/java/app/georgia/offline/data/SafetyChecklistRepository.kt"
 EMERGENCY_CONTACT_REPOSITORY = ROOT / "app/src/main/java/app/georgia/offline/data/EmergencyContactRepository.kt"
 SAFETY_TESTS = ROOT / "app/src/androidTest/java/app/georgia/offline/SafetyChecklistRepositoryTest.kt"
@@ -75,7 +76,7 @@ def fail(message: str) -> int:
 
 
 def main() -> int:
-    required = (MAP_SCRIPT, PBF_PREP_SCRIPT, WRITER_SCRIPT, WORKFLOW, DATA_SOURCES, SMOKE_FIXTURE, BUNDLE_MANIFEST, POI_BUILDER, POI_VERIFIER, POI_TESTS, POI_SMOKE_TEST, POI_SMOKE_FIXTURE, PBF_CACHE_TEST, APP_BUILD, POI_REPOSITORY, POI_UI, DEM_BUILDER, DEM_VERIFIER, DEM_TESTS, APK_VERIFIER, DEM_REPOSITORY, MAP_SURFACE, CONTOUR_BUILDER, CONTOUR_TESTS, CONTOUR_MAP_BUILDER, CONTOUR_MAP_VERIFIER, TERRAIN_REPOSITORY, CONTOUR_THEME_LIGHT, CONTOUR_THEME_DARK, ANDROID_MANIFEST, TOOLS_SCREEN, MAP_ZOOM_POLICY, MAP_ZOOM_TESTS, ROAD_FORMAT, ROAD_GRAPH_READER, ROUTING_REPOSITORY, ROAD_ROUTER, ROUTING_PROFILE, ROAD_TESTS, ROAD_TURN_SMOKE, ROAD_TURN_FIXTURE, ROUTING_PROFILE_TESTS, TINY_ROAD_GRAPH, TINY_TURN_GRAPH, TINY_ONLY_TURN_GRAPH, GUIDEBOOK_REPOSITORY, GUIDEBOOK_TESTS, SAFETY_REPOSITORY, EMERGENCY_CONTACT_REPOSITORY, SAFETY_TESTS, SAFETY_SOURCES, APP_FLOW_UI_TESTS)
+    required = (MAP_SCRIPT, PBF_PREP_SCRIPT, WRITER_SCRIPT, WORKFLOW, DATA_SOURCES, SMOKE_FIXTURE, BUNDLE_MANIFEST, POI_BUILDER, POI_VERIFIER, POI_TESTS, POI_SMOKE_TEST, POI_SMOKE_FIXTURE, PBF_CACHE_TEST, APP_BUILD, POI_REPOSITORY, POI_UI, DEM_BUILDER, DEM_VERIFIER, DEM_TESTS, APK_VERIFIER, DEM_REPOSITORY, MAP_SURFACE, CONTOUR_BUILDER, CONTOUR_TESTS, CONTOUR_MAP_BUILDER, CONTOUR_MAP_VERIFIER, TERRAIN_REPOSITORY, CONTOUR_THEME_LIGHT, CONTOUR_THEME_DARK, ANDROID_MANIFEST, TOOLS_SCREEN, MAP_ZOOM_POLICY, MAP_ZOOM_TESTS, ROAD_FORMAT, ROAD_GRAPH_READER, ROUTING_REPOSITORY, ROAD_ROUTER, ROUTING_PROFILE, ROAD_TESTS, ROAD_TURN_SMOKE, ROAD_TURN_FIXTURE, ROUTING_PROFILE_TESTS, TINY_ROAD_GRAPH, TINY_TURN_GRAPH, TINY_ONLY_TURN_GRAPH, GUIDEBOOK_REPOSITORY, GUIDEBOOK_TESTS, GUIDEBOOK_SOURCES, SAFETY_REPOSITORY, EMERGENCY_CONTACT_REPOSITORY, SAFETY_TESTS, SAFETY_SOURCES, APP_FLOW_UI_TESTS)
     for path in required:
         if not path.is_file():
             return fail(f"required build file is missing: {path.relative_to(ROOT)}")
@@ -120,6 +121,7 @@ def main() -> int:
     tiny_only_turn_graph = TINY_ONLY_TURN_GRAPH.read_bytes()
     guidebook_repository = GUIDEBOOK_REPOSITORY.read_text(encoding="utf-8")
     guidebook_tests = GUIDEBOOK_TESTS.read_text(encoding="utf-8")
+    guidebook_sources = GUIDEBOOK_SOURCES.read_text(encoding="utf-8")
     safety_repository = SAFETY_REPOSITORY.read_text(encoding="utf-8")
     emergency_contact_repository = EMERGENCY_CONTACT_REPOSITORY.read_text(encoding="utf-8")
     safety_tests = SAFETY_TESTS.read_text(encoding="utf-8")
@@ -464,6 +466,9 @@ def main() -> int:
     if "scripts/make_road_graph_fixture.py" not in workflow:
         return fail("CI must regenerate the versioned Kotlin road graph fixtures before unit tests.")
 
+    for token in ("georgia.travel/regions", "apa.gov.ge", "Editorial constraints"):
+        if token not in guidebook_sources:
+            return fail(f"Guidebook source documentation is missing: {token}.")
     for token in ("data class GuidebookPlace", "data class GuidebookRoute", "data class GuidebookService", "searchQuery"):
         if token not in guidebook_repository:
             return fail(f"Offline guidebook collections are missing: {token}.")
