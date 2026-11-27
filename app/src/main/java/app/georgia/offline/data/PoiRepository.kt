@@ -2,6 +2,7 @@ package app.georgia.offline.data
 
 import android.content.Context
 import android.database.sqlite.SQLiteDatabase
+import app.georgia.offline.domain.GeoMath
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import org.json.JSONObject
@@ -410,6 +411,129 @@ object PoiRepository {
         } finally {
             db.close()
         }
+    }
+
+
+    /**
+     * Search a narrow corridor around a planned route. Candidate SQL windows are sampled along
+     * the polyline, then every result is checked against the actual route geometry. Returned
+     * places are ordered in travel order, not by an unrelated map-viewport center.
+     */
+    suspend fun searchAlongRoute(
+        database: File,
+        query: String,
+        routePoints: List<Pair<Double, Double>>,
+        category: String = "all",
+        corridorMeters: Double = 2_500.0,
+        limit: Int = 60
+    ): List<PoiRecord> = withContext(Dispatchers.IO) {
+        if (routePoints.size < 2) return@withContext emptyList()
+        val routeLengths = DoubleArray(routePoints.size)
+        for (index in 1 until routePoints.size) {
+            routeLengths[index] = routeLengths[index - 1] + GeoMath.distanceMeters(
+                routePoints[index - 1].first, routePoints[index - 1].second,
+                routePoints[index].first, routePoints[index].second
+            )
+        }
+        val totalLength = routeLengths.last()
+        if (totalLength <= 0.0) return@withContext emptyList()
+
+        val sampleSpacing = maxOf(8_000.0, totalLength / 160.0)
+        val searchRadius = maxOf(corridorMeters.coerceIn(250.0, 10_000.0) * 2.0, sampleSpacing * 0.65)
+        val centers = mutableListOf<Pair<Double, Double>>()
+        centers += routePoints.first()
+        for (index in 1 until routePoints.size) {
+            val start = routePoints[index - 1]
+            val end = routePoints[index]
+            val segmentLength = routeLengths[index] - routeLengths[index - 1]
+            if (segmentLength <= 0.1) continue
+            val steps = kotlin.math.ceil(segmentLength / sampleSpacing).toInt().coerceAtLeast(1)
+            for (step in 1..steps) {
+                val fraction = step.toDouble() / steps
+                centers += (start.first + (end.first - start.first) * fraction) to
+                    (start.second + (end.second - start.second) * fraction)
+            }
+        }
+
+        val boxes = centers.distinct().map { (latitude, longitude) ->
+            val latitudeDelta = searchRadius / 110_540.0
+            val longitudeDelta = searchRadius /
+                (111_320.0 * kotlin.math.cos(Math.toRadians(latitude)).absoluteValue.coerceAtLeast(0.05))
+            listOf(
+                (latitude - latitudeDelta).toString(),
+                (latitude + latitudeDelta).toString(),
+                (longitude - longitudeDelta).toString(),
+                (longitude + longitudeDelta).toString()
+            )
+        }
+        val conditions = mutableListOf("(" + boxes.joinToString(" OR ") {
+            "(latitude BETWEEN ? AND ? AND longitude BETWEEN ? AND ?)"
+        } + ")")
+        val arguments = boxes.flatten().toMutableList()
+        if (category != "all") {
+            conditions += "category = ?"
+            arguments += category
+        }
+        val terms = query.trim().lowercase(Locale.ROOT)
+            .split(Regex("\\s+")).filter { it.isNotBlank() }.take(5)
+        terms.forEach { term ->
+            conditions += "instr(search_text, ?) > 0"
+            arguments += term
+        }
+        val sql = """
+            SELECT poi_id, category, subcategory, name, name_en, name_ru, name_ka,
+                   latitude, longitude, tags_json
+            FROM poi
+            WHERE ${conditions.joinToString(" AND ")}
+            ORDER BY name COLLATE NOCASE
+            LIMIT ?
+        """.trimIndent()
+        arguments += 1_200.toString()
+        val databaseHandle = SQLiteDatabase.openDatabase(database.absolutePath, null, SQLiteDatabase.OPEN_READONLY)
+        val candidates = try {
+            databaseHandle.rawQuery(sql, arguments.toTypedArray()).use { cursor ->
+                buildList {
+                    while (cursor.moveToNext()) add(PoiRecord(
+                        poiId = cursor.getString(0), category = cursor.getString(1),
+                        subcategory = cursor.getString(2), name = cursor.getString(3),
+                        nameEn = cursor.getString(4), nameRu = cursor.getString(5),
+                        nameKa = cursor.getString(6), latitude = cursor.getDouble(7),
+                        longitude = cursor.getDouble(8), tagsJson = cursor.getString(9)
+                    ))
+                }
+            }
+        } finally {
+            databaseHandle.close()
+        }
+
+        candidates.mapNotNull { poi ->
+            val latitudeScale = 111_195.0
+            val longitudeScale = latitudeScale * kotlin.math.cos(Math.toRadians(poi.latitude))
+            var bestDistance = Double.MAX_VALUE
+            var bestAlong = 0.0
+            for (index in 0 until routePoints.lastIndex) {
+                val start = routePoints[index]
+                val end = routePoints[index + 1]
+                val ax = (start.second - poi.longitude) * longitudeScale
+                val ay = (start.first - poi.latitude) * latitudeScale
+                val dx = (end.second - start.second) * longitudeScale
+                val dy = (end.first - start.first) * latitudeScale
+                val denominator = dx * dx + dy * dy
+                val fraction = if (denominator <= 0.0) 0.0
+                    else (-(ax * dx + ay * dy) / denominator).coerceIn(0.0, 1.0)
+                val distance = kotlin.math.hypot(ax + dx * fraction, ay + dy * fraction)
+                if (distance < bestDistance) {
+                    bestDistance = distance
+                    bestAlong = routeLengths[index] +
+                        (routeLengths[index + 1] - routeLengths[index]) * fraction
+                }
+            }
+            if (bestDistance <= corridorMeters) Triple(poi, bestAlong, bestDistance) else null
+        }
+            .distinctBy { it.first.poiId }
+            .sortedWith(compareBy<Triple<PoiRecord, Double, Double>> { it.second }.thenBy { it.third })
+            .take(limit.coerceIn(1, 120))
+            .map { it.first }
     }
 
     /** Bounded offline lookup for a POI nearest to a tapped map coordinate. */
