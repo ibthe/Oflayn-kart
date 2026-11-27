@@ -16,7 +16,8 @@ data class TrackPoint(
 data class GpxTrack(
     val name: String,
     val segments: List<List<TrackPoint>>,
-    val createdAtEpochMillis: Long = System.currentTimeMillis()
+    val createdAtEpochMillis: Long = System.currentTimeMillis(),
+    val description: String? = null
 ) {
     val pointCount: Int get() = segments.sumOf { it.size }
 }
@@ -57,7 +58,12 @@ object GpxCodec {
         val validSegments = segments.filter { it.isNotEmpty() }
         require(validSegments.sumOf { it.size } >= 2) { "В GPX должно быть не менее двух корректных точек." }
         val timestamps = validSegments.flatten().mapNotNull { it.timeEpochMillis }
-        return GpxTrack(name, validSegments, timestamps.minOrNull() ?: System.currentTimeMillis())
+        return GpxTrack(
+            name,
+            validSegments,
+            timestamps.minOrNull() ?: System.currentTimeMillis(),
+            firstText(root, "desc")?.take(1_000)
+        )
     }
 
     fun write(track: GpxTrack): String {
@@ -65,8 +71,11 @@ object GpxCodec {
         val output = StringBuilder()
         output.append("""<?xml version="1.0" encoding="UTF-8"?>""").append('\n')
         output.append("""<gpx version="1.1" creator="Oflayn kart" xmlns="http://www.topografix.com/GPX/1/1">""").append('\n')
-        output.append("  <metadata><name>").append(escape(track.name)).append("</name><time>")
-            .append(Instant.ofEpochMilli(track.createdAtEpochMillis)).append("</time></metadata>\n")
+        output.append("  <metadata><name>").append(escape(track.name)).append("</name>")
+        track.description?.takeIf { it.isNotBlank() }?.let {
+            output.append("<desc>").append(escape(it.take(1_000))).append("</desc>")
+        }
+        output.append("<time>").append(Instant.ofEpochMilli(track.createdAtEpochMillis)).append("</time></metadata>\n")
         output.append("  <trk><name>").append(escape(track.name)).append("</name>\n")
         track.segments.filter { it.isNotEmpty() }.forEach { segment ->
             output.append("    <trkseg>\n")
