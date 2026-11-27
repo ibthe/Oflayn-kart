@@ -172,7 +172,11 @@ internal fun DiscoverScreen(
             SelectPill("Путеводитель", selected = guidebookMode, onClick = { guidebookMode = true; planMode = false })
         }
         if (guidebookMode) {
-            GuidebookContent()
+            GuidebookContent(onSearchPlace = { searchTerm ->
+                query = searchTerm
+                selectedCategory = "all"
+                guidebookMode = false
+            })
         } else if (planMode) {
             if (tripPoisLoading || (database == null && loading)) {
                 Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(Space.s)) {
@@ -304,11 +308,11 @@ internal fun DiscoverScreen(
 }
 
 @Composable
-private fun GuidebookContent() {
+private fun GuidebookContent(onSearchPlace: (String) -> Unit) {
     var expandedRegion by rememberSaveable { mutableStateOf<String?>(null) }
     Column(verticalArrangement = Arrangement.spacedBy(Space.s)) {
         Text(
-            "Короткие заметки о регионах Грузии. Весь текст доступен без интернета.",
+            "Офлайн-подборки мест, последовательности остановок и практические заметки по регионам.",
             style = MaterialTheme.typography.bodySmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant
         )
@@ -326,10 +330,41 @@ private fun GuidebookContent() {
                     }
                     if (expandedRegion == region.id) {
                         Text(region.overview, style = MaterialTheme.typography.bodyMedium)
-                        Text("Что посмотреть", style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.primary)
-                        region.highlights.forEach { highlight ->
-                            Text("• $highlight", style = MaterialTheme.typography.bodySmall)
+
+                        Text("Места", style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.primary)
+                        region.places.forEach { place ->
+                            Row(
+                                Modifier.fillMaxWidth(),
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(Space.xs)
+                            ) {
+                                Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                                    Text(place.name, style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.SemiBold)
+                                    Text(place.category, style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.primary)
+                                    Text(place.description, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                                }
+                                TextButton(onClick = { onSearchPlace(place.searchQuery) }) { Text("Найти") }
+                            }
                         }
+
+                        Text("Маршруты и последовательности", style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.primary)
+                        region.routes.forEach { route ->
+                            val placeNames = route.stopIds.mapNotNull { id -> region.places.firstOrNull { it.id == id }?.name }
+                            Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                                Text(route.title, style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.SemiBold)
+                                Text(placeNames.joinToString(" → "), style = MaterialTheme.typography.bodySmall)
+                                Text(route.advice, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                            }
+                        }
+
+                        Text("Полезные сервисы и подготовка", style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.primary)
+                        region.services.forEach { service ->
+                            Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                                Text(service.title, style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.SemiBold)
+                                Text(service.advice, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                            }
+                        }
+
                         Text("Лучшее время", style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.primary)
                         Text(region.bestSeason, style = MaterialTheme.typography.bodySmall)
                         Text("Дороги и безопасность", style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.primary)
@@ -340,7 +375,7 @@ private fun GuidebookContent() {
         }
         InfoCard(
             "Важно перед поездкой",
-            "Путеводитель содержит общие сведения, а не текущий статус дорог. Ограничения, погода, сезонный доступ и режим работы мест могут измениться. Перед выездом проверяй официальные сообщения дорожных служб."
+            "Подборки и последовательности остановок — справочные, не рассчитанные маршруты. Наличие места в путеводителе не подтверждает его доступность, открытие или состояние дороги. Ищи объекты в офлайн-каталоге и проверяй текущие ограничения перед выездом."
         )
     }
 }
