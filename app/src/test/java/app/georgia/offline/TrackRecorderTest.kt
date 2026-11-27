@@ -38,6 +38,26 @@ class TrackRecorderTest {
     }
 
     @Test
+    fun restoredRecordingCanContinueAndKeepsItsNoteAndPoints() {
+        val recorder = TrackRecorder()
+        val recovery = app.georgia.offline.data.GpxTrack(
+            "Interrupted",
+            listOf(listOf(TrackPoint(41.7, 44.8), TrackPoint(41.71, 44.81))),
+            description = "Вершина"
+        )
+        recorder.restore(recovery)
+        assertTrue(recorder.hasRecovery)
+        assertEquals(2, recorder.points.size)
+        recorder.start()
+        assertTrue(recorder.recording)
+        assertEquals(2, recorder.points.size)
+        recorder.addFix(TrackPoint(41.72, 44.82), 13_000_000_000L)
+        val continued = recorder.finish()
+        assertEquals(3, continued?.pointCount)
+        assertEquals("Вершина", continued?.description)
+    }
+
+    @Test
     fun completedRecordingInvalidatesOutstandingCheckpoints() {
         val recorder = TrackRecorder()
         recorder.start()
