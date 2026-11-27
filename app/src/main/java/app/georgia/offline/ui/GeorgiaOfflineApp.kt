@@ -251,6 +251,7 @@ fun GeorgiaOfflineApp(settings: LocalSettings) {
                                         if (reverseRoute == null) {
                                             android.widget.Toast.makeText(context, "Подойдите ближе к линии трека (не дальше 150 м). Если вы уже у начала, возврат не требуется.", android.widget.Toast.LENGTH_LONG).show()
                                         } else {
+                                            navigation.clearRoute()
                                             selectedTrackPoints = emptyList()
                                             routeSession.beginTrackFollow(reverseRoute)
                                             selectedTab = AppTab.MAP.name
