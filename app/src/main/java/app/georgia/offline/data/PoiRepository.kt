@@ -308,6 +308,44 @@ object PoiRepository {
 
 
 
+    /** Loads itinerary objects by their stable OSM IDs while preserving the caller's order. */
+    suspend fun byIds(database: File, poiIds: List<String>): List<PoiRecord> = withContext(Dispatchers.IO) {
+        val ids = poiIds.distinct().take(200)
+        if (ids.isEmpty()) return@withContext emptyList()
+        val placeholders = ids.joinToString(",") { "?" }
+        val sql = """
+            SELECT poi_id, category, subcategory, name, name_en, name_ru, name_ka,
+                   latitude, longitude, tags_json
+            FROM poi
+            WHERE poi_id IN ($placeholders)
+        """.trimIndent()
+        val db = SQLiteDatabase.openDatabase(database.absolutePath, null, SQLiteDatabase.OPEN_READONLY)
+        val found = try {
+            db.rawQuery(sql, ids.toTypedArray()).use { cursor ->
+                buildMap {
+                    while (cursor.moveToNext()) {
+                        val poi = PoiRecord(
+                            poiId = cursor.getString(0),
+                            category = cursor.getString(1),
+                            subcategory = cursor.getString(2),
+                            name = cursor.getString(3),
+                            nameEn = cursor.getString(4),
+                            nameRu = cursor.getString(5),
+                            nameKa = cursor.getString(6),
+                            latitude = cursor.getDouble(7),
+                            longitude = cursor.getDouble(8),
+                            tagsJson = cursor.getString(9)
+                        )
+                        put(poi.poiId, poi)
+                    }
+                }
+            }
+        } finally {
+            db.close()
+        }
+        ids.mapNotNull(found::get)
+    }
+
     /** Search only inside the visible map rectangle; the coordinate index bounds the offline query. */
     suspend fun searchInBounds(
         database: File,
