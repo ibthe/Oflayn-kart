@@ -237,6 +237,7 @@ fun GeorgiaOfflineApp(settings: LocalSettings) {
                                 trackRecorder,
                                 onShowTrack = { points ->
                                     selectedTrackPoints = points.map { LatLong(it.latitude, it.longitude) }
+                                    routeSession.fitToken++
                                     selectedTab = AppTab.MAP.name
                                 },
                                 onFollowTrack = { track ->
@@ -254,6 +255,7 @@ fun GeorgiaOfflineApp(settings: LocalSettings) {
                                             navigation.clearRoute()
                                             selectedTrackPoints = emptyList()
                                             routeSession.beginTrackFollow(reverseRoute)
+                                            routeSession.fitToken++
                                             selectedTab = AppTab.MAP.name
                                         }
                                     }
