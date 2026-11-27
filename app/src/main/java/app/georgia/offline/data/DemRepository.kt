@@ -125,12 +125,12 @@ object DemRepository {
         }
         if (expected.isEmpty()) return@withContext null
 
+        val manifestHash = sha256(manifestBytes)
         val hillshadeRoot = File(context.filesDir, "dem/hgt")
         val directory = File(hillshadeRoot, manifestHash.take(12))
         if (!directory.exists() && !directory.mkdirs()) {
             throw IllegalStateException("Не удалось подготовить локальные данные рельефа.")
         }
-        val manifestHash = sha256(manifestBytes)
         val marker = File(directory, ".manifest-sha256")
         val alreadyInstalled = marker.isFile && runCatching { marker.readText() }.getOrNull() == manifestHash &&
             expected.all { (name, _, size) -> File(directory, name).let { it.isFile && it.length() == size } }
