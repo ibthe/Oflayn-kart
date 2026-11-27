@@ -20,7 +20,8 @@ class TrackRepositoryTest {
         val repository = TrackRepository(File(temporary.root, "tracks"))
         val source = GpxTrack(
             "Переход",
-            listOf(listOf(TrackPoint(41.7, 44.8), TrackPoint(41.8, 44.9)))
+            listOf(listOf(TrackPoint(41.7, 44.8), TrackPoint(41.8, 44.9))),
+            description = "Проверка маршрута"
         )
 
         val id = repository.save(source)
@@ -29,6 +30,7 @@ class TrackRepositoryTest {
         assertEquals(id, listed.single().id)
         assertEquals("Переход", listed.single().name)
         assertEquals(2, listed.single().pointCount)
+        assertEquals(source.description, listed.single().description)
         assertEquals(source.name, repository.load(id).name)
         assertTrue(repository.delete(id))
         assertFalse(repository.delete(id))
