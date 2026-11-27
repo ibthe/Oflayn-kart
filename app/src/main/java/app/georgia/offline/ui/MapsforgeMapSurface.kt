@@ -184,7 +184,7 @@ fun MapsforgeMapSurface(
                             try {
                                 val algorithm = AdaptiveClasyHillShading()
                                     .setAdaptiveZoomEnabled(true)
-                                    .setCustomQualityScale(1)
+                                    .setCustomQualityScale(1.0)
                                 val hillTileSource = MemoryCachingHgtReaderTileSource(
                                     DemFolderFS(hillshadeDirectory),
                                     algorithm,
