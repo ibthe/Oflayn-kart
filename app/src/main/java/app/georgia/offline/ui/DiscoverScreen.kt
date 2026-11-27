@@ -269,6 +269,71 @@ internal fun DiscoverScreen(
     }
 }
 
+@Composable
+private fun TripPlanContent(
+    stops: List<TripPlanStop>,
+    pois: List<PoiRepository.PoiRecord>,
+    language: String,
+    onPlanRoute: (List<PoiRepository.PoiRecord>) -> Unit,
+    onMove: (String, Int) -> Unit,
+    onSetDay: (String, Int) -> Unit,
+    onRemove: (String) -> Unit
+) {
+    val byId = remember(pois) { pois.associateBy { it.poiId } }
+    if (stops.isEmpty()) {
+        InfoCard(
+            "План пока пуст",
+            "Добавляйте интересные места из каталога. План хранится на устройстве и доступен без интернета."
+        )
+        return
+    }
+    stops.groupBy { it.day }.toSortedMap().forEach { (day, dayStops) ->
+        Panel(padding = 0.dp) {
+            Column(Modifier.fillMaxWidth().padding(Space.m), verticalArrangement = Arrangement.spacedBy(Space.xs)) {
+                Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                    Column(Modifier.weight(1f)) {
+                        Text("День $day", style = MaterialTheme.typography.titleMedium)
+                        Text("${dayStops.size} мест", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    }
+                    OutlinedButton(
+                        onClick = { onPlanRoute(dayStops.mapNotNull { byId[it.poiId] }) },
+                        enabled = dayStops.any { byId[it.poiId] != null }
+                    ) { Text("Маршрут дня") }
+                }
+                dayStops.forEachIndexed { index, stop ->
+                    val poi = byId[stop.poiId]
+                    if (index > 0) HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
+                    Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                        Text(
+                            poi?.nameIn(language)?.ifBlank { "Без названия" } ?: "Место отсутствует в офлайн-базе",
+                            style = MaterialTheme.typography.bodyMedium,
+                            fontWeight = FontWeight.SemiBold,
+                            maxLines = 2,
+                            overflow = TextOverflow.Ellipsis
+                        )
+                        poi?.let {
+                            Text(
+                                "${poiCategoryLabel(it.category)} · ${"%.5f".format(java.util.Locale.US, it.latitude)}, ${"%.5f".format(java.util.Locale.US, it.longitude)}",
+                                style = MaterialTheme.typography.labelSmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        }
+                        stop.note.takeIf { it.isNotBlank() }?.let {
+                            Text(it, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                        }
+                        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(Space.xxs)) {
+                            TextButton(onClick = { onMove(stop.poiId, -1) }, enabled = index > 0) { Text("↑") }
+                            TextButton(onClick = { onMove(stop.poiId, 1) }, enabled = index < dayStops.lastIndex) { Text("↓") }
+                            TextButton(onClick = { onSetDay(stop.poiId, day + 1) }, enabled = day < 30) { Text("День +") }
+                            TextButton(onClick = { onRemove(stop.poiId) }) { Text("Убрать") }
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
 private val PLACE_CATEGORIES = listOf(
     "all" to "Все", "tourism" to "Туризм", "historic" to "История",
     "nature" to "Природа", "food" to "Еда", "lodging" to "Жильё",
