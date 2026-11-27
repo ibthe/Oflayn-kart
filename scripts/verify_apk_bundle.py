@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import gzip
 import hashlib
+import io
 import json
 import sys
 import zipfile
@@ -56,6 +57,7 @@ def main() -> int:
             print("ERROR: APK elevation manifest is missing or incomplete.", file=sys.stderr)
             return 7
         dem_total_size = 0
+        hgt_total_size = 0
         for tile in dem_tiles:
             dem_entry = f"assets/dem/{tile.get('file', '')}"
             if dem_entry not in entries:
@@ -79,6 +81,30 @@ def main() -> int:
                 return 7
             dem_total_size += len(compressed_bytes)
 
+            hgt_file = tile.get("hgtFile")
+            hgt_entry = f"assets/dem/{hgt_file}"
+            if not hgt_file or hgt_entry not in entries:
+                available_dem = sorted(name for name in entries if name.startswith("assets/dem/hgt/"))
+                print(f"ERROR: APK is missing HGT hillshade archive {hgt_entry}; available HGT entries: {available_dem[:30]!r}.", file=sys.stderr)
+                return 7
+            hgt_bytes = apk.read(hgt_entry)
+            if hashlib.sha256(hgt_bytes).hexdigest() != tile.get("hgtSha256"):
+                print(f"ERROR: HGT hillshade checksum mismatch: {hgt_entry}.", file=sys.stderr)
+                return 7
+            try:
+                with zipfile.ZipFile(io.BytesIO(hgt_bytes)) as hgt_archive:
+                    hgt_names = hgt_archive.namelist()
+                    if hgt_names != [f"{tile.get('file', '').removesuffix('.dem.gz')}.hgt"]:
+                        raise ValueError("Unexpected HGT archive entry.")
+                    hgt_raw = hgt_archive.read(hgt_names[0])
+            except (OSError, zipfile.BadZipFile, ValueError):
+                print(f"ERROR: HGT hillshade archive is invalid: {hgt_entry}.", file=sys.stderr)
+                return 7
+            if len(hgt_raw) != 1201 * 1201 * 2 or tile.get("hgtRawBytes") != len(hgt_raw):
+                print(f"ERROR: HGT hillshade archive has an unexpected raw size: {hgt_entry}.", file=sys.stderr)
+                return 7
+            hgt_total_size += len(hgt_bytes)
+
     digest = digest_builder.hexdigest()
     poi_sha = poi_digest.hexdigest()
     if digest != build_manifest.get("mapFileSha256"):
@@ -100,7 +126,7 @@ def main() -> int:
     print(
         f"OK: {APK_PATH.name} contains georgia.map ({map_size:,} bytes) and "
         f"georgia-poi.sqlite ({poi_size:,} bytes, {build_manifest['poiCount']:,} POIs) and "
-        f"Copernicus GLO-90 DEM ({len(dem_tiles)} tiles, {dem_total_size:,} compressed bytes)."
+        f"Copernicus GLO-90 DEM ({len(dem_tiles)} tiles, {dem_total_size:,} compressed bytes) and HGT hillshade ({hgt_total_size:,} bytes)."
     )
     return 0
 
