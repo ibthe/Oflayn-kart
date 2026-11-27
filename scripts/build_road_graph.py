@@ -45,7 +45,7 @@ def _restriction_records(tags: dict, members: list, stats: dict) -> list:
         return []
     except_values = {part.strip().lower() for part in str(tags.get("except", "")).replace(";", ",").split(",") if part.strip()}
     except_mask = 0
-    if "motorcar" in except_values: except_mask |= rg.PROFILE_CAR
+    if "motorcar" in except_values: except_mask |= rg.PROFILE_CAR | rg.PROFILE_OFFROAD
     if "motor_vehicle" in except_values: except_mask |= rg.PROFILE_CAR | rg.PROFILE_OFFROAD | rg.PROFILE_MOTORCYCLE
     if "vehicle" in except_values: except_mask |= rg.PROFILE_CAR | rg.PROFILE_OFFROAD | rg.PROFILE_MOTORCYCLE | rg.PROFILE_BIKE
     if "motorcycle" in except_values: except_mask |= rg.PROFILE_MOTORCYCLE
