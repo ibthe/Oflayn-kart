@@ -275,7 +275,7 @@ jobs:
           for name in entries[:40]:
               print(name)
           PY
-          find app/build/intermediates/merged_assets -path "*dem*" -type f | head -40
+          find app/build -path "*/merged_assets/*/out/dem/*" -type f | head -40 || true
 
       - name: Verify the APK contains the full offline map
         run: python3 scripts/verify_apk_bundle.py
