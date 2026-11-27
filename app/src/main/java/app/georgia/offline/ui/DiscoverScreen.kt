@@ -52,6 +52,7 @@ import app.georgia.offline.data.LocalSettings
 import app.georgia.offline.data.PoiRepository
 import app.georgia.offline.data.TripPlanRepository
 import app.georgia.offline.data.TripPlanStop
+import app.georgia.offline.data.GuidebookRepository
 import app.georgia.offline.domain.GeoFormatting
 import app.georgia.offline.domain.GeoMath
 import app.georgia.offline.domain.PoiLabels
@@ -90,6 +91,7 @@ internal fun DiscoverScreen(
     var statusMessage by remember { mutableStateOf("Подготавливаю локальную базу объектов…") }
     var statusIsError by remember { mutableStateOf(false) }
     var planMode by rememberSaveable { mutableStateOf(false) }
+    var guidebookMode by rememberSaveable { mutableStateOf(false) }
     var tripStops by remember { mutableStateOf(tripPlanRepository.list()) }
     var tripPois by remember { mutableStateOf<List<PoiRepository.PoiRecord>>(emptyList()) }
     var tripPoisLoading by remember { mutableStateOf(false) }
@@ -164,11 +166,14 @@ internal fun DiscoverScreen(
 
     PageColumn(modifier) {
         PageTitle("Места")
-        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(Space.xs)) {
-            SelectPill("Каталог", selected = !planMode, onClick = { planMode = false })
-            SelectPill("План поездки · ${tripStops.size}", selected = planMode, onClick = { planMode = true })
+        Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(Space.xs)) {
+            SelectPill("Каталог", selected = !planMode && !guidebookMode, onClick = { planMode = false; guidebookMode = false })
+            SelectPill("План поездки · ${tripStops.size}", selected = planMode, onClick = { planMode = true; guidebookMode = false })
+            SelectPill("Путеводитель", selected = guidebookMode, onClick = { guidebookMode = true; planMode = false })
         }
-        if (planMode) {
+        if (guidebookMode) {
+            GuidebookContent()
+        } else if (planMode) {
             if (tripPoisLoading || (database == null && loading)) {
                 Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(Space.s)) {
                     CircularProgressIndicator(modifier = Modifier.size(16.dp), strokeWidth = 2.dp)
@@ -295,6 +300,48 @@ internal fun DiscoverScreen(
             color = MaterialTheme.colorScheme.onSurfaceVariant
         )
         }
+    }
+}
+
+@Composable
+private fun GuidebookContent() {
+    var expandedRegion by rememberSaveable { mutableStateOf<String?>(null) }
+    Column(verticalArrangement = Arrangement.spacedBy(Space.s)) {
+        Text(
+            "Короткие заметки о регионах Грузии. Весь текст доступен без интернета.",
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant
+        )
+        GuidebookRepository.regions.forEach { region ->
+            Panel(padding = 0.dp) {
+                Column(Modifier.fillMaxWidth().padding(Space.m), verticalArrangement = Arrangement.spacedBy(Space.xs)) {
+                    Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                        Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                            Text(region.title, style = MaterialTheme.typography.titleMedium)
+                            Text(region.subtitle, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                        }
+                        TextButton(onClick = {
+                            expandedRegion = if (expandedRegion == region.id) null else region.id
+                        }) { Text(if (expandedRegion == region.id) "Свернуть" else "Подробнее") }
+                    }
+                    if (expandedRegion == region.id) {
+                        Text(region.overview, style = MaterialTheme.typography.bodyMedium)
+                        Text("Что посмотреть", style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.primary)
+                        region.highlights.forEach { highlight ->
+                            Text("• $highlight", style = MaterialTheme.typography.bodySmall)
+                        }
+                        Text("Лучшее время", style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.primary)
+                        Text(region.bestSeason, style = MaterialTheme.typography.bodySmall)
+                        Text("Дороги и безопасность", style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.primary)
+                        Text(region.roadAdvice, style = MaterialTheme.typography.bodySmall)
+                    }
+                }
+            }
+        }
+        InfoCard(
+            "Важно перед поездкой",
+            "Путеводитель содержит общие сведения, а не текущий статус дорог. Ограничения, погода, сезонный доступ и режим работы мест могут измениться. Перед выездом проверяй официальные сообщения дорожных служб."
+        )
     }
 }
 
