@@ -24,9 +24,17 @@ Osmosis is used only in the GitHub Actions data preparation workflow and is not 
 
 BRouter is a planned offline-routing candidate. It is not yet included in the APK. Its upstream project is MIT licensed: https://github.com/abrensch/brouter
 
-## Copernicus DEM / Sentinel (planned)
+## Copernicus WorldDEM-90 / Copernicus DEM GLO-90
 
-Copernicus data products have their own product-specific attribution and redistribution conditions. No Copernicus raster data is included in v0.4.0. See `docs/DATA_SOURCES.md` before adding any derivative product.
+The application bundles derived, gzip-compressed 90 m elevation tiles for Georgia from Copernicus WorldDEM-90 / Copernicus DEM GLO-90. Preserve the product attribution:
+
+`Produced using Copernicus WorldDEM-90 © DLR e.V. 2010–2014 and © Airbus Defence and Space GmbH 2014–2018, provided under COPERNICUS by the European Union and ESA; all rights reserved.`
+
+The dataset is a digital surface model (DSM), not bare-earth terrain. Source, public COG mirror, tile conversion and limitations are documented in `docs/DATA_SOURCES.md`.
+
+## Rasterio and NumPy (build-time only)
+
+The CI workflow uses the Ubuntu packages `python3-rasterio` and `python3-numpy` to read public Copernicus COG tiles and create compact offline assets. Neither package is included in the Android APK. Preserve their upstream notices: Rasterio is BSD 3-Clause and NumPy is BSD 3-Clause.
 
 ## Inter typeface
 
