@@ -255,6 +255,7 @@ jobs:
         run: |
           python3 - <<'PY'
           import json
+          import sqlite3
           from pathlib import Path
           manifest = json.loads(Path("app/src/main/assets/offline/georgia-map-build.json").read_text())
           print("Full-country POI count:", manifest.get("poiCount", 0))
@@ -262,6 +263,14 @@ jobs:
           print("Cross-geometry duplicates removed:", manifest.get("poiDuplicatesRemoved", 0))
           print("POI coverage:", manifest.get("poiGeometryCoverage", "not reported"))
           print("Deduplication:", manifest.get("poiDeduplication", "not reported"))
+          connection = sqlite3.connect("app/src/main/assets/offline/georgia-poi.sqlite")
+          try:
+              rows = connection.execute("SELECT category, subcategory, COUNT(*) FROM poi GROUP BY category, subcategory ORDER BY COUNT(*) DESC").fetchall()
+              print("POI category/subcategory distribution:")
+              for category, subcategory, count in rows:
+                  print(f"  {category}/{subcategory}: {count}")
+          finally:
+              connection.close()
           PY
 
       - name: Restore or cache Georgia Copernicus DEM tiles
