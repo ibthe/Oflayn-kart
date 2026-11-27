@@ -755,21 +755,22 @@ private class MapOverlays(
             view.setCenter(here)
             if (view.model.mapViewPosition.zoomLevel.toInt() < 14) view.setZoomLevel(15.toByte())
         }
-        if (state.fitToken != handledFit && route != null && route.size >= 4) {
-            handledFit = state.fitToken
-            var minLat = Double.MAX_VALUE
-            var maxLat = -Double.MAX_VALUE
-            var minLon = Double.MAX_VALUE
-            var maxLon = -Double.MAX_VALUE
-            for (i in 0 until route.size / 2) {
-                minLat = minOf(minLat, route[2 * i])
-                maxLat = maxOf(maxLat, route[2 * i])
-                minLon = minOf(minLon, route[2 * i + 1])
-                maxLon = maxOf(maxLon, route[2 * i + 1])
+        if (state.fitToken != handledFit) {
+            val fitPoints: List<LatLong>? = when {
+                route != null && route.size >= 4 -> (0 until route.size / 2).map { LatLong(route[2 * it], route[2 * it + 1]) }
+                state.trackPoints.size >= 2 -> state.trackPoints
+                else -> null
             }
-            val box = BoundingBox(minLat, minLon, maxLat, maxLon)
-            val zoom = LatLongUtils.zoomForBounds(view.dimension, box, view.model.displayModel.tileSize).toInt() - 1
-            view.model.mapViewPosition.mapPosition = MapPosition(box.centerPoint, zoom.coerceIn(MIN_ZOOM.toInt(), 17).toByte())
+            if (fitPoints != null) {
+                handledFit = state.fitToken
+                val minLat = fitPoints.minOf { it.latitude }
+                val maxLat = fitPoints.maxOf { it.latitude }
+                val minLon = fitPoints.minOf { it.longitude }
+                val maxLon = fitPoints.maxOf { it.longitude }
+                val box = BoundingBox(minLat, minLon, maxLat, maxLon)
+                val zoom = LatLongUtils.zoomForBounds(view.dimension, box, view.model.displayModel.tileSize).toInt() - 1
+                view.model.mapViewPosition.mapPosition = MapPosition(box.centerPoint, zoom.coerceIn(MIN_ZOOM.toInt(), 17).toByte())
+            }
         }
         if (state.followUser && here != null) {
             view.setCenter(here)
