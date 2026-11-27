@@ -199,8 +199,10 @@ class RouteSession {
             if (offRouteFixes >= 3 && !busy) {
                 offRouteFixes = 0
                 if (followingTrack) {
-                    message = "Вы отклонились от записанного трека. Вернитесь к выделенной линии."
-                    return TrackingEvent.OFF_TRACK
+                    if (message == null) {
+                        message = "Вы отклонились от записанного трека. Вернитесь к выделенной линии."
+                        return TrackingEvent.OFF_TRACK
+                    }
                 }
                 if (nowMillis - lastRerouteAt > 10_000L) {
                     lastRerouteAt = nowMillis
