@@ -180,6 +180,8 @@ def main() -> int:
 
     if bundle_manifest.get("mapBoundingBox") != EXPECTED_GEORGIA_BBOX:
         return fail("the static bundle manifest bbox does not match the map build bbox.")
+    if bundle_manifest.get("roadGraphFormatVersion") != 3:
+        return fail("the static bundle manifest must require turn-aware road graph format version 3.")
     if bundle_manifest.get("appVersion") != "0.7.0":
         return fail("the static bundle manifest appVersion must match this source package (0.7.0).")
     if 'versionName = "0.7.0"' not in app_build or "versionCode = 23" not in app_build:
