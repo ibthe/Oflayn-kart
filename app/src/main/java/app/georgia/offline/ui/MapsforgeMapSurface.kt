@@ -118,7 +118,7 @@ fun MapsforgeMapSurface(
     val currentRoutePoints by rememberUpdatedState(routePoints)
     val currentViaPoints by rememberUpdatedState(viaPoints)
     val currentRouteDrag by rememberUpdatedState(onRouteDrag)
-    key(mapFile.absolutePath, mapFile.lastModified(), preferredLanguage, mapTheme, accentColor, routeColor) {
+    key(mapFile.absolutePath, mapFile.lastModified(), preferredLanguage, mapTheme, accentColor, destinationColor, routeColor, savedColor, carColor, originColor) {
         val overlays = remember { MapOverlays(accentColor, destinationColor, routeColor, savedColor, carColor, originColor) }
         var mapViewRef by remember { mutableStateOf<MapView?>(null) }
         var mapDataStoreRef by remember { mutableStateOf<MapFile?>(null) }
