@@ -646,6 +646,7 @@ private fun MapScreen(modifier: Modifier, settings: LocalSettings, navigation: N
     DisposableEffect(Unit) { onDispose { poiLookupJob?.cancel() } }
     var mapSearchQuery by rememberSaveable { mutableStateOf("") }
     var mapSearchCategory by rememberSaveable { mutableStateOf("all") }
+    var mapSearchAlongRoute by rememberSaveable { mutableStateOf(false) }
     var mapSearchResults by remember { mutableStateOf<List<PoiRepository.PoiRecord>>(emptyList()) }
     var mapSearchViewport by remember { mutableStateOf<MapViewportBounds?>(null) }
     var mapSearchLoading by remember { mutableStateOf(false) }
@@ -656,25 +657,35 @@ private fun MapScreen(modifier: Modifier, settings: LocalSettings, navigation: N
         poiDatabaseMessage = installation.message
         poiDatabaseLoading = false
     }
-    LaunchedEffect(poiDatabase, mapSearchViewport, mapSearchQuery, mapSearchCategory) {
+    LaunchedEffect(poiDatabase, mapSearchViewport, mapSearchQuery, mapSearchCategory, mapSearchAlongRoute, session.route) {
         val db = poiDatabase ?: return@LaunchedEffect
-        val bounds = mapSearchViewport ?: return@LaunchedEffect
-        if (mapSearchQuery.isBlank() && mapSearchCategory == "all") {
+        val route = session.route
+        val searchRoute = mapSearchAlongRoute && route != null
+        val bounds = if (searchRoute) null else mapSearchViewport
+        if (!searchRoute && bounds == null) return@LaunchedEffect
+        if (!searchRoute && mapSearchQuery.isBlank() && mapSearchCategory == "all") {
             mapSearchResults = emptyList()
             mapSearchError = null
             mapSearchLoading = false
             return@LaunchedEffect
         }
-        // Never leave old results tappable while a new query or viewport is being resolved.
+        // Never leave old results tappable while a new query, route or viewport is being resolved.
         mapSearchResults = emptyList()
         mapSearchError = null
         mapSearchLoading = true
         delay(180)
         try {
-            mapSearchResults = PoiRepository.searchInBounds(
-                db, mapSearchQuery, bounds.north, bounds.south, bounds.east, bounds.west,
-                category = mapSearchCategory, limit = 60
-            )
+            mapSearchResults = if (searchRoute && route != null) {
+                val points = List(route.pointCount) { index -> route.lat(index) to route.lon(index) }
+                PoiRepository.searchAlongRoute(
+                    db, mapSearchQuery, points, category = mapSearchCategory, limit = 60
+                )
+            } else {
+                PoiRepository.searchInBounds(
+                    db, mapSearchQuery, bounds!!.north, bounds.south, bounds.east, bounds.west,
+                    category = mapSearchCategory, limit = 60
+                )
+            }
         } catch (error: Exception) {
             mapSearchResults = emptyList()
             mapSearchError = error.message ?: "Не удалось выполнить поиск по локальной базе."
@@ -941,6 +952,9 @@ private fun MapScreen(modifier: Modifier, settings: LocalSettings, navigation: N
                                 onQueryChange = { mapSearchQuery = it },
                                 selectedCategory = mapSearchCategory,
                                 onCategoryChange = { mapSearchCategory = it },
+                                alongRouteAvailable = session.route != null,
+                                alongRoute = mapSearchAlongRoute,
+                                onAlongRouteChange = { mapSearchAlongRoute = it },
                                 results = mapSearchResults,
                                 loading = mapSearchLoading,
                                 databaseLoading = poiDatabaseLoading,
@@ -1044,6 +1058,20 @@ private fun MapScreen(modifier: Modifier, settings: LocalSettings, navigation: N
                             saved = alreadySaved,
                             inTrip = poi.poiId in tripPlanIds,
                             planFull = tripPlanIds.size >= 20,
+                            routeAvailable = session.route != null && !session.navigating,
+                            onAddToRoute = {
+                                val currentRoute = session.route
+                                if (currentRoute != null && navigation.target != null) {
+                                    val progress = currentRoute.project(poi.latitude, poi.longitude).alongMeters
+                                    val insertAt = navigation.viaPoints.indexOfFirst { via ->
+                                        currentRoute.project(via.latitude, via.longitude).alongMeters > progress
+                                    }.let { if (it < 0) navigation.viaPoints.size else it }
+                                    navigation.addWaypoint(NavigationTarget(poiName, poi.latitude, poi.longitude), insertAt)
+                                    session.reset()
+                                    selectedMapPoi = null
+                                    coroutineScope.launch { delay(120); planFrom(tracker.location, rerouting = false) }
+                                }
+                            },
                             onRoute = {
                                 session.reset()
                                 navigation.startRouteTo(NavigationTarget(poiName, poi.latitude, poi.longitude))
@@ -1174,6 +1202,9 @@ private fun MapViewportSearchBox(
     onQueryChange: (String) -> Unit,
     selectedCategory: String,
     onCategoryChange: (String) -> Unit,
+    alongRouteAvailable: Boolean,
+    alongRoute: Boolean,
+    onAlongRouteChange: (Boolean) -> Unit,
     results: List<PoiRepository.PoiRecord>,
     loading: Boolean,
     databaseLoading: Boolean,
@@ -1205,7 +1236,7 @@ private fun MapViewportSearchBox(
                 modifier = Modifier.fillMaxWidth(),
                 singleLine = true,
                 shape = RoundedCornerShape(50),
-                placeholder = { Text("Найти место на этой области карты", maxLines = 1, overflow = TextOverflow.Ellipsis) },
+                placeholder = { Text(if (alongRoute) "Найти место вдоль маршрута" else "Найти место на этой области карты", maxLines = 1, overflow = TextOverflow.Ellipsis) },
                 trailingIcon = {
                     if (query.isNotEmpty()) {
                         TextButton(onClick = { onQueryChange("") }) { Text("Очистить") }
@@ -1222,6 +1253,14 @@ private fun MapViewportSearchBox(
                 Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()),
                 horizontalArrangement = Arrangement.spacedBy(Space.xs)
             ) {
+                if (alongRouteAvailable) {
+                    FilterChip(
+                        selected = alongRoute,
+                        onClick = { onAlongRouteChange(!alongRoute) },
+                        label = { Text("По маршруту", maxLines = 1) },
+                        shape = RoundedCornerShape(50)
+                    )
+                }
                 categories.forEach { (key, label) ->
                     FilterChip(
                         selected = selectedCategory == key,
@@ -1266,7 +1305,7 @@ private fun MapViewportSearchBox(
                     }
                 } else if (results.isEmpty()) {
                     Text(
-                        "В видимой области ничего не найдено",
+                        if (alongRoute) "Вдоль маршрута ничего не найдено" else "В видимой области ничего не найдено",
                         modifier = Modifier.padding(horizontal = Space.xs, vertical = Space.xs),
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
@@ -1320,6 +1359,8 @@ private fun MapPoiCard(
     saved: Boolean,
     inTrip: Boolean,
     planFull: Boolean,
+    routeAvailable: Boolean,
+    onAddToRoute: () -> Unit,
     onRoute: () -> Unit,
     onSave: () -> Unit,
     onAddToTrip: () -> Unit,
@@ -1422,6 +1463,11 @@ private fun MapPoiCard(
                     enabled = !saved
                 ) {
                     Text(if (saved) "В избранном" else "В избранное", maxLines = 1, softWrap = false)
+                }
+            }
+            if (routeAvailable) {
+                OutlinedButton(onClick = onAddToRoute, modifier = Modifier.fillMaxWidth()) {
+                    Text("Добавить остановку в маршрут")
                 }
             }
             TextButton(onClick = onAddToTrip, enabled = !inTrip && !planFull) {
