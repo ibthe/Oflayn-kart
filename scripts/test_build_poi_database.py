@@ -5,7 +5,7 @@ import sqlite3
 import tempfile
 import unittest
 from pathlib import Path
-from build_poi_database import ProgressReporter, PoiInput, classify_tags, create_database, insert_poi, normalise_search_text, point_in_bbox, polygon_centroid
+from build_poi_database import ProgressReporter, PoiInput, classify_tags, create_database, insert_poi, normalise_search_text, point_in_bbox, polygon_centroid, multipolygon_centroid
 from verify_poi_database import verify
 
 
