@@ -16,6 +16,7 @@ class DemSampler:
     def __init__(self, directory: Path):
         self.directory = Path(directory)
         self._tiles: dict[tuple[int, int], np.ndarray | None] = {}
+        self._samples: dict[tuple[int, int], float | None] = {}
 
     @staticmethod
     def tile_key(latitude: int, longitude: int) -> str:
@@ -43,10 +44,14 @@ class DemSampler:
     def sample(self, latitude: float, longitude: float) -> float | None:
         if not (-90.0 <= latitude <= 90.0 and -180.0 <= longitude <= 180.0):
             return None
+        sample_key = (round(latitude * 1e6), round(longitude * 1e6))
+        if sample_key in self._samples:
+            return self._samples[sample_key]
         tile_latitude = math.floor(latitude)
         tile_longitude = math.floor(longitude)
         data = self._tile(tile_latitude, tile_longitude)
         if data is None:
+            self._samples[sample_key] = None
             return None
 
         # The raster is north-up: row zero is the north edge, column zero the west edge.
@@ -61,8 +66,11 @@ class DemSampler:
         ]
         valid = window[window != NODATA]
         if valid.size == 0:
+            self._samples[sample_key] = None
             return None
-        return float(np.median(valid))
+        result = float(np.median(valid))
+        self._samples[sample_key] = result
+        return result
 
     def __call__(self, latitude: float, longitude: float) -> float | None:
         return self.sample(latitude, longitude)
