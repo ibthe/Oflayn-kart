@@ -247,8 +247,9 @@ class RouteSession {
         val next = current.nextStep(along) ?: return null
         val index = current.steps.indexOf(next)
         val remaining = next.distanceFromStartMeters - along
-        val far = if (profile == RoutingProfile.CAR || profile == RoutingProfile.OFFROAD) 300.0 else 100.0
-        val near = if (profile == RoutingProfile.CAR || profile == RoutingProfile.OFFROAD) 50.0 else 20.0
+        val motorized = profile == RoutingProfile.CAR || profile == RoutingProfile.OFFROAD || profile == RoutingProfile.MOTORCYCLE
+        val far = if (motorized) 300.0 else 100.0
+        val near = if (motorized) 50.0 else 20.0
         return when {
             remaining <= near && announced.add("$index:near") -> next.text
             remaining <= far && remaining > near && announced.add("$index:far") ->
