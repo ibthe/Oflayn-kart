@@ -270,7 +270,7 @@ internal fun DiscoverScreen(
                         onRoute = { onNavigate(name, poi.latitude, poi.longitude) },
                         onSave = { settings.addPlace(name, poi.latitude, poi.longitude) },
                         inTrip = tripStops.any { it.poiId == poi.poiId },
-                        planFull = tripStops.size >= 20,
+                        planFull = tripStops.size >= TripPlanRepository.MAX_STOPS,
                         onAddToTrip = {
                             if (tripStops.size >= 20) {
                                 statusMessage = "В плане может быть не более 20 мест."
@@ -362,7 +362,7 @@ private fun TripPlanContent(
                         if (editingNoteId == stop.poiId) {
                             OutlinedTextField(
                                 value = noteDrafts[stop.poiId].orEmpty(),
-                                onValueChange = { noteDrafts = noteDrafts + (stop.poiId to it.take(500)) },
+                                onValueChange = { noteDrafts = noteDrafts + (stop.poiId to it.take(TripPlanRepository.MAX_NOTE_LENGTH)) },
                                 modifier = Modifier.fillMaxWidth(),
                                 label = { Text("Заметка к месту") },
                                 maxLines = 2
@@ -378,7 +378,7 @@ private fun TripPlanContent(
                         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(Space.xxs)) {
                             TextButton(onClick = { onMove(stop.poiId, -1) }, enabled = index > 0) { Text("↑") }
                             TextButton(onClick = { onMove(stop.poiId, 1) }, enabled = index < dayStops.lastIndex) { Text("↓") }
-                            TextButton(onClick = { onSetDay(stop.poiId, day + 1) }, enabled = day < 30) { Text("День +") }
+                            TextButton(onClick = { onSetDay(stop.poiId, day + 1) }, enabled = day < TripPlanRepository.MAX_DAYS) { Text("День +") }
                             TextButton(onClick = { onRemove(stop.poiId) }) { Text("Убрать") }
                         }
                     }
