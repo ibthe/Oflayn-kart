@@ -37,6 +37,7 @@ object EmergencyContactRepository {
 
     fun isValid(name: String, phone: String): Boolean {
         if (name.isBlank()) return false
+        if (phone.any { !(it.isDigit() || it in "+ ()-") }) return false
         val compact = phone.filter { it.isDigit() || it == '+' }
         val digits = compact.count(Char::isDigit)
         return digits in 6..15 && compact.count { it == '+' } <= 1 &&
