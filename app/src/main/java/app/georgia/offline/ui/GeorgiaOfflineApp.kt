@@ -1511,12 +1511,20 @@ private fun SettingsScreen(modifier: Modifier, settings: LocalSettings, onShowOn
     var storageError by remember { mutableStateOf(false) }
     var bundledHillshadeBytes by remember { mutableStateOf(0L) }
     var installedHillshadeBytes by remember { mutableStateOf(0L) }
+    var bundledContoursBytes by remember { mutableStateOf(0L) }
+    var installedContoursBytes by remember { mutableStateOf(0L) }
     LaunchedEffect(context, settings.mapTheme) {
         val sizes = withContext(Dispatchers.IO) {
-            DemRepository.bundledHillshadeBytes(context) to DemRepository.installedHillshadeBytes(context)
+            Triple(
+                DemRepository.bundledHillshadeBytes(context),
+                DemRepository.installedHillshadeBytes(context),
+                TerrainRepository.bundledContoursBytes(context) to TerrainRepository.installedContoursBytes(context)
+            )
         }
         bundledHillshadeBytes = sizes.first
         installedHillshadeBytes = sizes.second
+        bundledContoursBytes = sizes.third.first
+        installedContoursBytes = sizes.third.second
     }
     LaunchedEffect(context) {
         storageOptions = withContext(Dispatchers.IO) { MapFileRepository.availableStorageOptions(context) }
@@ -1737,6 +1745,21 @@ private fun SettingsScreen(modifier: Modifier, settings: LocalSettings, onShowOn
             )
             Text(
                 "HGT-данные копируются во внутреннюю память при выборе стиля Oflayn Natural. Они используются для затенения рельефа и не требуют интернета.",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+            Text("Контурные линии", style = MaterialTheme.typography.titleSmall)
+            Text(
+                if (bundledContoursBytes > 0L) {
+                    "Пакет в приложении: ${"%.1f".format(java.util.Locale.US, bundledContoursBytes / (1024.0 * 1024.0))} МБ · Во внутренней памяти: ${"%.1f".format(java.util.Locale.US, installedContoursBytes / (1024.0 * 1024.0))} МБ"
+                } else {
+                    "Пакет контурных линий отсутствует в этой сборке."
+                },
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+            Text(
+                "Векторный пакет контуров копируется во внутреннюю память при выборе Oflayn Natural и отображается без интернета.",
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant
             )
