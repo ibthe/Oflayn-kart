@@ -52,8 +52,8 @@ jobs:
       - name: Install offline DEM build dependencies
         run: |
           sudo apt-get update
-          sudo apt-get install --yes python3-rasterio python3-contourpy
-          python3 -c "import contourpy, numpy, rasterio; print('Rasterio', rasterio.__version__, 'NumPy', numpy.__version__, 'ContourPy', contourpy.__version__)"
+          sudo apt-get install --yes python3-rasterio python3-contourpy python3-osmium
+          python3 -c "import contourpy, numpy, osmium, rasterio; print('Rasterio', rasterio.__version__, 'NumPy', numpy.__version__, 'ContourPy', contourpy.__version__, 'PyOsmium', osmium.__version__)"
 
       - name: Verify source manifest is offline
         run: python3 scripts/verify_offline_manifest.py
