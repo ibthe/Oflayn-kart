@@ -147,32 +147,39 @@ fun GeorgiaOfflineApp(settings: LocalSettings) {
         hostView.keepScreenOn = routeSession.navigating
         onDispose { hostView.keepScreenOn = false }
     }
-    LaunchedEffect(navigation.target, navigation.origin, navigation.viaPoints.toList()) { routeSession.reset() }
+    LaunchedEffect(navigation.target, navigation.origin, navigation.viaPoints.toList()) {
+        if (!routeSession.followingTrack) routeSession.reset()
+    }
 
     // Keep GPS progress, voice prompts, arrival detection and rerouting alive across tab changes.
     val coroutineScope = rememberCoroutineScope()
-    LaunchedEffect(fix, routeSession.navigating, navigation.target) {
+    LaunchedEffect(fix, routeSession.navigating, navigation.target, routeSession.followingTrack) {
         val target = navigation.target
-        if (!routeSession.navigating || fix == null || target == null) return@LaunchedEffect
+        if (!routeSession.navigating || fix == null) return@LaunchedEffect
+        if (!routeSession.followingTrack && target == null) return@LaunchedEffect
         when (routeSession.update(fix.latitude, fix.longitude, System.currentTimeMillis())) {
             TrackingEvent.ARRIVED -> {
-                if (routeSession.voice) speaker.speak("Вы прибыли в пункт назначения")
-                android.widget.Toast.makeText(context, "Вы прибыли в пункт назначения", android.widget.Toast.LENGTH_LONG).show()
-                // Arrival ends the whole route, including intermediate stops; do not
-                // accidentally reuse old waypoints when a new destination is chosen later.
+                val announcement = if (routeSession.followingTrack) "Вы вернулись к началу записанного трека" else "Вы прибыли в пункт назначения"
+                if (routeSession.voice) speaker.speak(announcement)
+                android.widget.Toast.makeText(context, announcement, android.widget.Toast.LENGTH_LONG).show()
                 navigation.clearRoute()
+                routeSession.reset()
+            }
+            TrackingEvent.OFF_TRACK -> {
+                android.widget.Toast.makeText(context, "Вы отклонились от записанного трека", android.widget.Toast.LENGTH_SHORT).show()
             }
             TrackingEvent.REROUTE -> {
                 // Rerouting always starts at the latest GPS fix, never the old
                 // explicitly selected origin. Keep only via stops still ahead.
+                val destination = target ?: return@LaunchedEffect
                 val via = routeSession.remainingWaypoints()
                 coroutineScope.launch {
                     routeSession.plan(
                         context,
                         fix.latitude,
                         fix.longitude,
-                        target.latitude,
-                        target.longitude,
+                        destination.latitude,
+                        destination.longitude,
                         rerouting = true,
                         waypoints = via
                     )
