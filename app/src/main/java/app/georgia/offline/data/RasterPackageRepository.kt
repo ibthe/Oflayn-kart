@@ -44,6 +44,8 @@ object RasterPackageRepository {
     private const val MAX_TILE_BYTES = 2L * 1024L * 1024L
     private const val MAX_TOTAL_BYTES = 8L * 1024L * 1024L * 1024L
     private const val MAX_TILE_COUNT = 1_000_000
+    private const val MAX_ENTRY_COUNT = 1_100_000
+    private const val STORAGE_RESERVE_BYTES = 32L * 1024L * 1024L
 
     private data class Manifest(
         val name: String,
@@ -69,6 +71,7 @@ object RasterPackageRepository {
             var manifestBytes: ByteArray? = null
             var totalBytes = 0L
             var tileCount = 0
+            var entryCount = 0
             val zoomLevels = HashSet<Int>()
             val seenPaths = HashSet<String>()
             val allowedExtension = setOf("png", "jpg")
@@ -78,6 +81,8 @@ object RasterPackageRepository {
             ZipInputStream(BufferedInputStream(input)).use { zip ->
                 while (true) {
                     val entry = zip.nextEntry ?: break
+                    entryCount++
+                    check(entryCount <= MAX_ENTRY_COUNT) { "В архиве слишком много записей." }
                     val name = entry.name
                     check(name.isNotBlank() && !name.startsWith("/") && !name.contains('\\') &&
                         !name.contains(':') && name.split('/').none { it == ".." || it == "." }
@@ -95,6 +100,7 @@ object RasterPackageRepository {
                             val read = zip.read(buffer)
                             if (read < 0) break
                             totalBytes += read
+                            ensureStorageSpace(storageRoot, totalBytes)
                             check(bytes.size().toLong() + read <= MAX_MANIFEST_BYTES && totalBytes <= MAX_TOTAL_BYTES) {
                                 "Манифест или архив слишком велик."
                             }
@@ -126,6 +132,7 @@ object RasterPackageRepository {
                                 if (read < 0) break
                                 tileBytes += read
                                 totalBytes += read
+                                ensureStorageSpace(storageRoot, totalBytes)
                                 check(tileBytes <= MAX_TILE_BYTES && totalBytes <= MAX_TOTAL_BYTES) {
                                     "Размер тайла или архива превышает безопасный предел."
                                 }
@@ -241,6 +248,15 @@ object RasterPackageRepository {
             setEnabled(context, false)
         }
         return removed
+    }
+
+    private fun ensureStorageSpace(storageRoot: File, writtenBytes: Long) {
+        val available = storageRoot.usableSpace
+        if (available > 0L) {
+            check(writtenBytes + STORAGE_RESERVE_BYTES <= available) {
+                "Недостаточно свободного места для импорта спутникового пакета."
+            }
+        }
     }
 
     private data class TilePath(val zoom: Int, val x: Int, val y: Int, val extension: String)
