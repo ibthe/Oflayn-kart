@@ -79,6 +79,7 @@ class AppFlowUiTest {
         composeRule.onNodeWithText("Карта", substring = false).performClick()
         composeRule.onNodeWithText("Утилиты", substring = false).performClick()
         awaitText("Экстренная помощь")
+        awaitText("Если произошло ДТП")
         composeRule.onNodeWithText("Открыть", substring = false).performClick()
         awaitText("Сначала безопасность")
         awaitText("Вызови 112")
