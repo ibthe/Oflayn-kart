@@ -1,6 +1,9 @@
 package app.georgia.offline.data
 
 import android.content.Context
+import java.io.File
+import java.security.MessageDigest
+import org.json.JSONObject
 import java.nio.ByteBuffer
 import java.nio.ByteOrder
 import java.util.zip.GZIPInputStream
@@ -85,6 +88,63 @@ object DemRepository {
             maximumMeters = samples.maxOf { it.elevationMeters }.roundToInt()
         )
     }
+
+
+    /**
+     * Installs the bundled HGT archives into app-private storage for Mapsforge's hillshading
+     * reader. Files are copied atomically and checked against the manifest; no network is used.
+     */
+    suspend fun ensureHillshadeInstalled(context: Context): File? = withContext(Dispatchers.IO) {
+        val manifestBytes = runCatching {
+            context.assets.open("dem/manifest.json").use { it.readBytes() }
+        }.getOrNull() ?: return@withContext null
+        val manifest = runCatching { JSONObject(String(manifestBytes, Charsets.UTF_8)) }.getOrNull()
+            ?: return@withContext null
+        val tiles = manifest.optJSONArray("tiles") ?: return@withContext null
+        val expected = mutableListOf<Triple<String, String, Long>>()
+        for (index in 0 until tiles.length()) {
+            val tile = tiles.optJSONObject(index) ?: continue
+            val relativePath = tile.optString("hgtFile").takeIf { it.startsWith("hgt/") } ?: continue
+            val sha256 = tile.optString("hgtSha256").takeIf { it.length == 64 } ?: continue
+            val size = tile.optLong("hgtCompressedBytes", -1L).takeIf { it > 0L } ?: continue
+            expected += Triple(relativePath.removePrefix("hgt/"), sha256, size)
+        }
+        if (expected.isEmpty()) return@withContext null
+
+        val directory = File(context.filesDir, "dem/hgt")
+        if (!directory.exists() && !directory.mkdirs()) {
+            throw IllegalStateException("Не удалось подготовить локальные данные рельефа.")
+        }
+        val manifestHash = sha256(manifestBytes)
+        val marker = File(directory, ".manifest-sha256")
+        val alreadyInstalled = marker.isFile && runCatching { marker.readText() }.getOrNull() == manifestHash &&
+            expected.all { (name, _, size) -> File(directory, name).let { it.isFile && it.length() == size } }
+        if (!alreadyInstalled) {
+            expected.forEach { (name, expectedSha, expectedSize) ->
+                val assetPath = "dem/hgt/$name"
+                val bytes = context.assets.open(assetPath).use { it.readBytes() }
+                if (bytes.size.toLong() != expectedSize || sha256(bytes) != expectedSha) {
+                    throw IllegalStateException("Повреждён архив рельефа: $name")
+                }
+                val target = File(directory, name)
+                val temporary = File(directory, "$name.tmp")
+                target.parentFile?.let { if (!it.exists() && !it.mkdirs()) error("Не удалось создать каталог рельефа.") }
+                temporary.writeBytes(bytes)
+                if (!temporary.renameTo(target)) {
+                    temporary.delete()
+                    throw IllegalStateException("Не удалось сохранить архив рельефа: $name")
+                }
+            }
+            val expectedNames = expected.map { it.first }.toSet()
+            directory.listFiles()?.filter { it.name.endsWith(".hgt.zip") && it.name !in expectedNames }
+                ?.forEach { it.delete() }
+            marker.writeText(manifestHash)
+        }
+        directory
+    }
+
+    private fun sha256(bytes: ByteArray): String =
+        MessageDigest.getInstance("SHA-256").digest(bytes).joinToString("") { "%02x".format(it) }
 
     @Synchronized
     fun clearCache() = tileCache.clear()
