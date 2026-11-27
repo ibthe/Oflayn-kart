@@ -60,6 +60,31 @@ class AppFlowUiTest {
         composeRule.onNodeWithText("Найти место на этой области карты").assertExists()
     }
 
+    @Test
+    fun guidebookAndEmergencyToolsExposeTheirExpandedContent() {
+        awaitText("Стиль: Классика")
+        composeRule.onNodeWithText("Места", substring = false).performClick()
+        awaitCount("Места", 2)
+        composeRule.onNodeWithText("Путеводитель", substring = false).performClick()
+        awaitText("Тушетия")
+        composeRule.onAllNodesWithText("Подробнее", substring = false).onFirst().performClick()
+        awaitText("Маршруты и последовательности")
+        awaitText("Полезные сервисы и подготовка")
+        awaitText("Найти")
+
+        composeRule.onNodeWithText("Карта", substring = false).performClick()
+        awaitText("Стиль: Классика")
+        composeRule.onNodeWithText("Утилиты", substring = false).performClick()
+        awaitText("Экстренная помощь")
+        composeRule.onNodeWithText("Открыть", substring = false).performClick()
+        awaitText("Сначала безопасность")
+        awaitText("Вызови 112")
+        composeRule.onNodeWithText("Добавить контакт", substring = false).performClick()
+        awaitText("Имя контакта")
+        awaitText("Телефон с кодом страны")
+        composeRule.onNodeWithText("Отмена", substring = false).performClick()
+    }
+
     private fun awaitText(text: String) {
         composeRule.waitUntil(timeoutMillis = 45_000) {
             composeRule.onAllNodesWithText(text, substring = false).fetchSemanticsNodes().isNotEmpty()
