@@ -152,13 +152,23 @@ fun GeorgiaOfflineApp(settings: LocalSettings) {
         val activeRoute = routeSession.route
         if (activeRoute == null) {
             routeSession.elevationProfile = null
+            routeSession.elevationLoading = false
         } else {
-            val geometry = buildList(activeRoute.pointCount) {
-                repeat(activeRoute.pointCount) { index ->
-                    add(LatLong(activeRoute.lat(index), activeRoute.lon(index)))
+            routeSession.elevationLoading = true
+            try {
+                val geometry = buildList(activeRoute.pointCount) {
+                    repeat(activeRoute.pointCount) { index ->
+                        add(LatLong(activeRoute.lat(index), activeRoute.lon(index)))
+                    }
                 }
+                routeSession.elevationProfile = DemRepository.profile(context, geometry)
+            } catch (cancelled: kotlinx.coroutines.CancellationException) {
+                throw cancelled
+            } catch (_: Exception) {
+                routeSession.elevationProfile = null
+            } finally {
+                routeSession.elevationLoading = false
             }
-            routeSession.elevationProfile = DemRepository.profile(context, geometry)
         }
     }
     // Recording follows fresh foreground GPS fixes and survives tab switches.
