@@ -29,8 +29,8 @@ class TrackRepository(private val directory: File) {
 
     fun load(id: String): GpxTrack = fileFor(id).inputStream().use { GpxCodec.parse(it) }
 
-    fun saveRecovery(track: GpxTrack) {
-        if (track.pointCount < 2) return
+    fun saveRecovery(track: GpxTrack, isCurrent: () -> Boolean = { true }) = synchronized(recoveryLock) {
+        if (track.pointCount < 2 || !isCurrent()) return@synchronized
         directory.mkdirs()
         val target = File(directory, RECOVERY_FILE_NAME)
         val temporary = File(directory, "$RECOVERY_FILE_NAME.tmp")
@@ -47,7 +47,7 @@ class TrackRepository(private val directory: File) {
         return runCatching { file.inputStream().use { GpxCodec.parse(it, "Восстановленный трек") } }.getOrNull()
     }
 
-    fun clearRecovery() {
+    fun clearRecovery() = synchronized(recoveryLock) {
         File(directory, RECOVERY_FILE_NAME).delete()
         File(directory, "$RECOVERY_FILE_NAME.tmp").delete()
     }
@@ -68,6 +68,7 @@ class TrackRepository(private val directory: File) {
     fun delete(id: String): Boolean = fileFor(id).delete()
 
     private companion object {
+        val recoveryLock = Any()
         const val RECOVERY_FILE_NAME = ".recording-recovery.gpx"
     }
 
