@@ -195,7 +195,7 @@ def main() -> int:
         return fail("the static POI manifest must require search index revision 3.")
     if "poiIndexVersion\": 3" not in map_script:
         return fail("the generated POI build manifest must identify search index revision 3.")
-    if "poi-v3-" not in workflow:
+    if "poi-v4-" not in workflow:
         return fail("the CI cache namespace must be bumped so older POI indexes are not reused.")
     if "python3 scripts/build_poi_database.py" not in map_script or "python3 scripts/verify_poi_database.py" not in map_script:
         return fail("the full country map build must generate and verify the POI database from the same PBF.")
