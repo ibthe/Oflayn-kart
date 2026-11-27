@@ -56,6 +56,7 @@
 - Лицензии библиотек и полные уведомления: [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md).
 - Источники путеводителя: [GUIDEBOOK_CONTENT_SOURCES.md](docs/GUIDEBOOK_CONTENT_SOURCES.md).
 - Формат офлайн-спутникового пакета: [OFLAYN_RASTER_PACK_FORMAT.md](docs/OFLAYN_RASTER_PACK_FORMAT.md).
+- Метод расчёта уклона дорог: [ROAD_GRADE_MODEL.md](docs/ROAD_GRADE_MODEL.md).
 - Источники памятки безопасности: [SAFETY_CONTENT_SOURCES.md](docs/SAFETY_CONTENT_SOURCES.md).
 
 ## Сборка
