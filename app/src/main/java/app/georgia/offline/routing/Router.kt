@@ -80,8 +80,10 @@ class Router(private val graph: RoadGraph) {
         val b = index.snap(profile, lat2, lon2, MAX_SNAP_METERS) ?: return RouteResult.failed(RouteFailure.NO_ROAD_NEAR_END)
         val ea = a.edge
         val eb = b.edge
-        val speedA = speed(profile, ea)
-        val speedB = speed(profile, eb)
+        val speedAForward = speed(profile, ea, 0)
+        val speedABackward = speed(profile, ea, 1)
+        val speedBForward = speed(profile, eb, 0)
+        val speedBBackward = speed(profile, eb, 1)
         val lengthA = graph.edgeLengthMeters(ea)
         val lengthB = graph.edgeLengthMeters(eb)
 
@@ -92,11 +94,11 @@ class Router(private val graph: RoadGraph) {
         var seedFromCost = Double.MAX_VALUE
         if (graph.usable(profile, ea, 0)) {
             seedToVertex = graph.edgeTo(ea)
-            seedToCost = (lengthA - a.alongMeters) / speedA
+            seedToCost = (lengthA - a.alongMeters) / speedAForward
         }
         if (graph.usable(profile, ea, 1)) {
             seedFromVertex = graph.edgeFrom(ea)
-            seedFromCost = a.alongMeters / speedA
+            seedFromCost = a.alongMeters / speedABackward
         }
         // The end point sits inside edge eb: it is reached from one of its ends.
         var targetFromVertex = -1 // reached at `from`, then driven forward to the point
@@ -105,11 +107,11 @@ class Router(private val graph: RoadGraph) {
         var targetToCost = 0.0
         if (graph.usable(profile, eb, 0)) {
             targetFromVertex = graph.edgeFrom(eb)
-            targetFromCost = b.alongMeters / speedB
+            targetFromCost = b.alongMeters / speedBForward
         }
         if (graph.usable(profile, eb, 1)) {
             targetToVertex = graph.edgeTo(eb)
-            targetToCost = (lengthB - b.alongMeters) / speedB
+            targetToCost = (lengthB - b.alongMeters) / speedBBackward
         }
 
         // Both points on the same edge: driving straight along it may beat any detour.
@@ -118,10 +120,10 @@ class Router(private val graph: RoadGraph) {
         if (ea == eb) {
             val delta = b.alongMeters - a.alongMeters
             if (delta >= 0 && graph.usable(profile, ea, 0)) {
-                sameEdgeSeconds = delta / speedA
+                sameEdgeSeconds = delta / speedAForward
                 sameEdgeDirection = 0
             } else if (delta <= 0 && graph.usable(profile, ea, 1)) {
-                sameEdgeSeconds = -delta / speedA
+                sameEdgeSeconds = -delta / speedABackward
                 sameEdgeDirection = 1
             }
         }
@@ -174,7 +176,7 @@ class Router(private val graph: RoadGraph) {
                     if (!graph.usable(profile, e, direction)) continue
                     val w = if (direction == 0) graph.edgeTo(e) else graph.edgeFrom(e)
                     if (closed[w]) continue
-                    val ng = gu + graph.edgeLengthMeters(e) / speed(profile, e)
+                    val ng = gu + graph.edgeLengthMeters(e) / speed(profile, e, direction)
                     if (ng < g[w]) {
                         g[w] = ng
                         parentVertex[w] = u
@@ -278,7 +280,8 @@ class Router(private val graph: RoadGraph) {
         return RouteResult.found(Route(profile, all.toArray(), seconds, steps, warnings))
     }
 
-    private fun speed(profile: RoutingProfile, e: Int): Double = profile.speedMps(graph.edgeClass(e), graph.edgeFlags(e))
+    private fun speed(profile: RoutingProfile, e: Int, direction: Int): Double =
+        profile.speedMps(graph.edgeClass(e), graph.edgeFlags(e), graph.edgeInclinePercent(e, direction))
 
     private fun pieceLength(points: DoubleArray): Double {
         var total = 0.0
