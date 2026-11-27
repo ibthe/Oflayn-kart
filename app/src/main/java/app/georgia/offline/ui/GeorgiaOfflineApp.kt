@@ -574,20 +574,35 @@ private fun MapScreen(modifier: Modifier, settings: LocalSettings, navigation: N
     val coroutineScope = rememberCoroutineScope()
     // A full-map CI build packages offline/georgia.map in the APK. Keep imported
     // maps untouched; refresh only the bundled copy when its embedded SHA-256 changes.
-    LaunchedEffect(settings.mapDisabled, settings.mapFilePath, settings.mapFileIsBundled) {
+    LaunchedEffect(settings.mapDisabled, settings.mapFilePath, settings.mapFileIsBundled, settings.mapStorageId) {
         val savedPath = settings.mapFilePath
-        val savedFileExists = !savedPath.isNullOrBlank() && File(savedPath).isFile
+        val savedFile = savedPath?.let(::File)
+        val savedFileExists = savedFile?.isFile == true
         val keepUserImportedMap = savedFileExists && !settings.mapFileIsBundled
-        if (!settings.mapDisabled && !keepUserImportedMap) {
+        if (!settings.mapDisabled) {
             try {
-                val bundled = withContext(Dispatchers.IO) {
-                    MapFileRepository.installBundledMap(context)
+                if (keepUserImportedMap && savedFile != null) {
+                    val moved = withContext(Dispatchers.IO) {
+                        MapFileRepository.moveImportedMap(context, savedFile, settings.mapStorageId)
+                    }
+                    if (moved.absolutePath != savedFile.absolutePath) {
+                        settings.setMapFilePath(moved.absolutePath, bundled = false)
+                    }
+                } else if (!keepUserImportedMap) {
+                    val bundled = withContext(Dispatchers.IO) {
+                        MapFileRepository.installBundledMap(context, settings.mapStorageId)
+                    }
+                    if (bundled != null) {
+                        if (settings.mapFileIsBundled && savedFile?.isFile == true && savedFile.canonicalFile != bundled.canonicalFile) {
+                            savedFile.delete()
+                        }
+                        settings.setMapFilePath(bundled.absolutePath, bundled = true)
+                    }
                 }
-                if (bundled != null) settings.setMapFilePath(bundled.absolutePath, bundled = true)
             } catch (error: Exception) {
                 android.widget.Toast.makeText(
                     context,
-                    error.message ?: "Не удалось установить встроенную карту.",
+                    error.message ?: "Не удалось подготовить карту на выбранном накопителе.",
                     android.widget.Toast.LENGTH_LONG
                 ).show()
             }
