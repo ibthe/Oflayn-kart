@@ -798,7 +798,7 @@ private fun MapScreen(modifier: Modifier, settings: LocalSettings, navigation: N
                 verticalArrangement = Arrangement.spacedBy(Space.xs)
             ) {
                 Text(
-                    "© OpenStreetMap",
+                    "© OpenStreetMap contributors",
                     modifier = Modifier.align(Alignment.End).padding(end = Space.s),
                     style = MaterialTheme.typography.labelSmall,
                     color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f)
