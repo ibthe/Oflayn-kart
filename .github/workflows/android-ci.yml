@@ -287,7 +287,7 @@ jobs:
             adb install -r "$app_apk"
             adb install -t -r "$test_apk"
             adb shell pm clear app.georgia.offline.debug
-            instrumentation="$(adb shell pm list instrumentation | sed -n 's/^instrumentation:\\([^ ]*\\).*/\\1/p' | grep 'AndroidJUnitRunner' | head -n 1)"
+            instrumentation="$(adb shell pm list instrumentation | sed -n 's/^instrumentation:\([^ ]*\).*/\1/p' | grep 'AndroidJUnitRunner' | head -n 1)"
             test -n "$instrumentation"
             set -o pipefail
             adb shell am instrument -w -r "$instrumentation" | tee artifacts/instrumentation.log
