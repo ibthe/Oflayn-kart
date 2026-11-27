@@ -409,7 +409,7 @@ def main() -> int:
         return fail("Android routing must enforce incoming/outgoing OSM turn transitions.")
     if "RoadGraph.FORMAT_VERSION" not in routing_repository:
         return fail("RoutingRepository must reinstall the bundled road graph when its format changes.")
-    for token in ("test_no_turn_restriction_forces_a_detour", "test_only_turn_restriction_keeps_the_allowed_exit", "test_via_way_is_counted_as_unsupported_not_silently_misapplied"):
+    for token in ("test_no_turn_restriction_forces_a_detour", "test_only_turn_restriction_keeps_the_allowed_exit", "test_via_way_is_counted_as_unsupported_not_silently_misapplied", "test_no_entry_and_no_exit_multiple_members_expand_all_pairs", "test_same_way_no_u_turn_blocks_only_the_reverse_arc", "test_same_way_only_u_turn_blocks_continuing_straight"):
         if token not in road_tests:
             return fail(f"OSM turn restriction regression coverage is missing: {token}.")
     for token in ("def _incline_pair", "incline_forward", "incline_backward", "edge_incline_percent"):
