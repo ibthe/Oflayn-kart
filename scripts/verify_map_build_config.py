@@ -60,6 +60,8 @@ EMERGENCY_CONTACT_REPOSITORY = ROOT / "app/src/main/java/app/georgia/offline/dat
 SAFETY_TESTS = ROOT / "app/src/androidTest/java/app/georgia/offline/SafetyChecklistRepositoryTest.kt"
 SAFETY_SOURCES = ROOT / "docs/SAFETY_CONTENT_SOURCES.md"
 APP_FLOW_UI_TESTS = ROOT / "app/src/androidTest/java/app/georgia/offline/AppFlowUiTest.kt"
+MAP_FILE_REPOSITORY = ROOT / "app/src/main/java/app/georgia/offline/data/MapFileRepository.kt"
+MAP_STORAGE_TESTS = ROOT / "app/src/androidTest/java/app/georgia/offline/MapStorageTest.kt"
 
 EXPECTED_MIRROR = "https://download.openstreetmap.fr/extracts/asia/georgia.osm.pbf"
 EXPECTED_MIRROR_MD5 = "https://download.openstreetmap.fr/extracts/asia/georgia.osm.pbf.md5"
@@ -76,7 +78,7 @@ def fail(message: str) -> int:
 
 
 def main() -> int:
-    required = (MAP_SCRIPT, PBF_PREP_SCRIPT, WRITER_SCRIPT, WORKFLOW, DATA_SOURCES, SMOKE_FIXTURE, BUNDLE_MANIFEST, POI_BUILDER, POI_VERIFIER, POI_TESTS, POI_SMOKE_TEST, POI_SMOKE_FIXTURE, PBF_CACHE_TEST, APP_BUILD, POI_REPOSITORY, POI_UI, DEM_BUILDER, DEM_VERIFIER, DEM_TESTS, APK_VERIFIER, DEM_REPOSITORY, MAP_SURFACE, CONTOUR_BUILDER, CONTOUR_TESTS, CONTOUR_MAP_BUILDER, CONTOUR_MAP_VERIFIER, TERRAIN_REPOSITORY, CONTOUR_THEME_LIGHT, CONTOUR_THEME_DARK, ANDROID_MANIFEST, TOOLS_SCREEN, MAP_ZOOM_POLICY, MAP_ZOOM_TESTS, ROAD_FORMAT, ROAD_GRAPH_READER, ROUTING_REPOSITORY, ROAD_ROUTER, ROUTING_PROFILE, ROAD_TESTS, ROAD_TURN_SMOKE, ROAD_TURN_FIXTURE, ROUTING_PROFILE_TESTS, TINY_ROAD_GRAPH, TINY_TURN_GRAPH, TINY_ONLY_TURN_GRAPH, GUIDEBOOK_REPOSITORY, GUIDEBOOK_TESTS, GUIDEBOOK_SOURCES, SAFETY_REPOSITORY, EMERGENCY_CONTACT_REPOSITORY, SAFETY_TESTS, SAFETY_SOURCES, APP_FLOW_UI_TESTS)
+    required = (MAP_SCRIPT, PBF_PREP_SCRIPT, WRITER_SCRIPT, WORKFLOW, DATA_SOURCES, SMOKE_FIXTURE, BUNDLE_MANIFEST, POI_BUILDER, POI_VERIFIER, POI_TESTS, POI_SMOKE_TEST, POI_SMOKE_FIXTURE, PBF_CACHE_TEST, APP_BUILD, POI_REPOSITORY, POI_UI, DEM_BUILDER, DEM_VERIFIER, DEM_TESTS, APK_VERIFIER, DEM_REPOSITORY, MAP_SURFACE, CONTOUR_BUILDER, CONTOUR_TESTS, CONTOUR_MAP_BUILDER, CONTOUR_MAP_VERIFIER, TERRAIN_REPOSITORY, CONTOUR_THEME_LIGHT, CONTOUR_THEME_DARK, ANDROID_MANIFEST, TOOLS_SCREEN, MAP_ZOOM_POLICY, MAP_ZOOM_TESTS, ROAD_FORMAT, ROAD_GRAPH_READER, ROUTING_REPOSITORY, ROAD_ROUTER, ROUTING_PROFILE, ROAD_TESTS, ROAD_TURN_SMOKE, ROAD_TURN_FIXTURE, ROUTING_PROFILE_TESTS, TINY_ROAD_GRAPH, TINY_TURN_GRAPH, TINY_ONLY_TURN_GRAPH, GUIDEBOOK_REPOSITORY, GUIDEBOOK_TESTS, GUIDEBOOK_SOURCES, SAFETY_REPOSITORY, EMERGENCY_CONTACT_REPOSITORY, SAFETY_TESTS, SAFETY_SOURCES, APP_FLOW_UI_TESTS, MAP_FILE_REPOSITORY, MAP_STORAGE_TESTS)
     for path in required:
         if not path.is_file():
             return fail(f"required build file is missing: {path.relative_to(ROOT)}")
@@ -127,6 +129,8 @@ def main() -> int:
     safety_tests = SAFETY_TESTS.read_text(encoding="utf-8")
     safety_sources = SAFETY_SOURCES.read_text(encoding="utf-8")
     app_flow_ui_tests = APP_FLOW_UI_TESTS.read_text(encoding="utf-8")
+    map_file_repository = MAP_FILE_REPOSITORY.read_text(encoding="utf-8")
+    map_storage_tests = MAP_STORAGE_TESTS.read_text(encoding="utf-8")
     data_sources = DATA_SOURCES.read_text(encoding="utf-8")
     try:
         bundle_manifest = json.loads(BUNDLE_MANIFEST.read_text(encoding="utf-8"))
@@ -491,6 +495,12 @@ def main() -> int:
     for token in ("guidebookAndEmergencyToolsExposeTheirExpandedContent", "Добавить контакт", "Если произошло ДТП"):
         if token not in app_flow_ui_tests:
             return fail(f"Guidebook/emergency emulator UI coverage is missing: {token}.")
+
+    if "internal fun availableStorageOptions" not in map_file_repository:
+        return fail("Removable storage discovery must expose a testable volume-probe seam.")
+    for token in ("onlyMountedRemovableVolumesAreOfferedAsSdStorage", "failedMoveKeepsTheOriginalMapAndCleansTemporaryCopy"):
+        if token not in map_storage_tests:
+            return fail(f"Map storage regression coverage is missing: {token}.")
 
     if "continue-on-error: true" in workflow:
         return fail("map preparation must fail fast; do not hide failed prerequisites.")
