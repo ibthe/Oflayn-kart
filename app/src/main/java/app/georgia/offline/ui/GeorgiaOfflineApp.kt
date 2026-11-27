@@ -258,7 +258,7 @@ fun GeorgiaOfflineApp(settings: LocalSettings) {
                                 trackRecorder.points.size,
                                 tripPlanIds,
                                 onAddToTrip = { poi ->
-                                    if (tripPlanIds.size >= 20) {
+                                    if (tripPlanIds.size >= TripPlanRepository.MAX_STOPS) {
                                         android.widget.Toast.makeText(context, "В плане может быть не более 20 мест", android.widget.Toast.LENGTH_SHORT).show()
                                     } else if (tripPlanRepository.add(poi.poiId)) {
                                         tripPlanRevision++
