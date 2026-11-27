@@ -52,8 +52,8 @@ jobs:
       - name: Install offline DEM build dependencies
         run: |
           sudo apt-get update
-          sudo apt-get install --yes python3-rasterio
-          python3 -c "import numpy, rasterio; print('Rasterio', rasterio.__version__, 'NumPy', numpy.__version__)"
+          sudo apt-get install --yes python3-rasterio python3-contourpy
+          python3 -c "import contourpy, numpy, rasterio; print('Rasterio', rasterio.__version__, 'NumPy', numpy.__version__, 'ContourPy', contourpy.__version__)"
 
       - name: Verify source manifest is offline
         run: python3 scripts/verify_offline_manifest.py
@@ -66,6 +66,9 @@ jobs:
 
       - name: Test offline DEM tile selection and encoding
         run: python3 scripts/test_build_dem.py
+
+      - name: Test offline elevation contour generation
+        run: python3 scripts/test_build_contours.py
 
       - name: Test offline road graph builder and reference router
         run: python3 scripts/test_build_road_graph.py
