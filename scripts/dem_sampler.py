@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Small cached sampler for the app's compressed 90 m Copernicus DEM tiles."""
+"""Small cached 3×3 median sampler for the app's compressed 90 m Copernicus DEM tiles."""
 from __future__ import annotations
 
 import gzip
