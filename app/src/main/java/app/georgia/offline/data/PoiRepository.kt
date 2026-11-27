@@ -269,10 +269,10 @@ object PoiRepository {
                     ELSE 2
                 END,
                 CASE category
-                    WHEN 'settlement' THEN 0 WHEN 'tourism' THEN 1 WHEN 'historic' THEN 2
-                    WHEN 'nature' THEN 3 WHEN 'food' THEN 4 WHEN 'lodging' THEN 5
-                    WHEN 'medical' THEN 6 WHEN 'transport' THEN 7 WHEN 'services' THEN 8
-                    WHEN 'shops' THEN 9 ELSE 10
+                    WHEN 'tourism' THEN 1 WHEN 'historic' THEN 2 WHEN 'nature' THEN 3
+                    WHEN 'food' THEN 4 WHEN 'lodging' THEN 5 WHEN 'medical' THEN 6
+                    WHEN 'transport' THEN 7 WHEN 'services' THEN 8 WHEN 'shops' THEN 9
+                    WHEN 'settlement' THEN 10 ELSE 11
                 END,
                 name COLLATE NOCASE
             LIMIT ?
