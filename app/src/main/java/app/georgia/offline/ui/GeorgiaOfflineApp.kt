@@ -246,7 +246,28 @@ fun GeorgiaOfflineApp(settings: LocalSettings) {
                         label = "tabs"
                     ) { tab ->
                         when (tab) {
-                            AppTab.MAP -> MapScreen(Modifier.padding(padding), settings, navigation, tracker, routeSession, speaker, selectedTrackPoints, trackRecorder.recording, trackRecorder.points.size, { selectedTrackPoints = emptyList() }) { selectedTab = AppTab.TOOLS.name }
+                            AppTab.MAP -> MapScreen(
+                                Modifier.padding(padding),
+                                settings,
+                                navigation,
+                                tracker,
+                                routeSession,
+                                speaker,
+                                selectedTrackPoints,
+                                trackRecorder.recording,
+                                trackRecorder.points.size,
+                                tripPlanIds,
+                                onAddToTrip = { poi ->
+                                    if (tripPlanRepository.add(poi.poiId)) {
+                                        tripPlanRevision++
+                                        android.widget.Toast.makeText(context, "Добавлено в план поездки", android.widget.Toast.LENGTH_SHORT).show()
+                                    } else {
+                                        android.widget.Toast.makeText(context, "Место уже есть в плане", android.widget.Toast.LENGTH_SHORT).show()
+                                    }
+                                },
+                                onClearTrack = { selectedTrackPoints = emptyList() },
+                                onOpenTrackTools = { selectedTab = AppTab.TOOLS.name }
+                            )
                             AppTab.DISCOVER -> DiscoverScreen(
                                 Modifier.padding(padding),
                                 settings,
@@ -545,7 +566,7 @@ private fun openExternalNavigator(context: android.content.Context, target: Navi
 }
 
 @Composable
-private fun MapScreen(modifier: Modifier, settings: LocalSettings, navigation: NavigationState, tracker: LocationTracker, session: RouteSession, speaker: Speaker, selectedTrackPoints: List<LatLong>, isRecordingTrack: Boolean, recordedTrackPointCount: Int, onClearTrack: () -> Unit, onOpenTrackTools: () -> Unit) {
+private fun MapScreen(modifier: Modifier, settings: LocalSettings, navigation: NavigationState, tracker: LocationTracker, session: RouteSession, speaker: Speaker, selectedTrackPoints: List<LatLong>, isRecordingTrack: Boolean, recordedTrackPointCount: Int, tripPlanIds: Set<String>, onAddToTrip: (PoiRepository.PoiRecord) -> Unit, onClearTrack: () -> Unit, onOpenTrackTools: () -> Unit) {
     val context = LocalContext.current
     val coroutineScope = rememberCoroutineScope()
     // A full-map CI build packages offline/georgia.map in the APK. Keep imported
