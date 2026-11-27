@@ -54,7 +54,7 @@ class TrackRecorder {
             }
         }
         points += point
-        lastElapsedRealtimeNanos = location.elapsedRealtimeNanos
+        lastElapsedRealtimeNanos = elapsedRealtimeNanos
     }
 
     fun finish(name: String = "Мой трек"): GpxTrack? {
