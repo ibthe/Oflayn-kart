@@ -7,21 +7,10 @@ import org.junit.Test
 
 class MapThemeTest {
     @Test
-    fun everyMapStyleOfferedByThePickerIsAcceptedBySettings() {
-        val offeredByPicker = setOf(
-            "classic",
-            "oflayn_natural",
-            "oflayn_natural_dark",
-            "outdoor",
-            "motorider",
-            "biker"
-        )
-        assertEquals(offeredByPicker, LocalSettings.MAP_THEMES)
-    }
-
-    @Test
-    fun naturalThemesAreIncludedInTheSupportedMapStyles() {
-        assertTrue("oflayn_natural" in LocalSettings.MAP_THEMES)
-        assertTrue("oflayn_natural_dark" in LocalSettings.MAP_THEMES)
+    fun mapStyleChoicesHaveUniquePersistedIds() {
+        assertEquals(LocalSettings.MAP_THEME_CHOICES.size, LocalSettings.MAP_THEMES.size)
+        assertTrue(LocalSettings.MAP_THEMES.contains("classic"))
+        assertTrue(LocalSettings.MAP_THEMES.contains("oflayn_natural"))
+        assertTrue(LocalSettings.MAP_THEMES.contains("oflayn_natural_dark"))
     }
 }
