@@ -13,6 +13,7 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
+import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
@@ -138,7 +139,7 @@ fun EmergencyPanel(context: Context, location: Location?) {
                         onClick = {
                             runCatching {
                                 val sms = Intent(Intent.ACTION_SENDTO).apply {
-                                    data = Uri.parse("smsto:${Uri.encode(savedContact!!.phone)}")
+                                    data = Uri.parse("smsto:${savedContact!!.phone.filter { it.isDigit() || it == '+' }}")
                                     putExtra("sms_body", message)
                                 }
                                 context.startActivity(sms)
