@@ -17,13 +17,47 @@ class TrackRecorder {
     var startedAtEpochMillis by mutableStateOf(0L)
         private set
     var note by mutableStateOf("")
+    var hasRecovery by mutableStateOf(false)
+        private set
+    private var recoveryName = "Мой трек"
     private var lastElapsedRealtimeNanos = 0L
+    private var lastCheckpointNanos = 0L
+    private var lastCheckpointPointCount = 0
 
     fun start() {
-        points.clear()
-        startedAtEpochMillis = System.currentTimeMillis()
+        if (!hasRecovery) {
+            points.clear()
+            startedAtEpochMillis = System.currentTimeMillis()
+            recoveryName = "Мой трек"
+            lastCheckpointNanos = 0L
+            lastCheckpointPointCount = 0
+        }
+        hasRecovery = false
         lastElapsedRealtimeNanos = 0L
         recording = true
+    }
+
+    fun restore(track: GpxTrack) {
+        points.clear()
+        track.segments.forEach { points.addAll(it) }
+        startedAtEpochMillis = track.createdAtEpochMillis
+        recoveryName = track.name
+        note = track.description.orEmpty()
+        lastElapsedRealtimeNanos = 0L
+        lastCheckpointNanos = 0L
+        lastCheckpointPointCount = points.size
+        hasRecovery = points.size >= 2
+        recording = false
+    }
+
+    fun checkpointIfDue(elapsedRealtimeNanos: Long): GpxTrack? {
+        if (!recording || points.size < 2) return null
+        val enoughNewPoints = points.size - lastCheckpointPointCount >= CHECKPOINT_POINT_INTERVAL
+        val enoughTime = lastCheckpointNanos == 0L || elapsedRealtimeNanos - lastCheckpointNanos >= CHECKPOINT_INTERVAL_NANOS
+        if (!enoughNewPoints && !enoughTime) return null
+        lastCheckpointNanos = elapsedRealtimeNanos
+        lastCheckpointPointCount = points.size
+        return GpxTrack(recoveryName, listOf(points.toList()), startedAtEpochMillis, note.ifBlank { null })
     }
 
     fun addFix(location: Location) {
@@ -58,7 +92,7 @@ class TrackRecorder {
         lastElapsedRealtimeNanos = elapsedRealtimeNanos
     }
 
-    fun finish(name: String = "Мой трек", description: String? = note): GpxTrack? {
+    fun finish(name: String = recoveryName, description: String? = note): GpxTrack? {
         recording = false
         if (points.size < 2) {
             points.clear()
@@ -68,6 +102,10 @@ class TrackRecorder {
             .also {
                 points.clear()
                 note = ""
+                hasRecovery = false
+                recoveryName = "Мой трек"
+                lastCheckpointNanos = 0L
+                lastCheckpointPointCount = 0
             }
     }
 
@@ -75,12 +113,18 @@ class TrackRecorder {
         recording = false
         points.clear()
         note = ""
+        hasRecovery = false
+        recoveryName = "Мой трек"
         lastElapsedRealtimeNanos = 0L
+        lastCheckpointNanos = 0L
+        lastCheckpointPointCount = 0
     }
 
     private companion object {
         const val MAX_ACCURACY_METERS = 50f
         const val MIN_POINT_DISTANCE_METERS = 3.0
         const val MAX_STATIONARY_INTERVAL_MILLIS = 10_000L
+        const val CHECKPOINT_POINT_INTERVAL = 10
+        const val CHECKPOINT_INTERVAL_NANOS = 30_000_000_000L
     }
 }
