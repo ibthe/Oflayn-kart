@@ -108,7 +108,15 @@ class RouteSession {
     ) {
         val id = ++requestId
         busy = true
-        if (!rerouting) message = null
+        if (!rerouting) {
+            // A newly requested route/profile must never leave an older route startable
+            // if the new calculation fails.
+            message = null
+            route = null
+            along = 0.0
+            segmentHint = 0
+            announced.clear()
+        }
         val loaded = withContext(Dispatchers.IO) { RoutingRepository.load(context) }
         val router = loaded.router
         if (id != requestId) return
@@ -168,6 +176,15 @@ class RouteSession {
             offRouteFixes = 0
         }
         return TrackingEvent.NONE
+    }
+
+    /** Only stops not yet reached should be carried into an off-route recalculation. */
+    fun remainingWaypoints(): List<Pair<Double, Double>> {
+        val current = route ?: return emptyList()
+        return current.steps.asSequence()
+            .filter { it.maneuver == Maneuver.WAYPOINT && it.distanceFromStartMeters > along + 3.0 }
+            .map { it.lat to it.lon }
+            .toList()
     }
 
     /** A phrase to speak now, if the next instruction has just come into range and was not announced yet. */
