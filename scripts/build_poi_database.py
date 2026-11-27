@@ -452,6 +452,15 @@ def deduplicate_pois(pois: Iterable[PoiInput], max_distance_m: float = 18.0) -> 
                 if other_id != winner_id and other_id in clusters:
                     clusters[winner_id].extend(clusters.pop(other_id))
             cluster_id = winner_id
+            # Re-index every member after a cluster merge so old name variants
+            # continue to resolve to the surviving cluster.
+            for member in clusters[cluster_id]:
+                member_lat = math.floor(member.latitude / cell_size)
+                member_lon = math.floor(member.longitude / cell_size)
+                for member_key in _poi_name_keys(member):
+                    index.setdefault((
+                        member.category, member.subcategory, member_key, member_lat, member_lon
+                    ), set()).add(cluster_id)
         else:
             cluster_id = next_cluster_id
             clusters[cluster_id] = [poi]
