@@ -52,6 +52,13 @@ ROUTING_PROFILE_TESTS = ROOT / "app/src/test/java/app/georgia/offline/routing/Ro
 TINY_ROAD_GRAPH = ROOT / "app/src/test/resources/tiny-roads.bin"
 TINY_TURN_GRAPH = ROOT / "app/src/test/resources/tiny-turns.bin"
 TINY_ONLY_TURN_GRAPH = ROOT / "app/src/test/resources/tiny-only-turns.bin"
+GUIDEBOOK_REPOSITORY = ROOT / "app/src/main/java/app/georgia/offline/data/GuidebookRepository.kt"
+GUIDEBOOK_TESTS = ROOT / "app/src/test/java/app/georgia/offline/GuidebookRepositoryTest.kt"
+SAFETY_REPOSITORY = ROOT / "app/src/main/java/app/georgia/offline/data/SafetyChecklistRepository.kt"
+EMERGENCY_CONTACT_REPOSITORY = ROOT / "app/src/main/java/app/georgia/offline/data/EmergencyContactRepository.kt"
+SAFETY_TESTS = ROOT / "app/src/androidTest/java/app/georgia/offline/SafetyChecklistRepositoryTest.kt"
+SAFETY_SOURCES = ROOT / "docs/SAFETY_CONTENT_SOURCES.md"
+APP_FLOW_UI_TESTS = ROOT / "app/src/androidTest/java/app/georgia/offline/AppFlowUiTest.kt"
 
 EXPECTED_MIRROR = "https://download.openstreetmap.fr/extracts/asia/georgia.osm.pbf"
 EXPECTED_MIRROR_MD5 = "https://download.openstreetmap.fr/extracts/asia/georgia.osm.pbf.md5"
@@ -68,7 +75,7 @@ def fail(message: str) -> int:
 
 
 def main() -> int:
-    required = (MAP_SCRIPT, PBF_PREP_SCRIPT, WRITER_SCRIPT, WORKFLOW, DATA_SOURCES, SMOKE_FIXTURE, BUNDLE_MANIFEST, POI_BUILDER, POI_VERIFIER, POI_TESTS, POI_SMOKE_TEST, POI_SMOKE_FIXTURE, PBF_CACHE_TEST, APP_BUILD, POI_REPOSITORY, POI_UI, DEM_BUILDER, DEM_VERIFIER, DEM_TESTS, APK_VERIFIER, DEM_REPOSITORY, MAP_SURFACE, CONTOUR_BUILDER, CONTOUR_TESTS, CONTOUR_MAP_BUILDER, CONTOUR_MAP_VERIFIER, TERRAIN_REPOSITORY, CONTOUR_THEME_LIGHT, CONTOUR_THEME_DARK, ANDROID_MANIFEST, TOOLS_SCREEN, MAP_ZOOM_POLICY, MAP_ZOOM_TESTS, ROAD_FORMAT, ROAD_GRAPH_READER, ROUTING_REPOSITORY, ROAD_ROUTER, ROUTING_PROFILE, ROAD_TESTS, ROAD_TURN_SMOKE, ROAD_TURN_FIXTURE, ROUTING_PROFILE_TESTS, TINY_ROAD_GRAPH, TINY_TURN_GRAPH, TINY_ONLY_TURN_GRAPH)
+    required = (MAP_SCRIPT, PBF_PREP_SCRIPT, WRITER_SCRIPT, WORKFLOW, DATA_SOURCES, SMOKE_FIXTURE, BUNDLE_MANIFEST, POI_BUILDER, POI_VERIFIER, POI_TESTS, POI_SMOKE_TEST, POI_SMOKE_FIXTURE, PBF_CACHE_TEST, APP_BUILD, POI_REPOSITORY, POI_UI, DEM_BUILDER, DEM_VERIFIER, DEM_TESTS, APK_VERIFIER, DEM_REPOSITORY, MAP_SURFACE, CONTOUR_BUILDER, CONTOUR_TESTS, CONTOUR_MAP_BUILDER, CONTOUR_MAP_VERIFIER, TERRAIN_REPOSITORY, CONTOUR_THEME_LIGHT, CONTOUR_THEME_DARK, ANDROID_MANIFEST, TOOLS_SCREEN, MAP_ZOOM_POLICY, MAP_ZOOM_TESTS, ROAD_FORMAT, ROAD_GRAPH_READER, ROUTING_REPOSITORY, ROAD_ROUTER, ROUTING_PROFILE, ROAD_TESTS, ROAD_TURN_SMOKE, ROAD_TURN_FIXTURE, ROUTING_PROFILE_TESTS, TINY_ROAD_GRAPH, TINY_TURN_GRAPH, TINY_ONLY_TURN_GRAPH, GUIDEBOOK_REPOSITORY, GUIDEBOOK_TESTS, SAFETY_REPOSITORY, EMERGENCY_CONTACT_REPOSITORY, SAFETY_TESTS, SAFETY_SOURCES, APP_FLOW_UI_TESTS)
     for path in required:
         if not path.is_file():
             return fail(f"required build file is missing: {path.relative_to(ROOT)}")
@@ -111,6 +118,13 @@ def main() -> int:
     tiny_road_graph = TINY_ROAD_GRAPH.read_bytes()
     tiny_turn_graph = TINY_TURN_GRAPH.read_bytes()
     tiny_only_turn_graph = TINY_ONLY_TURN_GRAPH.read_bytes()
+    guidebook_repository = GUIDEBOOK_REPOSITORY.read_text(encoding="utf-8")
+    guidebook_tests = GUIDEBOOK_TESTS.read_text(encoding="utf-8")
+    safety_repository = SAFETY_REPOSITORY.read_text(encoding="utf-8")
+    emergency_contact_repository = EMERGENCY_CONTACT_REPOSITORY.read_text(encoding="utf-8")
+    safety_tests = SAFETY_TESTS.read_text(encoding="utf-8")
+    safety_sources = SAFETY_SOURCES.read_text(encoding="utf-8")
+    app_flow_ui_tests = APP_FLOW_UI_TESTS.read_text(encoding="utf-8")
     data_sources = DATA_SOURCES.read_text(encoding="utf-8")
     try:
         bundle_manifest = json.loads(BUNDLE_MANIFEST.read_text(encoding="utf-8"))
@@ -449,6 +463,29 @@ def main() -> int:
         return fail("OSM turn restriction smoke fixture must include a restriction tag.")
     if "scripts/make_road_graph_fixture.py" not in workflow:
         return fail("CI must regenerate the versioned Kotlin road graph fixtures before unit tests.")
+
+    for token in ("data class GuidebookPlace", "data class GuidebookRoute", "data class GuidebookService", "searchQuery"):
+        if token not in guidebook_repository:
+            return fail(f"Offline guidebook collections are missing: {token}.")
+    for token in ("everyRegionHasLinkedPlacesRoutesAndPracticalServiceNotes", "tushetiWarnsAboutAbano"):
+        if token not in guidebook_tests:
+            return fail(f"Guidebook content regression coverage is missing: {token}.")
+    if "GuidebookContent(onSearchPlace" not in POI_UI.read_text(encoding="utf-8"):
+        return fail("Guidebook place entries must link back to the offline catalog search.")
+    for token in ("incidentSteps", "Сначала безопасность", "Вызови 112", "emergency_contact"):
+        if token not in safety_repository:
+            return fail(f"Safety guidance or pre-ride checklist is missing: {token}.")
+    if "EmergencyContactRepository.save" not in EMERGENCY_CONTACT_REPOSITORY.read_text(encoding="utf-8"):
+        return fail("Emergency contact storage must remain local and validated.")
+    for token in ("emergencyContactIsValidatedAndStoredOnlyLocally", "expandedChecklistAndIncidentGuidanceAreComplete"):
+        if token not in safety_tests:
+            return fail(f"Emergency safety instrumentation coverage is missing: {token}.")
+    for token in ("112.gov.ge", "2024-first-aid-guidelines", "Annex 7"):
+        if token not in safety_sources:
+            return fail(f"Safety content source documentation is missing: {token}.")
+    for token in ("guidebookAndEmergencyToolsExposeTheirExpandedContent", "Добавить контакт", "Если произошло ДТП"):
+        if token not in app_flow_ui_tests:
+            return fail(f"Guidebook/emergency emulator UI coverage is missing: {token}.")
 
     if "continue-on-error: true" in workflow:
         return fail("map preparation must fail fast; do not hide failed prerequisites.")
