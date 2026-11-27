@@ -408,14 +408,15 @@ jobs:
             TEST_APK="$(find artifacts/apks -type f -name '*androidTest*.apk' | head -n 1)"
             if [ -z "$APP_APK" ] || [ -z "$TEST_APK" ]; then
               echo "ERROR: app or instrumentation APK is missing." >&2
-              find artifacts/apks -type f -maxdepth 5 -print
+              find artifacts/apks -maxdepth 5 -type f -print
               exit 1
             fi
 
             APP_ID="app.georgia.offline.debug"
             adb install -r "$APP_APK"
             adb install -r "$TEST_APK"
-            RUNNER="$(adb shell pm list instrumentation | tr -d '\r' | sed -n 's/^instrumentation:\([^ ]*\) (target=app\.georgia\.offline\.debug)$/\1/p' | head -n 1)"
+            adb shell pm clear "$APP_ID"
+            RUNNER="$(adb shell pm list instrumentation | tr -d '\r' | grep 'target=app.georgia.offline.debug' | sed -n 's/^instrumentation:\([^ ]*\).*/\1/p' | head -n 1)"
             if [ -z "$RUNNER" ]; then
               echo "ERROR: instrumentation runner for $APP_ID was not registered." >&2
               adb shell pm list instrumentation
