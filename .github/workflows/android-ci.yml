@@ -67,6 +67,9 @@ jobs:
       - name: Test offline DEM tile selection and encoding
         run: python3 scripts/test_build_dem.py
 
+      - name: Test offline DEM elevation sampling
+        run: python3 scripts/test_dem_sampler.py
+
       - name: Test offline elevation contour generation
         run: python3 scripts/test_build_contours.py
 
@@ -162,13 +165,27 @@ jobs:
           echo "Installed Osmosis Debian package: ${osmosis_package_version}"
           echo "Installed PyOsmium Debian package: ${pyosmium_package_version}"
 
+      - name: Restore or cache Georgia Copernicus DEM tiles
+        id: georgia_dem_cache
+        uses: actions/cache@v4
+        with:
+          path: app/src/main/assets/dem
+          key: georgia-dem-glo90-v1-${{ runner.os }}-${{ hashFiles('scripts/build_dem.py') }}
+
+      - name: Build Georgia Copernicus GLO-90 elevation tiles
+        if: ${{ steps.georgia_dem_cache.outputs['cache-hit'] != 'true' }}
+        run: python3 scripts/build_dem.py --output app/src/main/assets/dem
+
+      - name: Verify Georgia DEM package
+        run: python3 scripts/verify_dem.py app/src/main/assets/dem
+
       - name: Restore most recent offline road graph
         uses: actions/cache/restore@v4
         with:
           path: app/src/main/assets/offline/georgia-roads.bin
-          key: georgia-roads-v6-${{ runner.os }}-${{ hashFiles('scripts/road_graph_format.py', 'scripts/build_road_graph.py', 'scripts/verify_road_graph.py') }}-restore-only
+          key: georgia-roads-v7-${{ runner.os }}-${{ hashFiles('scripts/road_graph_format.py', 'scripts/build_road_graph.py', 'scripts/verify_road_graph.py', 'scripts/dem_sampler.py', 'scripts/build_dem.py', 'app/src/main/assets/dem/manifest.json') }}-restore-only
           restore-keys: |
-            georgia-roads-v6-${{ runner.os }}-${{ hashFiles('scripts/road_graph_format.py', 'scripts/build_road_graph.py', 'scripts/verify_road_graph.py') }}-
+            georgia-roads-v7-${{ runner.os }}-${{ hashFiles('scripts/road_graph_format.py', 'scripts/build_road_graph.py', 'scripts/verify_road_graph.py') }}-
             georgia-roads-v6-${{ runner.os }}-
 
       - name: Check restored road graph
@@ -203,7 +220,7 @@ jobs:
               bash scripts/prepare_georgia_pbf.sh || return 1
             fi
             local out="${RUNNER_TEMP}/georgia-roads.bin"
-            python3 scripts/build_road_graph.py data/cache/georgia-latest.osm.pbf "$out" --summary "${RUNNER_TEMP}/georgia-roads-summary.json" || return 1
+            python3 scripts/build_road_graph.py data/cache/georgia-latest.osm.pbf "$out" --dem-dir app/src/main/assets/dem --summary "${RUNNER_TEMP}/georgia-roads-summary.json" || return 1
             python3 scripts/verify_road_graph.py "$out" || return 1
             mkdir -p app/src/main/assets/offline || return 1
             mv "$out" app/src/main/assets/offline/georgia-roads.bin || return 1
@@ -279,20 +296,6 @@ jobs:
           finally:
               connection.close()
           PY
-
-      - name: Restore or cache Georgia Copernicus DEM tiles
-        id: georgia_dem_cache
-        uses: actions/cache@v4
-        with:
-          path: app/src/main/assets/dem
-          key: georgia-dem-glo90-v1-${{ runner.os }}-${{ hashFiles('scripts/build_dem.py') }}
-
-      - name: Build Georgia Copernicus GLO-90 elevation tiles
-        if: ${{ steps.georgia_dem_cache.outputs['cache-hit'] != 'true' }}
-        run: python3 scripts/build_dem.py --output app/src/main/assets/dem
-
-      - name: Verify Georgia DEM package
-        run: python3 scripts/verify_dem.py app/src/main/assets/dem
 
       - name: Restore or cache Georgia elevation contour map
         id: contours_cache
