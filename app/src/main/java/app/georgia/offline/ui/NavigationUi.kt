@@ -1,5 +1,6 @@
 package app.georgia.offline.ui
 
+import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.size
@@ -7,6 +8,9 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.Path
+import androidx.compose.ui.graphics.StrokeCap
+import androidx.compose.ui.graphics.drawscope.Stroke
 import app.georgia.offline.ui.theme.accentBrush
 import app.georgia.offline.ui.theme.edgeBrush
 import app.georgia.offline.ui.theme.glass
@@ -19,6 +23,7 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
@@ -491,6 +496,7 @@ fun RoutePlannerCard(
                     else MaterialTheme.colorScheme.onSurfaceVariant
                 )
             }
+            session.elevationProfile?.let { ElevationProfileCard(it) }
             if (origin != null && route != null) {
                 Text(
                     "Это просмотр маршрута от выбранной точки. Чтобы вести по нему, постройте маршрут от своего положения.",
@@ -540,6 +546,60 @@ fun RoutePlannerCard(
                 contentPadding = PaddingValues(horizontal = Space.s)
             ) {
                 Text("Закрыть")
+            }
+        }
+    }
+}
+
+@Composable
+private fun ElevationProfileCard(profile: ElevationProfile) {
+    val primary = MaterialTheme.colorScheme.primary
+    Surface(
+        color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.55f),
+        shape = RoundedCornerShape(14.dp)
+    ) {
+        Column(
+            Modifier.fillMaxWidth().padding(Space.s),
+            verticalArrangement = Arrangement.spacedBy(Space.xxs)
+        ) {
+            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+                Text("Профиль высот", style = MaterialTheme.typography.labelLarge)
+                Text(
+                    "↑ ${profile.ascentMeters} м  ↓ ${profile.descentMeters} м",
+                    style = MaterialTheme.typography.labelMedium,
+                    color = MaterialTheme.colorScheme.primary
+                )
+            }
+            Canvas(Modifier.fillMaxWidth().height(58.dp)) {
+                val minHeight = profile.minimumMeters.toFloat()
+                val maxHeight = profile.maximumMeters.toFloat()
+                val range = (maxHeight - minHeight).coerceAtLeast(1f)
+                val points = profile.samples
+                val line = Path()
+                val area = Path()
+                points.forEachIndexed { index, sample ->
+                    val x = if (points.size <= 1) 0f else size.width * index / (points.size - 1)
+                    val y = size.height - ((sample.elevationMeters.toFloat() - minHeight) / range) * size.height
+                    if (index == 0) {
+                        line.moveTo(x, y)
+                        area.moveTo(x, size.height)
+                        area.lineTo(x, y)
+                    } else {
+                        line.lineTo(x, y)
+                        area.lineTo(x, y)
+                    }
+                }
+                if (points.isNotEmpty()) {
+                    area.lineTo(size.width, size.height)
+                    area.close()
+                    drawPath(area, primary.copy(alpha = 0.12f))
+                    drawPath(line, primary, style = Stroke(width = 2.dp.toPx(), cap = StrokeCap.Round))
+                }
+            }
+            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+                Text("Мин. ${profile.minimumMeters} м", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                Text("Макс. ${profile.maximumMeters} м", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                Text(GeoMath.formatDistance(profile.samples.last().distanceMeters), style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
             }
         }
     }
@@ -657,6 +717,14 @@ fun NavigationFooter(
                 )
             }
                 GradientButton(text = "Завершить", onClick = onStop)
+            }
+            session.elevationProfile?.let { profile ->
+                Text(
+                    "Подъём +${profile.ascentMeters} м · спуск −${profile.descentMeters} м",
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    maxLines = 1
+                )
             }
             if (route.warnings.isNotEmpty()) {
                 Text(
