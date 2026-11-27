@@ -7,6 +7,7 @@ import gzip
 import hashlib
 import json
 import math
+import zipfile
 from pathlib import Path
 
 NODATA = -32768
@@ -55,6 +56,26 @@ def encode_elevations(values, mask) -> bytes:
     return encoded.tobytes(order="C")
 
 
+def encode_hgt(values, mask) -> bytes:
+    """Convert the 1200² GLO-90 raster into a canonical 1201² SRTM3 HGT tile."""
+    import numpy as np
+
+    data = np.asarray(values, dtype=np.float64)
+    invalid = np.asarray(mask, dtype=bool) | ~np.isfinite(data)
+    core = np.full((TILE_PIXELS, TILE_PIXELS), NODATA, dtype=np.int16)
+    valid = ~invalid
+    core[valid] = np.rint(data[valid]).clip(-32767, 32767).astype(np.int16)
+
+    # HGT uses 1201 samples so adjacent one-degree tiles share their outer row/column.
+    # GLO-90 publishes 1200 raster cells; duplicate the final sample to form the border.
+    grid = np.empty((TILE_PIXELS + 1, TILE_PIXELS + 1), dtype=np.int16)
+    grid[:TILE_PIXELS, :TILE_PIXELS] = core
+    grid[TILE_PIXELS, :TILE_PIXELS] = core[-1, :]
+    grid[:TILE_PIXELS, TILE_PIXELS] = core[:, -1]
+    grid[TILE_PIXELS, TILE_PIXELS] = core[-1, -1]
+    return grid.astype(">i2").tobytes(order="C")
+
+
 def sha256_file(path: Path) -> str:
     digest = hashlib.sha256()
     with path.open("rb") as stream:
@@ -82,7 +103,9 @@ def build_tile(latitude: int, longitude: int, output: Path) -> dict | None:
                         f"expected {TILE_PIXELS}x{TILE_PIXELS}."
                     )
                 values = source.read(1, masked=True)
-                raw = encode_elevations(values.data, np.ma.getmaskarray(values))
+                mask = np.ma.getmaskarray(values)
+                raw = encode_elevations(values.data, mask)
+                hgt_raw = encode_hgt(values.data, mask)
     except rasterio.errors.RasterioIOError as error:
         if is_missing_tile_error(error):
             print(f"[dem] no public GLO-90 tile for {tile_key(latitude, longitude)}; leaving this cell unavailable", flush=True)
@@ -96,6 +119,19 @@ def build_tile(latitude: int, longitude: int, output: Path) -> dict | None:
         with gzip.GzipFile(fileobj=file_stream, mode="wb", compresslevel=9, mtime=0) as compressed:
             compressed.write(raw)
     temporary.replace(target)
+
+    hgt_directory = output / "hgt"
+    hgt_directory.mkdir(parents=True, exist_ok=True)
+    hgt_name = f"{tile_key(latitude, longitude)}.hgt"
+    hgt_target = hgt_directory / f"{hgt_name}.zip"
+    hgt_temporary = hgt_target.with_suffix(hgt_target.suffix + ".tmp")
+    with zipfile.ZipFile(hgt_temporary, "w", compression=zipfile.ZIP_DEFLATED, compresslevel=9) as archive:
+        info = zipfile.ZipInfo(hgt_name, date_time=(1980, 1, 1, 0, 0, 0))
+        info.compress_type = zipfile.ZIP_DEFLATED
+        info.external_attr = 0o600 << 16
+        archive.writestr(info, hgt_raw, compress_type=zipfile.ZIP_DEFLATED, compresslevel=9)
+    hgt_temporary.replace(hgt_target)
+
     return {
         "file": target.name,
         "sha256": sha256_file(target),
@@ -103,6 +139,12 @@ def build_tile(latitude: int, longitude: int, output: Path) -> dict | None:
         "rawBytes": len(raw),
         "width": TILE_PIXELS,
         "height": TILE_PIXELS,
+        "hgtFile": f"hgt/{hgt_target.name}",
+        "hgtSha256": sha256_file(hgt_target),
+        "hgtCompressedBytes": hgt_target.stat().st_size,
+        "hgtRawBytes": len(hgt_raw),
+        "hgtWidth": TILE_PIXELS + 1,
+        "hgtHeight": TILE_PIXELS + 1,
     }
 
 
@@ -120,6 +162,7 @@ def main() -> None:
         "dataset": DATASET,
         "resolutionMeters": 90,
         "tilePixels": TILE_PIXELS,
+        "hillshadeFormat": "SRTM3 HGT, 1201x1201, signed 16-bit big-endian, ZIP per tile",
         "noData": NODATA,
         "bbox": list(bbox),
         "source": "https://registry.opendata.aws/copernicus-dem/",
