@@ -29,9 +29,32 @@ class TrackRepository(private val directory: File) {
 
     fun load(id: String): GpxTrack = fileFor(id).inputStream().use { GpxCodec.parse(it) }
 
+    fun saveRecovery(track: GpxTrack) {
+        if (track.pointCount < 2) return
+        directory.mkdirs()
+        val target = File(directory, RECOVERY_FILE_NAME)
+        val temporary = File(directory, "$RECOVERY_FILE_NAME.tmp")
+        temporary.writeText(GpxCodec.write(track), Charsets.UTF_8)
+        if (!temporary.renameTo(target)) {
+            temporary.copyTo(target, overwrite = true)
+            temporary.delete()
+        }
+    }
+
+    fun loadRecovery(): GpxTrack? {
+        val file = File(directory, RECOVERY_FILE_NAME)
+        if (!file.isFile) return null
+        return runCatching { file.inputStream().use { GpxCodec.parse(it, "Восстановленный трек") } }.getOrNull()
+    }
+
+    fun clearRecovery() {
+        File(directory, RECOVERY_FILE_NAME).delete()
+        File(directory, "$RECOVERY_FILE_NAME.tmp").delete()
+    }
+
     fun list(): List<SavedTrackInfo> {
         if (!directory.isDirectory) return emptyList()
-        return directory.listFiles { file -> file.isFile && file.extension == "gpx" }
+        return directory.listFiles { file -> file.isFile && file.extension == "gpx" && file.name != RECOVERY_FILE_NAME }
             .orEmpty()
             .mapNotNull { file ->
                 runCatching {
@@ -43,6 +66,10 @@ class TrackRepository(private val directory: File) {
     }
 
     fun delete(id: String): Boolean = fileFor(id).delete()
+
+    private companion object {
+        const val RECOVERY_FILE_NAME = ".recording-recovery.gpx"
+    }
 
     private fun fileFor(id: String): File {
         require(id.matches(Regex("[A-Za-z0-9-]{1,80}"))) { "Некорректный идентификатор трека." }
