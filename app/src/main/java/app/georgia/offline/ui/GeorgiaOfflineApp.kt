@@ -647,6 +647,7 @@ private fun MapScreen(modifier: Modifier, settings: LocalSettings, navigation: N
     var mapSearchQuery by rememberSaveable { mutableStateOf("") }
     var mapSearchCategory by rememberSaveable { mutableStateOf("all") }
     var mapSearchAlongRoute by rememberSaveable { mutableStateOf(false) }
+    var hillshadeDirectory by remember { mutableStateOf<File?>(null) }
     var mapSearchResults by remember { mutableStateOf<List<PoiRepository.PoiRecord>>(emptyList()) }
     var mapSearchViewport by remember { mutableStateOf<MapViewportBounds?>(null) }
     var mapSearchLoading by remember { mutableStateOf(false) }
@@ -656,6 +657,11 @@ private fun MapScreen(modifier: Modifier, settings: LocalSettings, navigation: N
         poiDatabase = installation.database
         poiDatabaseMessage = installation.message
         poiDatabaseLoading = false
+    }
+    LaunchedEffect(settings.mapTheme) {
+        hillshadeDirectory = if (settings.mapTheme == "oflayn_natural" || settings.mapTheme == "oflayn_natural_dark") {
+            runCatching { DemRepository.ensureHillshadeInstalled(context) }.getOrNull()
+        } else null
     }
     LaunchedEffect(session.route) {
         if (session.route == null) mapSearchAlongRoute = false
@@ -799,6 +805,7 @@ private fun MapScreen(modifier: Modifier, settings: LocalSettings, navigation: N
                 mapFile = mapFile,
                 preferredLanguages = preferredLanguages,
                 mapTheme = settings.mapTheme,
+                hillshadeDirectory = hillshadeDirectory,
                 modifier = Modifier.fillMaxSize(),
                 userLocation = tracker.location?.takeIf { tracker.hasFreshFix() },
                 destination = if (navigation.pointSelection == RoutePointRole.START) null else target?.let { LatLong(it.latitude, it.longitude) },
