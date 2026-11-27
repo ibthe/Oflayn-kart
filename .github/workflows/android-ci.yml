@@ -89,10 +89,11 @@ jobs:
             app/src/main/assets/offline/georgia.map
             app/src/main/assets/offline/georgia-poi.sqlite
             app/src/main/assets/offline/georgia-map-build.json
-          key: mapsforge-georgia-v0.25.0-poi-v3-${{ runner.os }}-${{ github.run_id }}
+          key: mapsforge-georgia-v0.25.0-poi-v4-${{ runner.os }}-${{ hashFiles('scripts/build_georgia_map.sh', 'scripts/build_poi_database.py', 'scripts/verify_poi_database.py', 'scripts/road_graph_format.py', 'scripts/verify_bundled_map.py') }}-${{ github.run_id }}
           restore-keys: |
-            mapsforge-georgia-v0.25.0-poi-v3-${{ runner.os }}-
-            mapsforge-georgia-v0.25.0-poi-v3-
+            mapsforge-georgia-v0.25.0-poi-v4-${{ runner.os }}-${{ hashFiles('scripts/build_georgia_map.sh', 'scripts/build_poi_database.py', 'scripts/verify_poi_database.py', 'scripts/road_graph_format.py', 'scripts/verify_bundled_map.py') }}-
+            mapsforge-georgia-v0.25.0-poi-v4-${{ runner.os }}-
+            mapsforge-georgia-v0.25.0-poi-v4-
 
       - name: Validate restored map cache
         id: map-state
@@ -245,7 +246,7 @@ jobs:
             app/src/main/assets/offline/georgia.map
             app/src/main/assets/offline/georgia-poi.sqlite
             app/src/main/assets/offline/georgia-map-build.json
-          key: mapsforge-georgia-v0.25.0-poi-v3-${{ runner.os }}-${{ steps.generate-map.outputs.provider }}-${{ steps.generate-map.outputs.source-md5 }}-${{ github.run_id }}
+          key: mapsforge-georgia-v0.25.0-poi-v4-${{ runner.os }}-${{ hashFiles('scripts/build_georgia_map.sh', 'scripts/build_poi_database.py', 'scripts/verify_poi_database.py', 'scripts/road_graph_format.py', 'scripts/verify_bundled_map.py') }}-${{ steps.generate-map.outputs.provider }}-${{ steps.generate-map.outputs.source-md5 }}-${{ github.run_id }}
 
       - name: Verify generated country map and multilingual metadata
         run: python3 scripts/verify_bundled_map.py
