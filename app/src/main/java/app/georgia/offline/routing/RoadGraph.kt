@@ -31,9 +31,6 @@ class RoadGraph(buffer: ByteBuffer) {
     private val turnStartOffset: Int
     private val turnRecordsOffset: Int
     val turnRestrictionCount: Int
-    private val turnRestrictionCount: Int
-    private val turnStartOffset: Int
-    private val turnRecordsOffset: Int
 
     init {
         require(buf.capacity() >= HEADER_SIZE) { "Файл графа дорог повреждён: слишком мал." }
@@ -119,29 +116,6 @@ class RoadGraph(buffer: ByteBuffer) {
         return (!onlyFound || onlyAllowed) && !prohibited
     }
 
-    /** Enforces OSM no_* and only_* transitions after arriving along [incomingArc]. */
-    fun turnAllowed(profile: RoutingProfile, incomingArc: Int, outgoingArc: Int): Boolean {
-        var onlyFound = false
-        var onlyAllowed = false
-        var prohibited = false
-        val start = buf.getInt(turnStartOffset + 4 * incomingArc)
-        val end = buf.getInt(turnStartOffset + 4 * (incomingArc + 1))
-        for (index in start until end) {
-            val offset = turnRecordsOffset + 8 * index
-            val mask = buf.get(offset + 4).toInt() and 0xFF
-            if (mask and profile.bit == 0) continue
-            val candidate = buf.getInt(offset)
-            when (buf.get(offset + 5).toInt() and 0xFF) {
-                TURN_ONLY -> {
-                    onlyFound = true
-                    if (candidate == outgoingArc) onlyAllowed = true
-                }
-                TURN_NO -> if (candidate == outgoingArc) prohibited = true
-            }
-        }
-        return (!onlyFound || onlyAllowed) && !prohibited
-    }
-
     /** Number of ways [profile] can leave vertex [v], counting the way it arrived by. */
     fun choicesAt(profile: RoutingProfile, v: Int): Int {
         var count = 0
@@ -197,6 +171,7 @@ class RoadGraph(buffer: ByteBuffer) {
         const val FORMAT_VERSION = 3
         private const val TURN_NO = 0
         private const val TURN_ONLY = 1
+        private const val TURN_RECORD_SIZE = 8
         const val FLAG_UNPAVED = 1
         const val FLAG_ROUNDABOUT = 2
         const val FLAG_ROUGH = 4
