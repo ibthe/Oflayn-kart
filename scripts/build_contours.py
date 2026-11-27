@@ -16,6 +16,7 @@ NODATA = -32768
 TILE_PIXELS = 1200
 NODE_ID_START = 8_000_000_000_000_000
 WAY_ID_START = 8_100_000_000_000_000
+OSM_ENTITY_TIMESTAMP = "2020-01-01T00:00:00Z"
 METERS_PER_DEGREE = 111_195.0
 TILE_PATTERN = re.compile(r"([NS])(\d{2})([EW])(\d{3})\.dem\.gz$")
 
@@ -126,11 +127,11 @@ def build_contours(
             for lon, lat in points:
                 refs.append(node_id)
                 nodes_xml.append(
-                    f'<node id="{node_id}" version="1" lat="{lat:.7f}" lon="{lon:.7f}"/>'
+                    f'<node id="{node_id}" version="1" timestamp="{OSM_ENTITY_TIMESTAMP}" lat="{lat:.7f}" lon="{lon:.7f}"/>'
                 )
                 node_id += 1
             ways_xml.append(
-                f'<way id="{way_id}" version="1">'
+                f'<way id="{way_id}" version="1" timestamp="{OSM_ENTITY_TIMESTAMP}">'
                 + "".join(f'<nd ref="{ref}"/>' for ref in refs)
                 + '<tag k="contour" v="elevation"/>'
                 + f'<tag k="ele" v="{elevation}"/>'
