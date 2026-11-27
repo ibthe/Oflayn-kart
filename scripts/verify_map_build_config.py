@@ -345,7 +345,7 @@ def main() -> int:
 
     if "scripts/verify_map_build_config.py" not in workflow:
         return fail("workflow must run the map builder preflight before the expensive steps.")
-    for token in ("scripts/test_build_road_graph.py", "scripts/build_road_graph.py", "scripts/verify_road_graph.py", "georgia-roads-v6-"):
+    for token in ("scripts/test_build_road_graph.py", "scripts/build_road_graph.py", "scripts/verify_road_graph.py", "georgia-roads-v7-"):
         if token not in workflow:
             return fail(f"workflow must build, verify and cache the optional road graph ({token} is missing).")
 
@@ -463,7 +463,7 @@ def main() -> int:
     if "uphillIsSlowerThanDownhillAndFlatForEveryProfile" not in routing_profile_tests:
         return fail("Android routing profile grade-cost regression tests are missing.")
 
-    if "georgia-roads-v6-" not in workflow or 'python3 scripts/verify_road_graph.py "$roads"' not in workflow:
+    if "georgia-roads-v7-" not in workflow or 'python3 scripts/verify_road_graph.py "$roads"' not in workflow:
         return fail("CI must invalidate legacy road graphs and validate restored graph format before bundling.")
 
 
