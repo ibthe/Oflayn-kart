@@ -106,7 +106,7 @@ class TripPlanRepository(private val file: File) {
                 values.sortedBy { it.order }.mapIndexed { index, stop -> stop.copy(day = day, order = index) }
             }
 
-    private companion object {
+    companion object {
         const val MAX_DAYS = 30
         const val MAX_STOPS = 20
         const val MAX_NOTE_LENGTH = 500
