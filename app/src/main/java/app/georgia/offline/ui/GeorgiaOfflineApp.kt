@@ -716,29 +716,6 @@ private fun MapScreen(modifier: Modifier, settings: LocalSettings, navigation: N
                     }
                 }
             )
-            if (showMapSearch) {
-                MapViewportSearchBox(
-                    query = mapSearchQuery,
-                    onQueryChange = { mapSearchQuery = it },
-                    selectedCategory = mapSearchCategory,
-                    onCategoryChange = { mapSearchCategory = it },
-                    results = mapSearchResults,
-                    loading = mapSearchLoading,
-                    databaseLoading = poiDatabaseLoading,
-                    databaseMessage = poiDatabaseMessage,
-                    searchError = mapSearchError,
-                    topOffset = (if (tracker.error != null || (tracker.active && !tracker.hasFreshFix())) 104.dp else 64.dp) +
-                        if (mapStyleExpanded) 160.dp else 0.dp,
-                    language = settings.language,
-                    onSelect = { poi ->
-                        poiLookupJob?.cancel()
-                        selectedMapPoi = poi
-                        navigation.selectedPlaceId = null
-                        mapSearchQuery = ""
-                        mapSearchResults = emptyList()
-                    }
-                )
-            }
             if (navigation.pointSelection != null) {
                 MapChip(
                     modifier = Modifier.align(Alignment.TopCenter).padding(Space.s),
@@ -765,7 +742,7 @@ private fun MapScreen(modifier: Modifier, settings: LocalSettings, navigation: N
                     }
                 } else {
                     Column(
-                        Modifier.align(Alignment.TopStart).padding(Space.s),
+                        Modifier.align(Alignment.TopStart).fillMaxWidth().padding(Space.s),
                         verticalArrangement = Arrangement.spacedBy(Space.xs)
                     ) {
                         val trackerError = tracker.error
@@ -783,6 +760,27 @@ private fun MapScreen(modifier: Modifier, settings: LocalSettings, navigation: N
                             MapChip { Text("Ищу сигнал GPS…", style = MaterialTheme.typography.labelMedium) }
                         }
                         MapStylePicker(settings, expanded = mapStyleExpanded, onExpandedChange = { mapStyleExpanded = it })
+                        if (showMapSearch) {
+                            MapViewportSearchBox(
+                                query = mapSearchQuery,
+                                onQueryChange = { mapSearchQuery = it },
+                                selectedCategory = mapSearchCategory,
+                                onCategoryChange = { mapSearchCategory = it },
+                                results = mapSearchResults,
+                                loading = mapSearchLoading,
+                                databaseLoading = poiDatabaseLoading,
+                                databaseMessage = poiDatabaseMessage,
+                                searchError = mapSearchError,
+                                language = settings.language,
+                                onSelect = { poi ->
+                                    poiLookupJob?.cancel()
+                                    selectedMapPoi = poi
+                                    navigation.selectedPlaceId = null
+                                    mapSearchQuery = ""
+                                    mapSearchResults = emptyList()
+                                }
+                            )
+                        }
                     }
                     Text(
                         "© OpenStreetMap",
@@ -995,7 +993,6 @@ private fun MapViewportSearchBox(
     databaseLoading: Boolean,
     databaseMessage: String?,
     searchError: String?,
-    topOffset: Dp,
     language: String,
     onSelect: (PoiRepository.PoiRecord) -> Unit
 ) {
@@ -1007,7 +1004,7 @@ private fun MapViewportSearchBox(
     val resultsScrollState = rememberScrollState()
     LaunchedEffect(query, selectedCategory, results) { resultsScrollState.scrollTo(0) }
     Card(
-        modifier = Modifier.fillMaxWidth().padding(horizontal = Space.s).padding(top = topOffset),
+        modifier = Modifier.fillMaxWidth(),
         shape = RoundedCornerShape(Radius.card),
         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
         elevation = CardDefaults.cardElevation(defaultElevation = 8.dp)
