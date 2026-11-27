@@ -38,7 +38,7 @@ def tile_key(latitude: int, longitude: int) -> str:
     return f"{ns}{abs(latitude):02d}{ew}{abs(longitude):03d}"
 
 
-def encode_elevations(values, mask, numpy_module) -> bytes:
+def encode_elevations(values, mask) -> bytes:
     import numpy as np
 
     data = np.asarray(values, dtype=np.float64)
@@ -75,7 +75,7 @@ def build_tile(latitude: int, longitude: int, output: Path) -> dict:
                     f"expected {TILE_PIXELS}x{TILE_PIXELS}."
                 )
             values = source.read(1, masked=True)
-            raw = encode_elevations(values.data, np.ma.getmaskarray(values), np)
+            raw = encode_elevations(values.data, np.ma.getmaskarray(values))
     if len(raw) != TILE_PIXELS * TILE_PIXELS * 2:
         raise RuntimeError(f"Unexpected raw DEM size for {name}: {len(raw)} bytes.")
     target = output / f"{tile_key(latitude, longitude)}.dem.gz"
