@@ -310,6 +310,7 @@ private fun TrackRecorderPanel(context: Context, tracker: LocationTracker, recor
                                         savedTracks = withContext(Dispatchers.IO) { repository.list() }
                                         message = "Восстановленный трек сохранён."
                                     } catch (error: Exception) {
+                                        recorder.restore(recovered)
                                         message = error.message ?: "Не удалось сохранить восстановленный трек."
                                     }
                                 }
@@ -343,6 +344,7 @@ private fun TrackRecorderPanel(context: Context, tracker: LocationTracker, recor
                                     savedTracks = withContext(Dispatchers.IO) { repository.list() }
                                     message = "Трек сохранён на устройстве."
                                 } catch (error: Exception) {
+                                    recorder.restore(track)
                                     message = error.message ?: "Не удалось сохранить трек."
                                 }
                             }
