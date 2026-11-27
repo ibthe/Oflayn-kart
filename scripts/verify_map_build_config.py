@@ -437,7 +437,7 @@ def main() -> int:
             return fail(f"Kotlin {label} fixture must use road graph format version 3.")
         if int.from_bytes(fixture[48:52], "little") <= 0:
             return fail(f"Kotlin {label} fixture must contain encoded turn restrictions.")
-    if "scripts/test_road_turn_restriction_smoke.py" not in workflow or "test_road_turn_restriction_smoke.py" not in road_turn_smoke:
+    if "scripts/test_road_turn_restriction_smoke.py" not in workflow or "collect_ways" not in road_turn_smoke or "PROFILE_MOTORCYCLE" not in road_turn_smoke:
         return fail("CI must execute the PyOsmium OSM relation extraction smoke test.")
     try:
         turn_fixture = ET.parse(ROAD_TURN_FIXTURE).getroot()
