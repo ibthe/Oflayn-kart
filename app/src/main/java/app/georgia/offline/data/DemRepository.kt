@@ -145,6 +145,10 @@ object DemRepository {
                 val temporary = File(directory, "$name.tmp")
                 target.parentFile?.let { if (!it.exists() && !it.mkdirs()) error("Не удалось создать каталог рельефа.") }
                 temporary.writeBytes(bytes)
+                if (target.exists() && !target.delete()) {
+                    temporary.delete()
+                    throw IllegalStateException("Не удалось заменить архив рельефа: $name")
+                }
                 if (!temporary.renameTo(target)) {
                     temporary.delete()
                     throw IllegalStateException("Не удалось сохранить архив рельефа: $name")
