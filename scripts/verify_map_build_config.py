@@ -555,7 +555,7 @@ def main() -> int:
     if "continue-on-error: true" in workflow:
         return fail("map preparation must fail fast; do not hide failed prerequisites.")
 
-    print("OK: OSM sources, resumable PBF cache, Mapsforge writer, PyOsmium extraction, local SQLite search, node-via turn-aware routing, DEM/HGT hillshading, guidebook, rider safety, removable storage and optional offline raster packs are configured.")
+    print("OK: OSM sources, resumable PBF cache, Mapsforge writer, PyOsmium extraction, local SQLite search, node-via turn-aware routing with DEM-derived directional grades, DEM/HGT hillshading, guidebook, rider safety, removable storage and optional offline raster packs are configured.")
     return 0
 
 
