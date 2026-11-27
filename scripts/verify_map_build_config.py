@@ -541,6 +541,8 @@ def main() -> int:
             return fail(f"DEM-derived road grade regression coverage is missing: {token}.")
     if "--dem-dir" not in road_builder or "dem_sampler=dem_sampler" not in road_builder:
         return fail("Road graph generation must consume the verified offline DEM package.")
+    if "python3-osmium" not in workflow:
+        return fail("PyOsmium must be installed before OSM relation extraction tests.")
     for token in ("test_dem_sampler.py", "--dem-dir app/src/main/assets/dem", "georgia-roads-v7"):
         if token not in workflow:
             return fail(f"DEM-derived road grade workflow is missing: {token}.")
