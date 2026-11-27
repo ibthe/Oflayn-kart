@@ -176,9 +176,10 @@ fun MapsforgeMapSurface(
 
                         // Hillshading is an optional renderer layer: if an HGT tile is corrupt or
                         // unavailable, the base offline map must remain usable.
-                        if (hillshadeDirectory?.isDirectory == true &&
-                            hillshadeDirectory.listFiles()?.any { it.name.endsWith(".hgt.zip") } == true
-                        ) {
+                        val availableHillshadeDirectory = hillshadeDirectory?.takeIf { directory ->
+                            directory.isDirectory && directory.listFiles()?.any { it.name.endsWith(".hgt.zip") } == true
+                        }
+                        if (availableHillshadeDirectory != null) {
                             var pendingHillsConfig: HillsRenderConfig? = null
                             var pendingHillDataStore: MapDataStore? = null
                             try {
@@ -186,7 +187,7 @@ fun MapsforgeMapSurface(
                                     .setAdaptiveZoomEnabled(true)
                                     .setCustomQualityScale(1.0)
                                 val hillTileSource = MemoryCachingHgtReaderTileSource(
-                                    DemFolderFS(hillshadeDirectory),
+                                    DemFolderFS(availableHillshadeDirectory),
                                     algorithm,
                                     AndroidGraphicFactory.INSTANCE
                                 )
