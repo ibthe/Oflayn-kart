@@ -17,6 +17,7 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.background
 import androidx.compose.material3.ButtonDefaults
+import androidx.compose.material3.Checkbox
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.OutlinedButton
@@ -34,6 +35,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import app.georgia.offline.data.LocalSettings
+import app.georgia.offline.data.SafetyChecklistRepository
 import app.georgia.offline.data.GpxCodec
 import app.georgia.offline.data.TrackRepository
 import app.georgia.offline.data.SavedTrackInfo
@@ -45,6 +47,70 @@ import app.georgia.offline.ui.theme.Space
 import kotlin.math.abs
 import kotlin.math.roundToInt
 import java.util.Locale
+
+
+@Composable
+private fun PreRideSafetyChecklist(context: Context) {
+    val items = SafetyChecklistRepository.items
+    var checkedIds by remember { mutableStateOf(SafetyChecklistRepository.load(context)) }
+
+    Panel(padding = 0.dp) {
+        Column(
+            Modifier.fillMaxWidth().padding(Space.card),
+            verticalArrangement = Arrangement.spacedBy(Space.xs)
+        ) {
+            Row(
+                Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.SpaceBetween
+            ) {
+                Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                    Text("Проверка перед поездкой", style = MaterialTheme.typography.titleMedium)
+                    Text(
+                        "${checkedIds.size} из ${items.size} пунктов отмечено · хранится только на устройстве",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+                OutlinedButton(
+                    onClick = {
+                        checkedIds = emptySet()
+                        SafetyChecklistRepository.clear(context)
+                    },
+                    enabled = checkedIds.isNotEmpty()
+                ) {
+                    Text("Сбросить")
+                }
+            }
+            items.forEachIndexed { index, item ->
+                Row(
+                    Modifier.fillMaxWidth(),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Checkbox(
+                        checked = item.id in checkedIds,
+                        onCheckedChange = { isChecked ->
+                            checkedIds = if (isChecked) checkedIds + item.id else checkedIds - item.id
+                            SafetyChecklistRepository.save(context, checkedIds)
+                        }
+                    )
+                    Column(
+                        Modifier.weight(1f).padding(vertical = Space.xs),
+                        verticalArrangement = Arrangement.spacedBy(2.dp)
+                    ) {
+                        Text(item.title, style = MaterialTheme.typography.bodyMedium)
+                        Text(
+                            item.detail,
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
+                }
+                if (index != items.lastIndex) HorizontalDivider()
+            }
+        }
+    }
+}
 
 @Composable
 fun ToolsScreen(modifier: Modifier = Modifier, settings: LocalSettings, tracker: LocationTracker, trackRecorder: TrackRecorder, trackRepository: TrackRepository, recoveryLoaded: Boolean, onShowTrack: (List<TrackPoint>) -> Unit, onFollowTrack: (GpxTrack) -> Unit) {
@@ -58,6 +124,7 @@ fun ToolsScreen(modifier: Modifier = Modifier, settings: LocalSettings, tracker:
         PageTitle("Утилиты", "Датчики телефона. Всё работает без интернета.")
 
         EmergencyPanel(context, currentLocation)
+        PreRideSafetyChecklist(context)
         GpsPanel(settings, tracker, currentLocation, context)
         TrackRecorderPanel(context, tracker, trackRecorder, trackRepository, recoveryLoaded, onShowTrack, onFollowTrack)
 
