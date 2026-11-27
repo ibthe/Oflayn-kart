@@ -132,6 +132,7 @@ fun GeorgiaOfflineApp(settings: LocalSettings) {
     val navigation = remember { NavigationState() }
     val tracker = rememberLocationTracker()
     val trackRecorder = remember { TrackRecorder() }
+    var selectedTrackPoints by remember { mutableStateOf<List<LatLong>>(emptyList()) }
     // Recording follows fresh foreground GPS fixes and survives tab switches.
     val fix = tracker.location?.takeIf { tracker.hasFreshFix() }
     LaunchedEffect(fix, trackRecorder.recording) {
@@ -219,7 +220,10 @@ fun GeorgiaOfflineApp(settings: LocalSettings) {
                                 navigation.startRouteTo(NavigationTarget(name, latitude, longitude))
                                 selectedTab = AppTab.MAP.name
                             }
-                            AppTab.TOOLS -> ToolsScreen(Modifier.padding(padding), settings, tracker, trackRecorder)
+                            AppTab.TOOLS -> ToolsScreen(Modifier.padding(padding), settings, tracker, trackRecorder) { points ->
+                                selectedTrackPoints = points.map { LatLong(it.latitude, it.longitude) }
+                                selectedTab = AppTab.MAP.name
+                            }
                             AppTab.SETTINGS -> SettingsScreen(Modifier.padding(padding), settings) { placeId ->
                                 navigation.selectedPlaceId = placeId
                                 navigation.focusToken++
