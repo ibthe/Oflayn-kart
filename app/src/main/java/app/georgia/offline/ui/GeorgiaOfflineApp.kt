@@ -148,6 +148,19 @@ fun GeorgiaOfflineApp(settings: LocalSettings) {
         if (recovery != null) trackRecorder.restore(recovery)
         recoveryLoaded = true
     }
+    LaunchedEffect(routeSession.route) {
+        val activeRoute = routeSession.route
+        if (activeRoute == null) {
+            routeSession.elevationProfile = null
+        } else {
+            val geometry = buildList(activeRoute.pointCount) {
+                repeat(activeRoute.pointCount) { index ->
+                    add(LatLong(activeRoute.lat(index), activeRoute.lon(index)))
+                }
+            }
+            routeSession.elevationProfile = DemRepository.profile(context, geometry)
+        }
+    }
     // Recording follows fresh foreground GPS fixes and survives tab switches.
     val fix = tracker.location?.takeIf { tracker.hasFreshFix() }
     LaunchedEffect(fix, trackRecorder.recording) {
