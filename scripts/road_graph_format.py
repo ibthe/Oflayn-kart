@@ -122,23 +122,25 @@ def _tri(tags: dict, *keys: str):
 
 
 def _incline_percent(tags: dict) -> float:
-    """Parse common OSM incline forms; unknown/free-form values are left unpenalized."""
+    """Parse common OSM incline forms; preserve the steepest directional value."""
+    grades = []
     for key in ("incline", "incline:forward", "incline:backward"):
         raw = str(tags.get(key, "")).strip().lower().replace(",", ".")
         if not raw:
             continue
         if raw in {"up", "down"}:
-            return 10.0
+            grades.append(10.0)
+            continue
         try:
             if raw.endswith("%"):
-                return float(raw[:-1].strip())
-            if raw.endswith("°"):
-                return math.tan(math.radians(float(raw[:-1].strip()))) * 100.0
-            if re.fullmatch(r"[+-]?\d+(?:\.\d+)?", raw):
-                return float(raw)
+                grades.append(float(raw[:-1].strip()))
+            elif raw.endswith("°"):
+                grades.append(math.tan(math.radians(float(raw[:-1].strip()))) * 100.0)
+            elif re.fullmatch(r"[+-]?\d+(?:\.\d+)?", raw):
+                grades.append(float(raw))
         except ValueError:
             continue
-    return 0.0
+    return max(grades, key=abs, default=0.0)
 
 
 def classify_way(tags: dict) -> RoadInfo | None:
