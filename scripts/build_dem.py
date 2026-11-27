@@ -12,6 +12,7 @@ from pathlib import Path
 
 NODATA = -32768
 TILE_PIXELS = 1200
+DEM_FILE_SUFFIX = ".dem.gzip"
 DATASET = "Copernicus DEM GLO-90"
 BASE_URL = "https://copernicus-dem-90m.s3.eu-central-1.amazonaws.com"
 
@@ -113,7 +114,7 @@ def build_tile(latitude: int, longitude: int, output: Path) -> dict | None:
         raise
     if len(raw) != TILE_PIXELS * TILE_PIXELS * 2:
         raise RuntimeError(f"Unexpected raw DEM size for {name}: {len(raw)} bytes.")
-    target = output / f"{tile_key(latitude, longitude)}.dem.gz"
+    target = output / f"{tile_key(latitude, longitude)}{DEM_FILE_SUFFIX}"
     temporary = target.with_suffix(target.suffix + ".tmp")
     with temporary.open("wb") as file_stream:
         with gzip.GzipFile(fileobj=file_stream, mode="wb", compresslevel=9, mtime=0) as compressed:
