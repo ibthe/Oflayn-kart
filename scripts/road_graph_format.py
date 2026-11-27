@@ -30,11 +30,14 @@ from dataclasses import dataclass, field
 from pathlib import Path
 
 MAGIC = b"GRT1"
-FORMAT_VERSION = 2
+FORMAT_VERSION = 3
 HEADER_SIZE = 64
 EDGE_STRUCT = struct.Struct("<iiiiHBBBBHi")
 EDGE_SIZE = EDGE_STRUCT.size  # 28
 assert EDGE_SIZE == 28
+TURN_STRUCT = struct.Struct("<iiBBH")  # outgoing arc, profile mask, kind, reserved
+TURN_NO = 0
+TURN_ONLY = 1
 
 PROFILE_CAR, PROFILE_OFFROAD, PROFILE_BIKE, PROFILE_FOOT, PROFILE_MOTORCYCLE = 1, 2, 4, 8, 16
 PROFILES = {"car": PROFILE_CAR, "offroad": PROFILE_OFFROAD, "bike": PROFILE_BIKE, "foot": PROFILE_FOOT, "motorcycle": PROFILE_MOTORCYCLE}
@@ -112,6 +115,16 @@ class WayRecord:
     refs: list
     lats: list  # degrees * 1e6
     lons: list
+    way_id: int = 0
+
+
+@dataclass
+class TurnRestriction:
+    from_way: int
+    to_way: int
+    via_node: int
+    profile_mask: int
+    kind: int
 
 
 _DENY = {"no", "private", "customers", "permit"}
@@ -288,9 +301,10 @@ class GraphData:
     vlon: array = field(default_factory=lambda: array("i"))
     edges: list = field(default_factory=list)  # (from, to, lenDm, shape, cls, flags, fwd, back, nameIdx, inclineFwd, inclineBack)
     names: list = field(default_factory=list)
+    turn_restrictions: list = field(default_factory=list)  # (incomingArc, outgoingArc, profileMask, kind)
 
 
-def build_graph(ways) -> GraphData:
+def build_graph(ways, restrictions=()) -> GraphData:
     """Split road ways at junctions and endpoints into edges between graph vertices."""
     ways = list(ways)
     counts: Counter = Counter()
@@ -301,6 +315,7 @@ def build_graph(ways) -> GraphData:
     data = GraphData()
     vertex_of: dict[int, int] = {}
     name_index: dict[str, int] = {}
+    way_arcs: dict[int, list[tuple[int, int, int]]] = {}
 
     def vertex(ref: int, lat: int, lon: int) -> int:
         index = vertex_of.get(ref)
@@ -327,12 +342,46 @@ def build_graph(ways) -> GraphData:
                 u = vertex(way.refs[start], way.lats[start], way.lons[start])
                 v = vertex(way.refs[i], way.lats[i], way.lons[i])
                 if length > 0.0 or u != v:
+                    edge_index = len(data.edges)
                     data.edges.append((u, v, int(round(length * 10)), shape, info.cls, info.flags, info.fwd, info.back, name_idx, info.incline_forward, info.incline_backward))
+                    way_arcs.setdefault(way.way_id, []).append((edge_index, way.refs[start], way.refs[i]))
                 start = i
                 length = 0.0
                 shape = []
             else:
                 shape.append((way.lats[i], way.lons[i]))
+    for restriction in restrictions:
+        if restriction.via_node not in vertex_of:
+            continue
+        incoming_arcs = []
+        outgoing_arcs = []
+        for edge_index, ref_from, ref_to in way_arcs.get(restriction.from_way, ()):
+            edge = data.edges[edge_index]
+            if ref_to == restriction.via_node:
+                direction, allowed = 0, edge[6]
+            elif ref_from == restriction.via_node:
+                direction, allowed = 1, edge[7]
+            else:
+                continue
+            mask = allowed & restriction.profile_mask
+            if mask:
+                incoming_arcs.append(((edge_index << 1) | direction, mask))
+        for edge_index, ref_from, ref_to in way_arcs.get(restriction.to_way, ()):
+            edge = data.edges[edge_index]
+            if ref_from == restriction.via_node:
+                direction, allowed = 0, edge[6]
+            elif ref_to == restriction.via_node:
+                direction, allowed = 1, edge[7]
+            else:
+                continue
+            mask = allowed & restriction.profile_mask
+            if mask:
+                outgoing_arcs.append(((edge_index << 1) | direction, mask))
+        for incoming_arc, incoming_mask in incoming_arcs:
+            for outgoing_arc, outgoing_mask in outgoing_arcs:
+                mask = incoming_mask & outgoing_mask
+                if mask:
+                    data.turn_restrictions.append((incoming_arc, outgoing_arc, mask, restriction.kind))
     return data
 
 
@@ -377,17 +426,28 @@ def write_graph(path: Path, data: GraphData) -> dict:
     for name in data.names:
         name_bytes += name.encode("utf-8")
         name_offsets.append(len(name_bytes))
+    by_incoming: dict[int, list[tuple[int, int, int]]] = {}
+    for incoming, outgoing, mask, kind in data.turn_restrictions:
+        by_incoming.setdefault(incoming, []).append((outgoing, mask, kind))
+    turn_start = array("i", [0])
+    turn_blob = bytearray()
+    for incoming in range(len(arcs)):
+        for outgoing, mask, kind in sorted(by_incoming.get(incoming, ()), key=lambda item: (item[0], item[2], item[1])):
+            turn_blob += TURN_STRUCT.pack(outgoing, mask, kind, 0)
+        turn_start.append(len(turn_blob) // TURN_STRUCT.size)
     min_lat = min(data.vlat) if vcount else 0
     max_lat = max(data.vlat) if vcount else 0
     min_lon = min(data.vlon) if vcount else 0
     max_lon = max(data.vlon) if vcount else 0
     header = struct.pack("<4s11i", MAGIC, FORMAT_VERSION, vcount, ecount, len(shape) * 4, len(data.names),
                          len(name_bytes), min_lat, min_lon, max_lat, max_lon, len(arcs))
+    struct.pack_into("<i", header, 48, len(turn_blob) // TURN_STRUCT.size)
     header += b"\x00" * (HEADER_SIZE - len(header))
     with path.open("wb") as handle:
-        for chunk in (header, _le(vert), bytes(edge_blob), _le(shape), _le(arc_start), _le(arcs), _le(name_offsets), bytes(name_bytes)):
+        for chunk in (header, _le(vert), bytes(edge_blob), _le(shape), _le(arc_start), _le(arcs), _le(name_offsets), bytes(name_bytes), _le(turn_start), bytes(turn_blob)):
             handle.write(chunk)
     return {"vertexCount": vcount, "edgeCount": ecount, "arcCount": len(arcs), "nameCount": len(data.names),
+            "turnRestrictionCount": len(turn_blob) // TURN_STRUCT.size,
             "sizeBytes": path.stat().st_size, "bbox": [min_lat / 1e6, min_lon / 1e6, max_lat / 1e6, max_lon / 1e6]}
 
 
@@ -409,6 +469,9 @@ class Graph:
             raise ValueError("not a Georgia road graph")
         (_, version, self.V, self.E, shape_bytes, self.N, name_bytes,
          self.min_lat, self.min_lon, self.max_lat, self.max_lon, arc_count) = struct.unpack_from("<4s11i", blob, 0)
+        turn_count = struct.unpack_from("<i", blob, 48)[0]
+        if turn_count < 0:
+            raise ValueError("invalid turn restriction count")
         if version != FORMAT_VERSION:
             raise ValueError(f"unsupported road graph version {version}")
         pos = HEADER_SIZE
@@ -431,6 +494,15 @@ class Graph:
         pos += 4 * (self.N + 1)
         text = blob[pos:pos + name_bytes]
         self.names = [text[offsets[i]:offsets[i + 1]].decode("utf-8") for i in range(self.N)]
+        pos += name_bytes
+        self.turn_start = array("i")
+        self.turn_start.frombytes(blob[pos:pos + 4 * (2 * self.E + 1)])
+        pos += 4 * (2 * self.E + 1)
+        if len(self.turn_start) != 2 * self.E + 1 or self.turn_start[-1] != turn_count:
+            raise ValueError("invalid turn restriction index")
+        self.turn_records = list(TURN_STRUCT.iter_unpack(blob[pos:pos + TURN_STRUCT.size * turn_count]))
+        if len(self.turn_records) != turn_count or pos + TURN_STRUCT.size * turn_count != len(blob):
+            raise ValueError("truncated or trailing turn restriction data")
         if sys.byteorder == "big":
             raise RuntimeError("reference reader assumes a little-endian host")
 
@@ -469,6 +541,21 @@ class Graph:
         edge = self.edges[e]
         return bool((edge[7] if direction == 0 else edge[8]) & profile)
 
+    def turn_allowed(self, profile: int, incoming_arc: int, outgoing_arc: int) -> bool:
+        only_found = False
+        only_allowed = False
+        prohibited = False
+        for outgoing, mask, kind, _reserved in self.turn_records[self.turn_start[incoming_arc]:self.turn_start[incoming_arc + 1]]:
+            if not (mask & profile):
+                continue
+            if kind == TURN_ONLY:
+                only_found = True
+                if outgoing == outgoing_arc:
+                    only_allowed = True
+            elif kind == TURN_NO and outgoing == outgoing_arc:
+                prohibited = True
+        return (not only_found or only_allowed) and not prohibited
+
     # snapping -------------------------------------------------------------
     def snap(self, profile: int, lat: float, lon: float, max_m: float = 5000.0) -> Snap | None:
         best: Snap | None = None
@@ -497,67 +584,64 @@ class Graph:
 
     # search ---------------------------------------------------------------
     def _astar(self, profile: int, seeds: dict, targets: dict, goal: tuple):
-        """Multi-source / multi-target A*. seeds: vertex -> seconds; targets: vertex -> extra seconds."""
+        """Turn-aware A*: each state is the directed arc used to arrive at its end vertex."""
         vmax = MAX_SPEED_MPS[profile]
         best_g = dict(seeds)
-        parent: dict = {v: None for v in seeds}
+        parent: dict[int, int | None] = {arc: None for arc in seeds}
         heap = []
-        for v, g in seeds.items():
-            la, lo = self.vertex(v)
-            heapq.heappush(heap, (g + dist_m(la, lo, goal[0], goal[1]) / vmax, g, v))
-        best_total, best_vertex = math.inf, None
+        for arc, g in seeds.items():
+            edge, direction = arc >> 1, arc & 1
+            vertex = self.edges[edge][1] if direction == 0 else self.edges[edge][0]
+            la, lo = self.vertex(vertex)
+            heapq.heappush(heap, (g + dist_m(la, lo, goal[0], goal[1]) / vmax, g, arc))
+        best_total, best_state, best_final_arc = math.inf, None, None
         closed = set()
         while heap:
-            f, g, u = heapq.heappop(heap)
+            f, g, incoming_arc = heapq.heappop(heap)
             if f >= best_total:
                 break
-            if u in closed or g > best_g.get(u, math.inf):
+            if incoming_arc in closed or g > best_g.get(incoming_arc, math.inf):
                 continue
-            closed.add(u)
-            if u in targets and g + targets[u] < best_total:
-                best_total, best_vertex = g + targets[u], u
+            closed.add(incoming_arc)
+            edge, direction = incoming_arc >> 1, incoming_arc & 1
+            u = self.edges[edge][1] if direction == 0 else self.edges[edge][0]
+            for final_arc, extra in targets.get(u, ()):
+                if self.turn_allowed(profile, incoming_arc, final_arc) and g + extra < best_total:
+                    best_total, best_state, best_final_arc = g + extra, incoming_arc, final_arc
             for pos in range(self.arc_start[u], self.arc_start[u + 1]):
-                arc = self.arcs[pos]
-                e, direction = arc >> 1, arc & 1
-                if not self.usable(profile, e, direction):
+                outgoing_arc = self.arcs[pos]
+                e, direction = outgoing_arc >> 1, outgoing_arc & 1
+                if not self.usable(profile, e, direction) or not self.turn_allowed(profile, incoming_arc, outgoing_arc):
                     continue
                 w = self.edges[e][1] if direction == 0 else self.edges[e][0]
                 ng = g + self.edge_seconds(profile, e, direction)
-                if ng < best_g.get(w, math.inf):
-                    best_g[w] = ng
-                    parent[w] = (u, arc)
+                if ng < best_g.get(outgoing_arc, math.inf):
+                    best_g[outgoing_arc] = ng
+                    parent[outgoing_arc] = incoming_arc
                     la, lo = self.vertex(w)
-                    heapq.heappush(heap, (ng + dist_m(la, lo, goal[0], goal[1]) / vmax, ng, w))
-        return best_total, best_vertex, parent
+                    heapq.heappush(heap, (ng + dist_m(la, lo, goal[0], goal[1]) / vmax, ng, outgoing_arc))
+        return best_total, best_state, best_final_arc, parent
 
     def route(self, profile: int, lat1: float, lon1: float, lat2: float, lon2: float, max_snap_m: float = 5000.0):
         a = self.snap(profile, lat1, lon1, max_snap_m)
         b = self.snap(profile, lat2, lon2, max_snap_m)
         if a is None or b is None:
             return None
-        seeds, seed_info, targets, target_info = {}, {}, {}, {}
-        ea = a.edge
+        seeds, targets = {}, {}
+        ea, eb = a.edge, b.edge
         la_total = self._geom_scale(ea)
         sa_forward = self._speed(profile, ea, 0)
         sa_backward = self._speed(profile, ea, 1)
         if self.usable(profile, ea, 0):
-            cost = (self.edge_length_m(ea) - a.along * la_total) / sa_forward
-            self._seed(seeds, seed_info, self.edges[ea][1], cost, (0, "to"))
+            self._seed(seeds, ea << 1, (self.edge_length_m(ea) - a.along * la_total) / sa_forward)
         if self.usable(profile, ea, 1):
-            cost = a.along * la_total / sa_backward
-            self._seed(seeds, seed_info, self.edges[ea][0], cost, (1, "from"))
-        eb = b.edge
+            self._seed(seeds, (ea << 1) | 1, a.along * la_total / sa_backward)
         sb_forward = self._speed(profile, eb, 0)
         sb_backward = self._speed(profile, eb, 1)
-        if self.usable(profile, eb, 0):  # arrive at `from`, drive forward to the point
-            targets[self.edges[eb][0]] = b.along * self._geom_scale(eb) / sb_forward
-            target_info[self.edges[eb][0]] = "from"
-        if self.usable(profile, eb, 1):  # arrive at `to`, drive backward to the point
-            cost = (self.edge_length_m(eb) - b.along * self._geom_scale(eb)) / sb_backward
-            vtx = self.edges[eb][1]
-            if cost < targets.get(vtx, math.inf):
-                targets[vtx] = cost
-                target_info[vtx] = "to"
+        if self.usable(profile, eb, 0):
+            targets.setdefault(self.edges[eb][0], []).append((eb << 1, b.along * self._geom_scale(eb) / sb_forward))
+        if self.usable(profile, eb, 1):
+            targets.setdefault(self.edges[eb][1], []).append(((eb << 1) | 1, (self.edge_length_m(eb) - b.along * self._geom_scale(eb)) / sb_backward))
         candidates = []
         if ea == eb:
             delta = (b.along - a.along) * la_total
@@ -566,9 +650,9 @@ class Graph:
             if delta <= 0 and self.usable(profile, ea, 1):
                 candidates.append((-delta / sa_backward, "same", 1))
         if seeds and targets:
-            total, end_vertex, parent = self._astar(profile, seeds, targets, (b.lat, b.lon))
-            if end_vertex is not None:
-                candidates.append((total, "graph", (end_vertex, parent)))
+            total, end_state, final_arc, parent = self._astar(profile, seeds, targets, (b.lat, b.lon))
+            if end_state is not None:
+                candidates.append((total, "graph", (end_state, final_arc, parent)))
         if not candidates:
             return None
         seconds, kind, extra = min(candidates, key=lambda item: item[0])
@@ -581,23 +665,24 @@ class Graph:
                 points += list(reversed(pts[b.segment + 1:a.segment + 1]))
             points.append((b.lat, b.lon))
         else:
-            end_vertex, parent = extra
+            end_state, final_arc, parent = extra
             chain = []
-            v = end_vertex
-            while parent[v] is not None:
-                u, arc = parent[v]
-                chain.append(arc)
-                v = u
+            state = end_state
+            while state is not None:
+                chain.append(state)
+                state = parent[state]
             chain.reverse()
-            first_vertex = v
-            pts = self.edge_points(ea)
-            points += pts[a.segment + 1:] if seed_info[first_vertex][1] == "to" else list(reversed(pts[:a.segment + 1]))
-            for arc in chain:
+            first_arc = chain[0]
+            first_edge, start_direction = first_arc >> 1, first_arc & 1
+            pts = self.edge_points(first_edge)
+            points += pts[a.segment + 1:] if start_direction == 0 else list(reversed(pts[:a.segment + 1]))
+            for arc in chain[1:]:
                 e, direction = arc >> 1, arc & 1
                 ep = self.edge_points(e)
                 points += ep[1:] if direction == 0 else list(reversed(ep[:-1]))
-            pts = self.edge_points(eb)
-            if target_info[end_vertex] == "from":
+            final_edge, final_direction = final_arc >> 1, final_arc & 1
+            pts = self.edge_points(final_edge)
+            if final_direction == 0:
                 points += pts[1:b.segment + 1]
             else:
                 points += list(reversed(pts[b.segment + 1:-1]))
@@ -616,10 +701,9 @@ class Graph:
         return speed_mps(profile, edge[5], edge[6], self.edge_incline_percent(e, direction))
 
     @staticmethod
-    def _seed(seeds, info, vertex, cost, tag):
-        if cost < seeds.get(vertex, math.inf):
-            seeds[vertex] = cost
-            info[vertex] = tag
+    def _seed(seeds, arc, cost):
+        if cost < seeds.get(arc, math.inf):
+            seeds[arc] = cost
 
 
 # ------------------------------------------------------------------ vertex-level helpers (CI sanity check)
