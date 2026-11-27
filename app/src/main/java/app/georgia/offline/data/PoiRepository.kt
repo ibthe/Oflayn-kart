@@ -256,13 +256,30 @@ object PoiRepository {
         val sql = """
             SELECT poi_id, category, subcategory, name, name_en, name_ru, name_ka, latitude, longitude, tags_json
             FROM poi $where
-            ORDER BY CASE category
-                WHEN 'tourism' THEN 1 WHEN 'historic' THEN 2 WHEN 'nature' THEN 3
-                WHEN 'food' THEN 4 WHEN 'lodging' THEN 5 WHEN 'medical' THEN 6
-                WHEN 'transport' THEN 7 WHEN 'services' THEN 8 WHEN 'shops' THEN 9
-                ELSE 10 END, name COLLATE NOCASE
+            ORDER BY
+                CASE
+                    WHEN ? <> '' AND (
+                        lower(name) = ? OR lower(name_en) = ? OR
+                        lower(name_ru) = ? OR lower(name_ka) = ?
+                    ) THEN 0
+                    WHEN ? <> '' AND (
+                        instr(lower(name), ?) = 1 OR instr(lower(name_en), ?) = 1 OR
+                        instr(lower(name_ru), ?) = 1 OR instr(lower(name_ka), ?) = 1
+                    ) THEN 1
+                    ELSE 2
+                END,
+                CASE category
+                    WHEN 'settlement' THEN 0 WHEN 'tourism' THEN 1 WHEN 'historic' THEN 2
+                    WHEN 'nature' THEN 3 WHEN 'food' THEN 4 WHEN 'lodging' THEN 5
+                    WHEN 'medical' THEN 6 WHEN 'transport' THEN 7 WHEN 'services' THEN 8
+                    WHEN 'shops' THEN 9 ELSE 10
+                END,
+                name COLLATE NOCASE
             LIMIT ?
         """.trimIndent()
+        val primaryTerm = terms.firstOrNull().orEmpty()
+        repeat(5) { arguments += primaryTerm }
+        repeat(5) { arguments += primaryTerm }
         arguments += limit.coerceIn(1, 200).toString()
         val db = SQLiteDatabase.openDatabase(database.absolutePath, null, SQLiteDatabase.OPEN_READONLY)
         try {
