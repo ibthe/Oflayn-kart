@@ -22,7 +22,7 @@ class AppFlowUiTest {
         composeRule.onAllNodesWithText("Найти место на этой области карты").assertCountEquals(1)
 
         // Expanding the style picker must not leave the search panel stacked beneath it.
-        composeRule.onAllNodesWithText("Стиль:", substring = true).onFirst().performClick()
+        composeRule.onAllNodesWithText("Стиль:", substring = true)[0].performClick()
         awaitText("Спутниковый слой")
         awaitText("Импортировать ZIP")
         composeRule.onAllNodesWithText("Найти место на этой области карты").assertCountEquals(0)
@@ -71,7 +71,7 @@ class AppFlowUiTest {
         awaitCount("Места", 2)
         composeRule.onNodeWithText("Путеводитель", substring = false).performClick()
         awaitText("Тушетия")
-        composeRule.onAllNodesWithText("Подробнее", substring = false).onFirst().performClick()
+        composeRule.onAllNodesWithText("Подробнее", substring = false)[0].performClick()
         awaitText("Маршруты и последовательности")
         awaitText("Полезные сервисы и подготовка")
         awaitCount("Найти", 4)
