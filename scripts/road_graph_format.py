@@ -534,7 +534,7 @@ class Graph:
     def edge_seconds(self, profile: int, e: int, direction: int, metres: float | None = None) -> float:
         edge = self.edges[e]
         return (self.edge_length_m(e) if metres is None else metres) / speed_mps(
-            profile, edge[5], edge[6], self.edge_incline_percent(e, direction)
+            profile, edge[4], edge[5], self.edge_incline_percent(e, direction)
         )
 
     def usable(self, profile: int, e: int, direction: int) -> bool:
@@ -698,7 +698,7 @@ class Graph:
 
     def _speed(self, profile: int, e: int, direction: int) -> float:
         edge = self.edges[e]
-        return speed_mps(profile, edge[5], edge[6], self.edge_incline_percent(e, direction))
+        return speed_mps(profile, edge[4], edge[5], self.edge_incline_percent(e, direction))
 
     @staticmethod
     def _seed(seeds, arc, cost):
