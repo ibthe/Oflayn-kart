@@ -28,6 +28,9 @@ class RoadGraph(buffer: ByteBuffer) {
     private val arcsOffset: Int
     private val nameOffsetsOffset: Int
     private val nameBytesOffset: Int
+    private val turnStartOffset: Int
+    private val turnRecordsOffset: Int
+    val turnRestrictionCount: Int
     private val turnRestrictionCount: Int
     private val turnStartOffset: Int
     private val turnRecordsOffset: Int
@@ -89,6 +92,33 @@ class RoadGraph(buffer: ByteBuffer) {
     fun arcStart(v: Int): Int = buf.getInt(arcStartOffset + 4 * v)
     fun arc(index: Int): Int = buf.getInt(arcsOffset + 4 * index)
 
+    fun arcFromVertex(arc: Int): Int = if ((arc and 1) == 0) edgeFrom(arc ushr 1) else edgeTo(arc ushr 1)
+    fun arcToVertex(arc: Int): Int = if ((arc and 1) == 0) edgeTo(arc ushr 1) else edgeFrom(arc ushr 1)
+
+    /** Enforce OSM no_* and only_* restrictions for a directed incoming/outgoing arc pair. */
+    fun turnAllowed(profile: RoutingProfile, incomingArc: Int, outgoingArc: Int): Boolean {
+        if (incomingArc !in 0 until arcCount || outgoingArc !in 0 until arcCount) return false
+        val start = buf.getInt(turnStartOffset + 4 * incomingArc)
+        val end = buf.getInt(turnStartOffset + 4 * (incomingArc + 1))
+        var onlyFound = false
+        var onlyAllowed = false
+        var prohibited = false
+        for (i in start until end) {
+            val base = turnRecordsOffset + TURN_RECORD_SIZE * i
+            val mask = buf.get(base + 4).toInt() and 0xFF
+            if (mask and profile.bit == 0) continue
+            val nextArc = buf.getInt(base)
+            when (buf.get(base + 5).toInt() and 0xFF) {
+                TURN_ONLY -> {
+                    onlyFound = true
+                    if (nextArc == outgoingArc) onlyAllowed = true
+                }
+                TURN_NO -> if (nextArc == outgoingArc) prohibited = true
+            }
+        }
+        return (!onlyFound || onlyAllowed) && !prohibited
+    }
+
     /** Enforces OSM no_* and only_* transitions after arriving along [incomingArc]. */
     fun turnAllowed(profile: RoutingProfile, incomingArc: Int, outgoingArc: Int): Boolean {
         var onlyFound = false
@@ -118,6 +148,17 @@ class RoadGraph(buffer: ByteBuffer) {
         for (i in arcStart(v) until arcStart(v + 1)) {
             val arc = arc(i)
             if (usable(profile, arc ushr 1, arc and 1)) count++
+        }
+        return count
+    }
+
+    fun choicesAt(profile: RoutingProfile, incomingArc: Int, v: Int): Int {
+        var count = 0
+        for (i in arcStart(v) until arcStart(v + 1)) {
+            val outgoingArc = arc(i)
+            if (usable(profile, outgoingArc ushr 1, outgoingArc and 1) &&
+                turnAllowed(profile, incomingArc, outgoingArc)
+            ) count++
         }
         return count
     }
