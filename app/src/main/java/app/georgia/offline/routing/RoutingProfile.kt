@@ -34,7 +34,7 @@ enum class RoutingProfile(
     FOOT(
         8, "Пешком", 1.5, 0.9,
         (3..21).associateWith { 5 } + mapOf(16 to 4, 19 to 3)
-    ),
+    );
 
     private val pavedMps = DoubleArray(CLASS_COUNT) { (kmhByClass[it] ?: 10) / 3.6 }
     private val unpavedMps = DoubleArray(CLASS_COUNT) { max((kmhByClass[it] ?: 10) * unpavedFactor, 3.0) / 3.6 }
