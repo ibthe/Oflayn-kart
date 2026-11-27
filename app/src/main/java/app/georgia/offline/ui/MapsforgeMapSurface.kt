@@ -28,6 +28,8 @@ import org.mapsforge.map.android.view.MapView
 import org.mapsforge.map.layer.overlay.Circle
 import org.mapsforge.map.layer.overlay.Marker
 import org.mapsforge.map.layer.overlay.Polyline
+import org.mapsforge.map.datastore.MapDataStore
+import org.mapsforge.map.datastore.MultiMapDataStore
 import org.mapsforge.map.reader.MapFile
 import org.mapsforge.map.rendertheme.ExternalRenderTheme
 import org.mapsforge.map.rendertheme.XmlRenderTheme
@@ -71,7 +73,7 @@ class MapPlace(val id: String, val latitude: Double, val longitude: Double, val 
 @Composable
 fun MapsforgeMapSurface(
     mapFile: File,
-    preferredLanguage: String?,
+    preferredLanguages: List<String>,
     mapTheme: String,
     modifier: Modifier = Modifier,
     userLocation: Location? = null,
@@ -118,10 +120,10 @@ fun MapsforgeMapSurface(
     val currentRoutePoints by rememberUpdatedState(routePoints)
     val currentViaPoints by rememberUpdatedState(viaPoints)
     val currentRouteDrag by rememberUpdatedState(onRouteDrag)
-    key(mapFile.absolutePath, mapFile.lastModified(), preferredLanguage, mapTheme, accentColor, destinationColor, routeColor, savedColor, carColor, originColor) {
+    key(mapFile.absolutePath, mapFile.lastModified(), preferredLanguages, mapTheme, accentColor, destinationColor, routeColor, savedColor, carColor, originColor) {
         val overlays = remember { MapOverlays(accentColor, destinationColor, routeColor, savedColor, carColor, originColor) }
         var mapViewRef by remember { mutableStateOf<MapView?>(null) }
-        var mapDataStoreRef by remember { mutableStateOf<MapFile?>(null) }
+        var mapDataStoreRef by remember { mutableStateOf<MapDataStore?>(null) }
         var rendererError by remember { mutableStateOf<String?>(null) }
         var cameraRestored by remember { mutableStateOf(false) }
 
@@ -134,10 +136,18 @@ fun MapsforgeMapSurface(
                     getMapScaleBar().setVisible(true)
 
                     try {
-                        val dataStore = if (preferredLanguage == null) {
-                            MapFile(mapFile)
-                        } else {
-                            MapFile(mapFile, preferredLanguage)
+                        val dataStore: MapDataStore = when (preferredLanguages.size) {
+                            0 -> MapFile(mapFile)
+                            1 -> MapFile(mapFile, preferredLanguages.first())
+                            else -> MultiMapDataStore(MultiMapDataStore.DataPolicy.RETURN_ALL).apply {
+                                preferredLanguages.forEachIndexed { index, language ->
+                                    addMapDataStore(
+                                        MapFile(mapFile, language),
+                                        index == 0,
+                                        index == 0
+                                    )
+                                }
+                            }
                         }
                         val tileCache = AndroidUtil.createTileCache(
                             viewContext,
