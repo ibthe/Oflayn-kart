@@ -450,15 +450,15 @@ object PoiRepository {
             val steps = kotlin.math.ceil(segmentLength / sampleSpacing).toInt().coerceAtLeast(1)
             for (step in 1..steps) {
                 val fraction = step.toDouble() / steps
-                centers += (start.first + (end.first - start.first) * fraction) to
-                    (start.second + (end.second - start.second) * fraction)
+                centers += ((start.first + (end.first - start.first) * fraction) to
+                    (start.second + (end.second - start.second) * fraction))
             }
         }
 
         val boxes = centers.distinct().map { (latitude, longitude) ->
             val latitudeDelta = searchRadius / 110_540.0
             val longitudeDelta = searchRadius /
-                (111_320.0 * kotlin.math.cos(Math.toRadians(latitude)).absoluteValue.coerceAtLeast(0.05))
+                (111_320.0 * kotlin.math.cos(Math.toRadians(latitude)).coerceAtLeast(0.05))
             listOf(
                 (latitude - latitudeDelta).toString(),
                 (latitude + latitudeDelta).toString(),
