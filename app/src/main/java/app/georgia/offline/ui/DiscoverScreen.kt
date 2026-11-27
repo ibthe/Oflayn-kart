@@ -176,6 +176,10 @@ internal fun DiscoverScreen(
                     tripPlanRepository.remove(id)
                     tripStops = tripPlanRepository.list()
                     onTripPlanChanged()
+                },
+                onUpdateNote = { id, note ->
+                    tripPlanRepository.updateNote(id, note)
+                    tripStops = tripPlanRepository.list()
                 }
             )
         } else {
@@ -283,9 +287,12 @@ private fun TripPlanContent(
     onPlanRoute: (List<PoiRepository.PoiRecord>) -> Unit,
     onMove: (String, Int) -> Unit,
     onSetDay: (String, Int) -> Unit,
-    onRemove: (String) -> Unit
+    onRemove: (String) -> Unit,
+    onUpdateNote: (String, String) -> Unit
 ) {
     val byId = remember(pois) { pois.associateBy { it.poiId } }
+    var editingNoteId by rememberSaveable { mutableStateOf<String?>(null) }
+    var noteDrafts by remember { mutableStateOf<Map<String, String>>(emptyMap()) }
     if (stops.isEmpty()) {
         InfoCard(
             "План пока пуст",
@@ -326,6 +333,28 @@ private fun TripPlanContent(
                         }
                         stop.note.takeIf { it.isNotBlank() }?.let {
                             Text(it, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                        }
+                        TextButton(
+                            onClick = {
+                                editingNoteId = if (editingNoteId == stop.poiId) null else stop.poiId
+                                noteDrafts = noteDrafts + (stop.poiId to stop.note)
+                            }
+                        ) { Text(if (stop.note.isBlank()) "Добавить заметку" else "Изменить заметку") }
+                        if (editingNoteId == stop.poiId) {
+                            OutlinedTextField(
+                                value = noteDrafts[stop.poiId].orEmpty(),
+                                onValueChange = { noteDrafts = noteDrafts + (stop.poiId to it.take(500)) },
+                                modifier = Modifier.fillMaxWidth(),
+                                label = { Text("Заметка к месту") },
+                                maxLines = 2
+                            )
+                            Row(horizontalArrangement = Arrangement.spacedBy(Space.xs)) {
+                                TextButton(onClick = {
+                                    onUpdateNote(stop.poiId, noteDrafts[stop.poiId].orEmpty())
+                                    editingNoteId = null
+                                }) { Text("Сохранить заметку") }
+                                TextButton(onClick = { editingNoteId = null }) { Text("Отмена") }
+                            }
                         }
                         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(Space.xxs)) {
                             TextButton(onClick = { onMove(stop.poiId, -1) }, enabled = index > 0) { Text("↑") }
