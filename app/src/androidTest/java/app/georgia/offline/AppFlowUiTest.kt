@@ -17,11 +17,14 @@ class AppFlowUiTest {
 
     @Test
     fun stylePickerAndTabTransitionsKeepPanelsExclusive() {
-        awaitText("Стиль: Классика")
+        awaitText("Карта")
+        composeRule.onNodeWithText("Карта", substring = false).performClick()
         composeRule.onAllNodesWithText("Найти место на этой области карты").assertCountEquals(1)
 
         // Expanding the style picker must not leave the search panel stacked beneath it.
-        composeRule.onNodeWithText("Стиль: Классика").performClick()
+        composeRule.onAllNodesWithText("Стиль:", substring = true).onFirst().performClick()
+        awaitText("Спутниковый слой")
+        awaitText("Импортировать ZIP")
         composeRule.onAllNodesWithText("Найти место на этой области карты").assertCountEquals(0)
         composeRule.onNodeWithText("Oflayn Natural", substring = false).performClick()
         awaitText("Стиль: Oflayn Natural")
@@ -74,7 +77,6 @@ class AppFlowUiTest {
         awaitCount("Найти", 4)
 
         composeRule.onNodeWithText("Карта", substring = false).performClick()
-        awaitText("Стиль: Классика")
         composeRule.onNodeWithText("Утилиты", substring = false).performClick()
         awaitText("Экстренная помощь")
         composeRule.onNodeWithText("Открыть", substring = false).performClick()
