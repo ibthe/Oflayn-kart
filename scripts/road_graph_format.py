@@ -8,7 +8,8 @@ is searched. The Kotlin `RoadGraph`/`Router` classes mirror the layout and the a
 
 File layout, all little-endian:
   header (64 bytes): magic "GRT1", version, vertexCount V, edgeCount E, shapeBytes,
-      nameCount N, nameBytes, minLat, minLon, maxLat, maxLon (degrees * 1e6), arcCount, zero padding
+      nameCount N, nameBytes, minLat, minLon, maxLat, maxLon (degrees * 1e6), arcCount,
+      turnRestrictionCount, then zero padding
   vertices   V * (lat int32, lon int32)
   edges      E * 28 bytes: from int32, to int32, lengthDecimetres int32, shapeOffsetBytes int32,
       shapeCount uint16, class uint8, flags uint8, fwdMask uint8, backMask uint8, pad uint16, nameIndex int32 (-1 none)
@@ -16,6 +17,8 @@ File layout, all little-endian:
   arcStart   (V + 1) * int32 offsets into arcs
   arcs       arcCount * int32: (edgeIndex << 1) | direction (0 = from->to, 1 = to->from)
   nameOffsets (N + 1) * int32, then nameBytes of UTF-8
+  turnStart (arcCount + 1) * int32 offsets into turn records
+  turn records: outgoingArc int32, profileMask uint8, kind uint8, reserved uint16
 """
 from __future__ import annotations
 
