@@ -47,6 +47,7 @@ import androidx.compose.ui.unit.dp
 import app.georgia.offline.domain.GeoMath
 import app.georgia.offline.routing.Maneuver
 import app.georgia.offline.routing.Route
+import app.georgia.offline.data.ElevationProfile
 import app.georgia.offline.routing.RouteFailure
 import app.georgia.offline.routing.RoutingProfile
 import app.georgia.offline.routing.RoutingRepository
@@ -63,6 +64,7 @@ enum class TrackingEvent { NONE, REROUTE, OFF_TRACK, ARRIVED }
 class RouteSession {
     var profile by mutableStateOf(RoutingProfile.CAR)
     var route by mutableStateOf<Route?>(null)
+    var elevationProfile by mutableStateOf<ElevationProfile?>(null)
     var busy by mutableStateOf(false)
     var message by mutableStateOf<String?>(null)
     var navigating by mutableStateOf(false)
@@ -82,6 +84,7 @@ class RouteSession {
         requestId++
         busy = false
         route = null
+        elevationProfile = null
         message = null
         navigating = false
         followingTrack = false
@@ -104,6 +107,7 @@ class RouteSession {
     fun beginTrackFollow(trackRoute: Route) {
         requestId++
         route = trackRoute
+        elevationProfile = null
         message = null
         busy = false
         followingTrack = true
@@ -132,6 +136,7 @@ class RouteSession {
             // if the new calculation fails.
             message = null
             route = null
+            elevationProfile = null
             along = 0.0
             segmentHint = 0
             announced.clear()
@@ -165,6 +170,7 @@ class RouteSession {
         val found = result.route
         if (found != null) {
             route = found
+            elevationProfile = null
             message = null
             along = 0.0
             segmentHint = 0
