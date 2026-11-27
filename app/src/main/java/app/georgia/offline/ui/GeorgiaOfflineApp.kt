@@ -572,6 +572,20 @@ private fun MapScreen(modifier: Modifier, settings: LocalSettings, navigation: N
         selectedMapPoi == null &&
         selectedPlace == null
 
+    val showMapStylePicker = navigation.pointSelection == null &&
+        !navigation.routeMenuVisible &&
+        navigation.origin == null &&
+        selectedMapPoi == null &&
+        selectedPlace == null
+
+    LaunchedEffect(navigation.routeMenuVisible, navigation.pointSelection, navigation.origin, selectedMapPoi?.poiId, selectedPlace?.id) {
+        if (navigation.routeMenuVisible || navigation.pointSelection != null ||
+            navigation.origin != null || selectedMapPoi != null || selectedPlace != null
+        ) {
+            mapStyleExpanded = false
+        }
+    }
+
     // Route tracking, speech and keep-screen-on are owned by GeorgiaOfflineApp so they
     // continue while another tab is temporarily visible.
 
@@ -729,7 +743,9 @@ private fun MapScreen(modifier: Modifier, settings: LocalSettings, navigation: N
                         verticalArrangement = Arrangement.spacedBy(Space.xs)
                     ) {
                         NavigationBanner(session.route!!, session.along)
-                        MapStylePicker(settings, expanded = mapStyleExpanded, onExpandedChange = { mapStyleExpanded = it })
+                        if (showMapStylePicker) {
+                            MapStylePicker(settings, expanded = mapStyleExpanded, onExpandedChange = { mapStyleExpanded = it })
+                        }
                     }
                 } else {
                     Column(
@@ -750,7 +766,9 @@ private fun MapScreen(modifier: Modifier, settings: LocalSettings, navigation: N
                         } else if (tracker.active && !tracker.hasFreshFix()) {
                             MapChip { Text("Ищу сигнал GPS…", style = MaterialTheme.typography.labelMedium) }
                         }
-                        MapStylePicker(settings, expanded = mapStyleExpanded, onExpandedChange = { mapStyleExpanded = it })
+                        if (showMapStylePicker) {
+                            MapStylePicker(settings, expanded = mapStyleExpanded, onExpandedChange = { mapStyleExpanded = it })
+                        }
                         if (showMapSearch && !mapStyleExpanded) {
                             MapViewportSearchBox(
                                 query = mapSearchQuery,
