@@ -2,8 +2,8 @@
 """Build a local multilingual POI SQLite database from a Georgia OSM PBF.
 
 The extractor intentionally uses PyOsmium's disk-backed sparse_file_array index
-so the GitHub runner does not need to keep every node location in RAM. Nodes and
-closed ways are included; relation-only POIs are reported as not yet supported.
+so the GitHub runner does not need to keep every node location in RAM. It indexes
+named nodes, closed ways and multipolygon relations without duplicating way-derived areas.
 """
 from __future__ import annotations
 
@@ -285,6 +285,29 @@ def polygon_centroid(points: list[tuple[float, float]]) -> tuple[float, float]:
     return lat, lon
 
 
+def multipolygon_centroid(outer_rings: Iterable[Iterable[tuple[float, float]]]) -> tuple[float, float] | None:
+    """Combine outer-ring centroids by polygon area, ignoring invalid/degenerate rings."""
+    weighted_lat = weighted_lon = total_area = 0.0
+    for ring in outer_rings:
+        points = list(ring)
+        if len(points) < 3:
+            continue
+        lat, lon = polygon_centroid(points)
+        area2 = 0.0
+        for index, point in enumerate(points):
+            next_point = points[(index + 1) % len(points)]
+            area2 += point[1] * next_point[0] - next_point[1] * point[0]
+        area = abs(area2) * max(0.1, __import__("math").cos(__import__("math").radians(lat)))
+        if area <= 1e-14:
+            continue
+        weighted_lat += lat * area
+        weighted_lon += lon * area
+        total_area += area
+    if total_area <= 0.0:
+        return None
+    return weighted_lat / total_area, weighted_lon / total_area
+
+
 def normalise_search_text(values: Iterable[str]) -> str:
     # SQLite's built-in LIKE is not fully Unicode case-folding; normalize case in
     # Python first so Cyrillic and Georgian searches behave predictably.
@@ -411,7 +434,7 @@ class ProgressReporter:
 
     def report(self, stats: dict, *, final: bool = False) -> None:
         now = self.clock()
-        total = int(stats["nodesSeen"]) + int(stats["waysSeen"])
+        total = int(stats["nodesSeen"]) + int(stats["waysSeen"]) + int(stats.get("relationsSeen", 0))
         if not final and total < self.next_entity_report and now - self.last_report < self.every_seconds:
             return
 
@@ -419,7 +442,8 @@ class ProgressReporter:
         prefix = "[poi] OSM scan complete" if final else "[poi] OSM scan progress"
         self.emit(
             f"{prefix}: entities={total:,}, nodes={stats['nodesSeen']:,}, "
-            f"ways={stats['waysSeen']:,}, POIs={stats['poisWritten']:,}, "
+            f"ways={stats['waysSeen']:,}, relations={stats.get('relationsSeen', 0):,}, "
+            f"POIs={stats['poisWritten']:,}, "
             f"elapsed={elapsed:.1f}s"
         )
         self.last_report = now
@@ -433,7 +457,7 @@ def build_from_pbf(input_file: Path, output_file: Path, bbox: tuple[float, float
         raise RuntimeError("PyOsmium is missing. Install Ubuntu package python3-pyosmium before running the POI builder.") from exc
 
     conn = create_database(output_file)
-    stats = {"nodesSeen": 0, "waysSeen": 0, "poisWritten": 0, "relationsNotProcessed": True}
+    stats = {"nodesSeen": 0, "waysSeen": 0, "relationsSeen": 0, "relationsWritten": 0, "poisWritten": 0, "relationsNotProcessed": False}
     progress = ProgressReporter()
 
     class Handler(osmium.SimpleHandler):
@@ -485,6 +509,34 @@ def build_from_pbf(input_file: Path, output_file: Path, bbox: tuple[float, float
                 return  # avoid a misleading centroid when the way has missing node locations
             lat, lon = polygon_centroid([(float(l.lat), float(l.lon)) for l in locations])
             self._insert(way, "way", lat, lon)
+
+        def area(self, area) -> None:
+            # Closed ways are already indexed by way(); only add relation-derived areas here.
+            if area.from_way():
+                return
+            stats["relationsSeen"] += 1
+            progress.report(stats)
+            tags = {tag.k: tag.v for tag in area.tags}
+            if classify_tags(tags) is None:
+                return
+            outer_rings = []
+            for ring in area.outer_rings():
+                points = []
+                for node in ring:
+                    if not node.location.valid():
+                        points = []
+                        break
+                    points.append((float(node.lat), float(node.lon)))
+                if points:
+                    outer_rings.append(points)
+            centroid = multipolygon_centroid(outer_rings)
+            if centroid is None:
+                return
+            lat, lon = centroid
+            if not point_in_bbox(lat, lon, bbox):
+                return
+            self._insert(area, "relation", lat, lon)
+            stats["relationsWritten"] += 1
 
     handler = Handler()
     scan_started = time.monotonic()
@@ -543,7 +595,7 @@ def build_from_pbf(input_file: Path, output_file: Path, bbox: tuple[float, float
         "categoryCounts": category_counts,
         "stats": stats,
         "scanElapsedSeconds": round(scan_elapsed, 1),
-        "relationsIncluded": False,
+        "relationsIncluded": True,
         "bbox": ",".join(str(part) for part in bbox),
     }
 
