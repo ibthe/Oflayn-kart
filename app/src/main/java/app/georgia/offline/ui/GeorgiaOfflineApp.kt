@@ -1219,7 +1219,7 @@ private fun MapViewportSearchBox(
         "historic" to "История", "nature" to "Природа", "shops" to "Магазины"
     )
     val resultsScrollState = rememberScrollState()
-    LaunchedEffect(query, selectedCategory, results) { resultsScrollState.scrollTo(0) }
+    LaunchedEffect(query, selectedCategory, alongRoute, results) { resultsScrollState.scrollTo(0) }
     Card(
         modifier = Modifier.fillMaxWidth(),
         shape = RoundedCornerShape(Radius.card),
@@ -1293,7 +1293,7 @@ private fun MapViewportSearchBox(
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.error
                 )
-            } else if (query.isNotBlank() || selectedCategory != "all") {
+            } else if (query.isNotBlank() || selectedCategory != "all" || alongRoute) {
                 if (loading) {
                     Row(Modifier.fillMaxWidth().padding(vertical = Space.xs), horizontalArrangement = Arrangement.Center) {
                         CircularProgressIndicator(modifier = Modifier.size(18.dp), strokeWidth = 2.dp)
