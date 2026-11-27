@@ -378,6 +378,9 @@ private fun TripPlanContent(
                         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(Space.xxs)) {
                             TextButton(onClick = { onMove(stop.poiId, -1) }, enabled = index > 0) { Text("↑") }
                             TextButton(onClick = { onMove(stop.poiId, 1) }, enabled = index < dayStops.lastIndex) { Text("↓") }
+                        }
+                        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(Space.xxs)) {
+                            TextButton(onClick = { onSetDay(stop.poiId, day - 1) }, enabled = day > 1) { Text("День −") }
                             TextButton(onClick = { onSetDay(stop.poiId, day + 1) }, enabled = day < TripPlanRepository.MAX_DAYS) { Text("День +") }
                             TextButton(onClick = { onRemove(stop.poiId) }) { Text("Убрать") }
                         }
