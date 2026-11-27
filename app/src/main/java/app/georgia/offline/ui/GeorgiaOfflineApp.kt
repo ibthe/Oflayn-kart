@@ -522,7 +522,9 @@ private fun MapStylePicker(
                 shadowElevation = 6.dp
             ) {
                 Column(
-                    Modifier.padding(horizontal = Space.s, vertical = Space.xs),
+                    Modifier.heightIn(max = 420.dp)
+                        .verticalScroll(rememberScrollState())
+                        .padding(horizontal = Space.s, vertical = Space.xs),
                     verticalArrangement = Arrangement.spacedBy(Space.xs)
                 ) {
                     choices.chunked(2).forEach { rowChoices ->
