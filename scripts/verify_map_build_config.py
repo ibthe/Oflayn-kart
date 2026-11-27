@@ -332,6 +332,8 @@ def main() -> int:
         return fail("CI must install Osmosis and build/cache the separate contour map before APK assembly.")
     if "mapsforge-georgia-v0.25.0-poi-v4-" not in workflow or "hashFiles('scripts/build_poi_database.py'" not in workflow:
         return fail("POI extraction changes must invalidate the full-country map cache.")
+    if "Report full-country POI coverage and deduplication" not in workflow or "category, subcategory, COUNT(*)" not in workflow:
+        return fail("CI must report full-country POI category coverage and deduplication counts.")
 
 
     for token in ("contoursMapFile", "resolveContourTheme", "contoursDataStoreRef"):
