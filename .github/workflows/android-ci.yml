@@ -185,7 +185,7 @@ jobs:
           path: app/src/main/assets/offline/georgia-roads.bin
           key: georgia-roads-v7-${{ runner.os }}-${{ hashFiles('scripts/road_graph_format.py', 'scripts/build_road_graph.py', 'scripts/verify_road_graph.py', 'scripts/dem_sampler.py', 'scripts/build_dem.py', 'app/src/main/assets/dem/manifest.json') }}-restore-only
           restore-keys: |
-            georgia-roads-v7-${{ runner.os }}-${{ hashFiles('scripts/road_graph_format.py', 'scripts/build_road_graph.py', 'scripts/verify_road_graph.py') }}-
+            georgia-roads-v7-${{ runner.os }}-
 
       - name: Check restored road graph
         id: roads-state
