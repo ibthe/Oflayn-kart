@@ -79,6 +79,7 @@ import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Switch
+import androidx.compose.material3.Slider
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -105,6 +106,8 @@ import app.georgia.offline.data.DemRepository
 import app.georgia.offline.data.TerrainRepository
 import app.georgia.offline.data.MapFileRepository
 import app.georgia.offline.data.MapStorageOption
+import app.georgia.offline.data.RasterPackageInfo
+import app.georgia.offline.data.RasterPackageRepository
 import app.georgia.offline.data.PoiRepository
 import app.georgia.offline.data.TrackRepository
 import app.georgia.offline.data.TripPlanRepository
@@ -476,7 +479,16 @@ private fun MapChip(
 private fun MapStylePicker(
     settings: LocalSettings,
     expanded: Boolean,
-    onExpandedChange: (Boolean) -> Unit
+    onExpandedChange: (Boolean) -> Unit,
+    rasterPackage: RasterPackageInfo?,
+    rasterEnabled: Boolean,
+    rasterOpacity: Float,
+    rasterImporting: Boolean,
+    rasterMessage: String?,
+    onImportRaster: () -> Unit,
+    onRasterEnabledChange: (Boolean) -> Unit,
+    onRasterOpacityChange: (Float) -> Unit,
+    onRemoveRaster: () -> Unit
 ) {
     val choices = LocalSettings.MAP_THEME_CHOICES
     val selectedLabel = choices.firstOrNull { it.first == settings.mapTheme }?.second ?: "Классика"
@@ -529,6 +541,43 @@ private fun MapStylePicker(
                                 )
                             }
                         }
+                    }
+                    HorizontalDivider()
+                    Text("Спутниковый слой", style = MaterialTheme.typography.labelLarge)
+                    if (rasterPackage == null) {
+                        Text(
+                            "Импортируй совместимый офлайн-пакет ZIP. Приложение не загружает снимки из интернета.",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                        TextButton(onClick = onImportRaster, enabled = !rasterImporting) {
+                            Text(if (rasterImporting) "Проверка пакета…" else "Импортировать ZIP")
+                        }
+                    } else {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                                Text(rasterPackage.name, style = MaterialTheme.typography.bodySmall, fontWeight = FontWeight.SemiBold)
+                                Text(
+                                    "${rasterPackage.attribution} · ${rasterPackage.license}",
+                                    style = MaterialTheme.typography.labelSmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                    maxLines = 2,
+                                    overflow = TextOverflow.Ellipsis
+                                )
+                            }
+                            Switch(checked = rasterEnabled, onCheckedChange = onRasterEnabledChange)
+                        }
+                        if (rasterEnabled) {
+                            Text("Прозрачность", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                            Slider(value = rasterOpacity, onValueChange = onRasterOpacityChange, valueRange = 0.25f..0.9f)
+                        }
+                        Row(horizontalArrangement = Arrangement.spacedBy(Space.xs)) {
+                            TextButton(onClick = onImportRaster, enabled = !rasterImporting) { Text("Заменить") }
+                            TextButton(onClick = onRemoveRaster) { Text("Удалить") }
+                        }
+                    }
+                    if (rasterMessage != null) {
+                        Text(rasterMessage, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                     }
                 }
             }
@@ -654,6 +703,40 @@ private fun MapScreen(modifier: Modifier, settings: LocalSettings, navigation: N
     var mapSearchViewport by remember { mutableStateOf<MapViewportBounds?>(null) }
     var mapSearchLoading by remember { mutableStateOf(false) }
     var mapStyleExpanded by remember { mutableStateOf(false) }
+    var rasterPackage by remember { mutableStateOf<RasterPackageInfo?>(null) }
+    var rasterEnabled by remember { mutableStateOf(false) }
+    var rasterOpacity by remember { mutableStateOf(0.62f) }
+    var rasterImporting by remember { mutableStateOf(false) }
+    var rasterMessage by remember { mutableStateOf<String?>(null) }
+    LaunchedEffect(settings.mapStorageId) {
+        rasterPackage = withContext(Dispatchers.IO) { RasterPackageRepository.active(context) }
+        rasterEnabled = rasterPackage != null && RasterPackageRepository.isEnabled(context)
+        rasterOpacity = RasterPackageRepository.opacity(context)
+    }
+    val rasterImportLauncher = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
+        if (uri != null) {
+            coroutineScope.launch {
+                rasterImporting = true
+                rasterMessage = null
+                try {
+                    val imported = withContext(Dispatchers.IO) {
+                        RasterPackageRepository.importZip(
+                            context,
+                            uri,
+                            settings.mapStorageId ?: MapFileRepository.INTERNAL_STORAGE_ID
+                        )
+                    }
+                    rasterPackage = imported
+                    rasterEnabled = false
+                    rasterMessage = "Пакет «${imported.name}» установлен. Включи слой, когда понадобится."
+                } catch (error: Exception) {
+                    rasterMessage = error.message ?: "Не удалось импортировать спутниковый пакет."
+                } finally {
+                    rasterImporting = false
+                }
+            }
+        }
+    }
     LaunchedEffect(Unit) {
         val installation = PoiRepository.ensureInstalled(context)
         poiDatabase = installation.database
@@ -816,6 +899,9 @@ private fun MapScreen(modifier: Modifier, settings: LocalSettings, navigation: N
                 mapTheme = settings.mapTheme,
                 hillshadeDirectory = hillshadeDirectory,
                 contoursMapFile = contoursMapFile,
+                rasterPackage = rasterPackage,
+                rasterEnabled = rasterEnabled,
+                rasterOpacity = rasterOpacity,
                 modifier = Modifier.fillMaxSize(),
                 userLocation = tracker.location?.takeIf { tracker.hasFreshFix() },
                 destination = if (navigation.pointSelection == RoutePointRole.START) null else target?.let { LatLong(it.latitude, it.longitude) },
@@ -932,7 +1018,44 @@ private fun MapScreen(modifier: Modifier, settings: LocalSettings, navigation: N
                     ) {
                         NavigationBanner(session.route!!, session.along, gpsFresh = tracker.hasFreshFix())
                         if (showMapStylePicker) {
-                            MapStylePicker(settings, expanded = mapStyleExpanded, onExpandedChange = { mapStyleExpanded = it })
+                            MapStylePicker(
+                                settings = settings,
+                                expanded = mapStyleExpanded,
+                                onExpandedChange = { mapStyleExpanded = it },
+                                rasterPackage = rasterPackage,
+                                rasterEnabled = rasterEnabled,
+                                rasterOpacity = rasterOpacity,
+                                rasterImporting = rasterImporting,
+                                rasterMessage = rasterMessage,
+                                onImportRaster = {
+                                    rasterImportLauncher.launch(arrayOf("application/zip", "application/x-zip-compressed", "application/octet-stream"))
+                                },
+                                onRasterEnabledChange = { enabled ->
+                                    rasterEnabled = enabled && rasterPackage != null
+                                    RasterPackageRepository.setEnabled(context, rasterEnabled)
+                                },
+                                onRasterOpacityChange = { opacity ->
+                                    rasterOpacity = opacity
+                                    RasterPackageRepository.setOpacity(context, opacity)
+                                },
+                                onRemoveRaster = {
+                                    val current = rasterPackage
+                                    if (current != null) {
+                                        coroutineScope.launch {
+                                            val removed = withContext(Dispatchers.IO) {
+                                                RasterPackageRepository.remove(context, current)
+                                            }
+                                            if (removed) {
+                                                rasterPackage = null
+                                                rasterEnabled = false
+                                                rasterMessage = "Спутниковый пакет удалён."
+                                            } else {
+                                                rasterMessage = "Не удалось удалить пакет. Проверь доступность накопителя."
+                                            }
+                                        }
+                                    }
+                                }
+                            )
                         }
                         if (selectedTrackPoints.isNotEmpty()) {
                             MapChip(onClick = onClearTrack) { Text("Скрыть GPX-трек") }
@@ -961,7 +1084,44 @@ private fun MapScreen(modifier: Modifier, settings: LocalSettings, navigation: N
                             MapChip { Text("Ищу сигнал GPS…", style = MaterialTheme.typography.labelMedium) }
                         }
                         if (showMapStylePicker) {
-                            MapStylePicker(settings, expanded = mapStyleExpanded, onExpandedChange = { mapStyleExpanded = it })
+                            MapStylePicker(
+                                settings = settings,
+                                expanded = mapStyleExpanded,
+                                onExpandedChange = { mapStyleExpanded = it },
+                                rasterPackage = rasterPackage,
+                                rasterEnabled = rasterEnabled,
+                                rasterOpacity = rasterOpacity,
+                                rasterImporting = rasterImporting,
+                                rasterMessage = rasterMessage,
+                                onImportRaster = {
+                                    rasterImportLauncher.launch(arrayOf("application/zip", "application/x-zip-compressed", "application/octet-stream"))
+                                },
+                                onRasterEnabledChange = { enabled ->
+                                    rasterEnabled = enabled && rasterPackage != null
+                                    RasterPackageRepository.setEnabled(context, rasterEnabled)
+                                },
+                                onRasterOpacityChange = { opacity ->
+                                    rasterOpacity = opacity
+                                    RasterPackageRepository.setOpacity(context, opacity)
+                                },
+                                onRemoveRaster = {
+                                    val current = rasterPackage
+                                    if (current != null) {
+                                        coroutineScope.launch {
+                                            val removed = withContext(Dispatchers.IO) {
+                                                RasterPackageRepository.remove(context, current)
+                                            }
+                                            if (removed) {
+                                                rasterPackage = null
+                                                rasterEnabled = false
+                                                rasterMessage = "Спутниковый пакет удалён."
+                                            } else {
+                                                rasterMessage = "Не удалось удалить пакет. Проверь доступность накопителя."
+                                            }
+                                        }
+                                    }
+                                }
+                            )
                         }
                         if (selectedTrackPoints.isNotEmpty()) {
                             MapChip(onClick = onClearTrack) { Text("Скрыть GPX-трек") }
