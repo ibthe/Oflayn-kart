@@ -128,6 +128,7 @@ class TurnRestriction:
     via_node: int
     profile_mask: int
     kind: int
+    value: str = ""
 
 
 _DENY = {"no", "private", "customers", "permit"}
@@ -380,6 +381,21 @@ def build_graph(ways, restrictions=()) -> GraphData:
             mask = allowed & restriction.profile_mask
             if mask:
                 outgoing_arcs.append(((edge_index << 1) | direction, mask))
+        if restriction.from_way == restriction.to_way:
+            # Same-way restriction relations describe a U-turn or continuation at the via node.
+            for incoming_arc, incoming_mask in incoming_arcs:
+                reverse_arc = incoming_arc ^ 1
+                if restriction.value.endswith("u_turn"):
+                    candidates = [(arc, mask) for arc, mask in outgoing_arcs if arc == reverse_arc]
+                elif restriction.value.endswith("straight_on"):
+                    candidates = [(arc, mask) for arc, mask in outgoing_arcs if arc != reverse_arc]
+                else:
+                    candidates = []
+                for outgoing_arc, outgoing_mask in candidates:
+                    mask = incoming_mask & outgoing_mask
+                    if mask:
+                        data.turn_restrictions.append((incoming_arc, outgoing_arc, mask, restriction.kind))
+            continue
         for incoming_arc, incoming_mask in incoming_arcs:
             for outgoing_arc, outgoing_mask in outgoing_arcs:
                 mask = incoming_mask & outgoing_mask
