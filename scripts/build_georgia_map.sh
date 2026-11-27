@@ -150,7 +150,7 @@ manifest = {
     "poiCategoryCatalog": ["food", "lodging", "tourism", "medical", "transport", "services", "shops", "historic", "nature", "settlement"],
     "poiSearchLanguages": ["en", "ru", "ka"],
     "poiIndexedDetailTags": ["addr:*", "phone", "contact:phone", "telephone", "website", "contact:website", "opening_hours", "cuisine", "wheelchair", "internet_access", "operator", "brand"],
-    "poiGeometryCoverage": "OSM nodes and closed ways; relation-only POIs are not yet included.",
+    "poiGeometryCoverage": "OSM nodes, closed ways and multipolygon relations; full-country duplicate and coverage review remains pending.",
     "mapWriter": "Mapsforge Map Writer",
     "mapWriterVersion": writer_version,
     "preferredLanguagesRequested": ["en", "ru", "ka"],
