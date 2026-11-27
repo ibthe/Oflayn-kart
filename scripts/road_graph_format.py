@@ -444,8 +444,8 @@ def write_graph(path: Path, data: GraphData) -> dict:
     max_lon = max(data.vlon) if vcount else 0
     header = bytearray(struct.pack("<4s11i", MAGIC, FORMAT_VERSION, vcount, ecount, len(shape) * 4, len(data.names),
                                    len(name_bytes), min_lat, min_lon, max_lat, max_lon, len(arcs)))
-    struct.pack_into("<i", header, 48, len(turn_blob) // TURN_STRUCT.size)
     header += b"\x00" * (HEADER_SIZE - len(header))
+    struct.pack_into("<i", header, 48, len(turn_blob) // TURN_STRUCT.size)
     with path.open("wb") as handle:
         for chunk in (header, _le(vert), bytes(edge_blob), _le(shape), _le(arc_start), _le(arcs), _le(name_offsets), bytes(name_bytes), _le(turn_start), bytes(turn_blob)):
             handle.write(chunk)
