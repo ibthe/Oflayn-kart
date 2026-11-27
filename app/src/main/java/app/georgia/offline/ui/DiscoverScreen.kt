@@ -110,12 +110,19 @@ internal fun DiscoverScreen(
         tripStops = stops
         val localDatabase = database
         tripPoisLoading = localDatabase != null && stops.isNotEmpty()
-        tripPois = if (localDatabase != null) {
-            PoiRepository.byIds(localDatabase, stops.map { it.poiId })
-        } else {
-            emptyList()
+        try {
+            tripPois = if (localDatabase != null) {
+                PoiRepository.byIds(localDatabase, stops.map { it.poiId })
+            } else {
+                emptyList()
+            }
+        } catch (error: Exception) {
+            tripPois = emptyList()
+            statusIsError = true
+            statusMessage = error.message ?: "Не удалось загрузить места плана."
+        } finally {
+            tripPoisLoading = false
         }
-        tripPoisLoading = false
     }
 
     LaunchedEffect(database, query, selectedCategory) {
