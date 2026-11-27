@@ -90,6 +90,11 @@ APK assets
 - `PoiRepository.searchAlongRoute` samples the planned polyline into bounded SQLite windows, then filters candidates against the route geometry within a 2.5 km corridor.
 - Results are ordered by route progress, so the list follows the planned direction. Selecting a place allows it to be inserted as a via stop without replacing the destination.
 
+## Pre-ride safety checklist
+
+- Eight checks cover protective gear, tires, brakes/lights, fuel, documents, water/first aid, offline-map readiness and phone/emergency readiness.
+- Checked items persist in private app preferences. The checklist is fully offline and exposes a reset action; it does not transmit user data.
+
 ## GPS tools (0.2.0)
 
 `ToolsScreen` uses Android `LocationManager` with `GPS_PROVIDER` only after the user taps the GPS start action and grants location permission. Updates are removed when the screen leaves composition or GPS is stopped. The implementation does not request background location or internet access. Compass azimuth uses `Sensor.TYPE_ROTATION_VECTOR`; the local car marker is stored in app-private SharedPreferences. Coordinate formatting is isolated in `GeoFormatting` and covered by unit tests.
