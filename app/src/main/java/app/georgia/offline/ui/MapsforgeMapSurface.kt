@@ -190,11 +190,13 @@ fun MapsforgeMapSurface(
                                     algorithm,
                                     AndroidGraphicFactory.INSTANCE
                                 )
-                                pendingHillsConfig = HillsRenderConfig(hillTileSource).apply {
+                                val hillsConfig = HillsRenderConfig(hillTileSource).apply {
                                     setExternal(true)
                                     indexOnThread()
                                 }
-                                pendingHillDataStore = MapFile(mapFile)
+                                pendingHillsConfig = hillsConfig
+                                val hillDataStore: MapDataStore = MapFile(mapFile)
+                                pendingHillDataStore = hillDataStore
                                 val hillCache = AndroidUtil.createTileCache(
                                     viewContext,
                                     "georgia-offline-hillshade-cache",
@@ -205,16 +207,16 @@ fun MapsforgeMapSurface(
                                 val hillLayer = AndroidUtil.createTileRendererLayer(
                                     hillCache,
                                     model.mapViewPosition,
-                                    pendingHillDataStore,
+                                    hillDataStore,
                                     MapsforgeThemes.HILLSHADING,
                                     true,
                                     false,
                                     false,
-                                    pendingHillsConfig
+                                    hillsConfig
                                 )
                                 layerManager.layers.add(hillLayer)
-                                hillsRenderConfigRef = pendingHillsConfig
-                                hillshadeDataStoreRef = pendingHillDataStore
+                                hillsRenderConfigRef = hillsConfig
+                                hillshadeDataStoreRef = hillDataStore
                             } catch (_: Exception) {
                                 runCatching { pendingHillDataStore?.close() }
                                 runCatching { pendingHillsConfig?.interruptAndDestroy() }
