@@ -270,8 +270,17 @@ fun MapsforgeMapSurface(
                             if (point != null) currentLongPress?.invoke(point)
                         }
                     })
+                    fun saveCameraPosition() {
+                        runCatching {
+                            val camera = model.mapViewPosition.mapPosition
+                            savedCenterLatitude = camera.latLong.latitude
+                            savedCenterLongitude = camera.latLong.longitude
+                            savedZoomLevel = camera.zoomLevel.toInt()
+                        }
+                    }
                     fun publishVisibleBounds() {
                         postDelayed({
+                            saveCameraPosition()
                             val topLeft = mapViewProjection.fromPixels(0.0, 0.0)
                             val bottomRight = mapViewProjection.fromPixels(width.toDouble(), height.toDouble())
                             if (topLeft != null && bottomRight != null) {
@@ -373,6 +382,12 @@ fun MapsforgeMapSurface(
                 )
                 // Wait until Mapsforge has applied a pan/zoom before reading the visible corners.
                 view.postDelayed({
+                    runCatching {
+                        val camera = view.model.mapViewPosition.mapPosition
+                        savedCenterLatitude = camera.latLong.latitude
+                        savedCenterLongitude = camera.latLong.longitude
+                        savedZoomLevel = camera.zoomLevel.toInt()
+                    }
                     val projection = view.mapViewProjection
                     val topLeft = projection.fromPixels(0.0, 0.0)
                     val bottomRight = projection.fromPixels(view.width.toDouble(), view.height.toDouble())
