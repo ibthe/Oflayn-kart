@@ -34,6 +34,8 @@ class AppFlowUiTest {
         awaitCount("Утилиты", 2)
         composeRule.waitForIdle()
         composeRule.onAllNodesWithText("Места", substring = false).assertCountEquals(1)
+        composeRule.onAllNodesWithText("Запись и GPX-треки", substring = false).assertCountEquals(1)
+        composeRule.onAllNodesWithText("Импорт GPX", substring = false).assertCountEquals(1)
 
         composeRule.onNodeWithText("Ещё", substring = false).performClick()
         awaitCount("Ещё", 2)
