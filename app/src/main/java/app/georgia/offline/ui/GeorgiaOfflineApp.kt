@@ -647,7 +647,9 @@ private fun MapScreen(modifier: Modifier, settings: LocalSettings, navigation: N
                 selectedPlaceId = navigation.selectedPlaceId,
                 selectedPoi = selectedMapPoi?.let { LatLong(it.latitude, it.longitude) },
                 searchResultPoints = if (showMapSearch) mapSearchResults.take(6).map { LatLong(it.latitude, it.longitude) } else emptyList(),
-                origin = navigation.origin?.let { LatLong(it.latitude, it.longitude) },
+                // During turn-by-turn navigation the live GPS marker replaces the
+                // historical route-start marker; keeping both is visually misleading.
+                origin = navigation.origin?.takeUnless { session.navigating }?.let { LatLong(it.latitude, it.longitude) },
                 savedColor = MaterialTheme.colorScheme.primary.toArgb(),
                 carColor = MaterialTheme.colorScheme.tertiary.toArgb(),
                 originColor = MaterialTheme.colorScheme.tertiary.toArgb(),
@@ -940,6 +942,7 @@ private fun MapScreen(modifier: Modifier, settings: LocalSettings, navigation: N
                             onPlan = { planFrom(tracker.location, rerouting = false) },
                             onStart = {
                                 session.beginNavigation()
+                                mapStyleExpanded = false
                                 // Planning controls must leave the map when turn-by-turn guidance starts.
                                 // Closing the sheet preserves the route and all of its waypoints.
                                 navigation.closeRouteMenu()
