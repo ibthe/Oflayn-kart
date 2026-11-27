@@ -147,6 +147,15 @@ object MapFileRepository {
     suspend fun importGeorgiaMap(context: Context, source: Uri, storageId: String? = null): File = withContext(Dispatchers.IO) {
         val destination = mapDestination(context, storageId)
         val temporary = File(destination.parentFile, "georgia-import.map.part")
+        val sourceLength = runCatching {
+            context.contentResolver.openAssetFileDescriptor(source, "r")?.use { it.length }
+        }.getOrNull()
+        if (sourceLength != null && sourceLength > 0L) {
+            val required = sourceLength + 32L * 1024L * 1024L
+            if ((destination.parentFile?.usableSpace ?: Long.MAX_VALUE) < required) {
+                error("Недостаточно свободного места для импорта карты на выбранный накопитель.")
+            }
+        }
 
         try {
             val input = context.contentResolver.openInputStream(source)
