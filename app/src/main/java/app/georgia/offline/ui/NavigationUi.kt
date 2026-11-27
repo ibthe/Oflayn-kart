@@ -15,6 +15,7 @@ import app.georgia.offline.ui.theme.accentBrush
 import app.georgia.offline.ui.theme.edgeBrush
 import app.georgia.offline.ui.theme.glass
 import android.content.Context
+import android.location.Location
 import android.speech.tts.TextToSpeech
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.horizontalScroll
@@ -50,6 +51,7 @@ import androidx.compose.ui.draw.rotate
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import app.georgia.offline.domain.GeoMath
+import app.georgia.offline.domain.GeoFormatting
 import app.georgia.offline.routing.Maneuver
 import app.georgia.offline.routing.Route
 import app.georgia.offline.data.ElevationProfile
@@ -663,8 +665,10 @@ fun NavigationFooter(
     speaker: Speaker,
     gpsStatus: String?,
     gpsError: Boolean,
+    location: Location?,
     onStop: () -> Unit
 ) {
+    var detailsExpanded by remember { mutableStateOf(false) }
     val remaining = (route.distanceMeters - session.along).coerceAtLeast(0.0)
     val seconds = if (route.distanceMeters > 0) route.durationSeconds * remaining / route.distanceMeters else 0.0
     Surface(
@@ -736,6 +740,29 @@ fun NavigationFooter(
                     maxLines = 1
                 )
             }
+            TextButton(
+                onClick = { detailsExpanded = !detailsExpanded },
+                contentPadding = PaddingValues(horizontal = Space.xs, vertical = 0.dp)
+            ) {
+                Text(if (detailsExpanded) "Скрыть данные" else "Данные поездки", style = MaterialTheme.typography.labelSmall)
+            }
+            if (detailsExpanded) {
+                val speed = location?.takeIf { it.hasSpeed() }?.speed?.times(3.6f)
+                val altitude = location?.takeIf { it.hasAltitude() }?.altitude
+                val course = location?.takeIf { it.hasBearing() }?.bearing
+                val coordinates = location?.let { GeoFormatting.decimalCoordinates(it.latitude, it.longitude) }
+                Row(
+                    Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(Space.s)
+                ) {
+                    NavigationMetric("Скорость", speed?.let { "${it.toInt()} км/ч" } ?: "—", Modifier.weight(1f))
+                    NavigationMetric("Высота GPS", altitude?.let { "${it.toInt()} м" } ?: "—", Modifier.weight(1f))
+                    NavigationMetric("Курс", course?.let { "${GeoFormatting.cardinalDirection(it)} ${it.toInt()}°" } ?: "—", Modifier.weight(1f))
+                }
+                coordinates?.let {
+                    Text("Координаты · $it", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                }
+            }
             if (route.warnings.isNotEmpty()) {
                 Text(
                     route.warnings.joinToString(" "),
@@ -747,5 +774,14 @@ fun NavigationFooter(
                 )
             }
         }
+    }
+}
+
+
+@Composable
+private fun NavigationMetric(label: String, value: String, modifier: Modifier = Modifier) {
+    Column(modifier, verticalArrangement = Arrangement.spacedBy(2.dp)) {
+        Text(label, style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 1)
+        Text(value, style = MaterialTheme.typography.bodyMedium, maxLines = 1, overflow = TextOverflow.Ellipsis)
     }
 }
