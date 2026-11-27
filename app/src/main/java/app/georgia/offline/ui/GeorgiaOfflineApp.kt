@@ -149,7 +149,9 @@ fun GeorgiaOfflineApp(settings: LocalSettings) {
         onDispose { hostView.keepScreenOn = false }
     }
     LaunchedEffect(navigation.target, navigation.origin, navigation.viaPoints.toList()) {
-        if (!routeSession.followingTrack) routeSession.reset()
+        if (!routeSession.followingTrack || navigation.target != null || navigation.origin != null || navigation.viaPoints.isNotEmpty()) {
+            routeSession.reset()
+        }
     }
 
     // Keep GPS progress, voice prompts, arrival detection and rerouting alive across tab changes.
