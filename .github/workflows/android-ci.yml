@@ -49,8 +49,13 @@ jobs:
         with:
           gradle-version: '9.6.0'
 
+      - name: Set up Python 3.12 for binary geospatial wheels
+        uses: actions/setup-python@v6
+        with:
+          python-version: '3.12'
+
       - name: Install offline DEM build dependencies
-        run: python3 -m pip install --disable-pip-version-check rasterio==1.4.3
+        run: python -m pip install --disable-pip-version-check --only-binary=:all: rasterio==1.4.3
 
       - name: Verify source manifest is offline
         run: python3 scripts/verify_offline_manifest.py
