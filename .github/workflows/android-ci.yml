@@ -382,3 +382,60 @@ jobs:
           if-no-files-found: error
           retention-days: 14
 
+  emulator-smoke:
+    name: Android emulator smoke and UI regression
+    needs: build
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - name: Download APK artifacts
+        uses: actions/download-artifact@v4
+        with:
+          name: GeorgiaOffline-debug-apk
+          path: artifacts/apks
+
+      - name: Run instrumentation tests and capture map screenshot
+        uses: reactivecircus/android-emulator-runner@v2
+        with:
+          api-level: 35
+          target: google_apis
+          arch: x86_64
+          profile: pixel_2
+          disable-animations: true
+          script: |
+            set -euo pipefail
+            APP_APK="$(find artifacts/apks -type f -name '*.apk' ! -name '*androidTest*.apk' | head -n 1)"
+            TEST_APK="$(find artifacts/apks -type f -name '*androidTest*.apk' | head -n 1)"
+            if [ -z "$APP_APK" ] || [ -z "$TEST_APK" ]; then
+              echo "ERROR: app or instrumentation APK is missing." >&2
+              find artifacts/apks -type f -maxdepth 5 -print
+              exit 1
+            fi
+
+            APP_ID="app.georgia.offline.debug"
+            adb install -r "$APP_APK"
+            adb install -r "$TEST_APK"
+            RUNNER="$(adb shell pm list instrumentation | tr -d '\r' | sed -n 's/^instrumentation:\([^ ]*\) (target=app\.georgia\.offline\.debug)$/\1/p' | head -n 1)"
+            if [ -z "$RUNNER" ]; then
+              echo "ERROR: instrumentation runner for $APP_ID was not registered." >&2
+              adb shell pm list instrumentation
+              exit 1
+            fi
+
+            adb shell am instrument -w -r "$RUNNER" | tee artifacts/apks/instrumentation.log
+            grep -q "OK (" artifacts/apks/instrumentation.log
+
+            adb shell am force-stop "$APP_ID"
+            adb shell monkey -p "$APP_ID" 1
+            sleep 8
+            adb shell screencap -p /sdcard/oflayn-map.png
+            adb pull /sdcard/oflayn-map.png artifacts/apks/oflayn-map.png
+
+      - name: Upload emulator screenshots and logs
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: GeorgiaOffline-emulator-smoke
+          path: artifacts/apks
+          if-no-files-found: warn
+          retention-days: 14
