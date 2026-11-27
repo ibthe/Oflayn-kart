@@ -28,6 +28,10 @@ import org.mapsforge.map.android.view.MapView
 import org.mapsforge.map.layer.overlay.Circle
 import org.mapsforge.map.layer.overlay.Marker
 import org.mapsforge.map.layer.overlay.Polyline
+import org.mapsforge.map.layer.hills.AdaptiveClasyHillShading
+import org.mapsforge.map.layer.hills.DemFolderFS
+import org.mapsforge.map.layer.hills.HillsRenderConfig
+import org.mapsforge.map.layer.hills.MemoryCachingHgtReaderTileSource
 import org.mapsforge.map.datastore.MapDataStore
 import org.mapsforge.map.datastore.MultiMapDataStore
 import org.mapsforge.map.reader.MapFile
@@ -75,6 +79,7 @@ fun MapsforgeMapSurface(
     mapFile: File,
     preferredLanguages: List<String>,
     mapTheme: String,
+    hillshadeDirectory: File? = null,
     modifier: Modifier = Modifier,
     userLocation: Location? = null,
     destination: LatLong? = null,
@@ -122,10 +127,12 @@ fun MapsforgeMapSurface(
     val currentRoutePoints by rememberUpdatedState(routePoints)
     val currentViaPoints by rememberUpdatedState(viaPoints)
     val currentRouteDrag by rememberUpdatedState(onRouteDrag)
-    key(mapFile.absolutePath, mapFile.lastModified(), preferredLanguages, mapTheme, accentColor, destinationColor, routeColor, trackColor, savedColor, carColor, originColor) {
+    key(mapFile.absolutePath, mapFile.lastModified(), preferredLanguages, mapTheme, hillshadeDirectory?.absolutePath, accentColor, destinationColor, routeColor, trackColor, savedColor, carColor, originColor) {
         val overlays = remember { MapOverlays(accentColor, destinationColor, routeColor, trackColor, savedColor, carColor, originColor) }
         var mapViewRef by remember { mutableStateOf<MapView?>(null) }
         var mapDataStoreRef by remember { mutableStateOf<MapDataStore?>(null) }
+        var hillshadeDataStoreRef by remember { mutableStateOf<MapDataStore?>(null) }
+        var hillsRenderConfigRef by remember { mutableStateOf<HillsRenderConfig?>(null) }
         var rendererError by remember { mutableStateOf<String?>(null) }
         var cameraRestored by remember { mutableStateOf(false) }
 
@@ -165,6 +172,45 @@ fun MapsforgeMapSurface(
                             resolveMapTheme(mapTheme, viewContext)
                         )
                         layerManager.layers.add(renderLayer)
+
+                        // Natural styles use bundled Copernicus-derived HGT tiles for offline relief.
+                        if (hillshadeDirectory?.isDirectory == true &&
+                            hillshadeDirectory.listFiles()?.any { it.name.endsWith(".hgt.zip") } == true
+                        ) {
+                            val algorithm = AdaptiveClasyHillShading()
+                                .setAdaptiveZoomEnabled(true)
+                                .setCustomQualityScale(1)
+                            val hillTileSource = MemoryCachingHgtReaderTileSource(
+                                DemFolderFS(hillshadeDirectory),
+                                algorithm,
+                                AndroidGraphicFactory.INSTANCE
+                            )
+                            val hillsConfig = HillsRenderConfig(hillTileSource).apply {
+                                setExternal(true)
+                                indexOnThread()
+                            }
+                            val hillDataStore: MapDataStore = MapFile(mapFile)
+                            val hillCache = AndroidUtil.createTileCache(
+                                viewContext,
+                                "georgia-offline-hillshade-cache",
+                                model.displayModel.tileSize,
+                                1f,
+                                model.frameBufferModel.overdrawFactor
+                            )
+                            val hillLayer = AndroidUtil.createTileRendererLayer(
+                                hillCache,
+                                model.mapViewPosition,
+                                hillDataStore,
+                                MapsforgeThemes.HILLSHADING,
+                                true,
+                                false,
+                                false,
+                                hillsConfig
+                            )
+                            layerManager.layers.add(hillLayer)
+                            hillsRenderConfigRef = hillsConfig
+                            hillshadeDataStoreRef = hillDataStore
+                        }
                         // The map can neither be shrunk to a speck nor dragged away from Georgia.
                         model.mapViewPosition.setZoomLevelMin(MIN_ZOOM)
                         model.mapViewPosition.setZoomLevelMax(MAX_ZOOM)
@@ -436,6 +482,8 @@ fun MapsforgeMapSurface(
                     runCatching { view.destroyAll() }
                 }
                 runCatching { mapDataStoreRef?.close() }
+                runCatching { hillshadeDataStoreRef?.close() }
+                runCatching { hillsRenderConfigRef?.interruptAndDestroy() }
                 AndroidGraphicFactory.clearResourceMemoryCache()
             }
         }
