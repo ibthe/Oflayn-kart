@@ -24,8 +24,7 @@ class TrackRouteBuilderTest {
     @Test
     fun buildsReturnGeometryFromNearestTrackPointBackToTrackStart() {
         val route = TrackRouteBuilder.reverseFromNearest(track, 41.7020, 44.8020, RoutingProfile.FOOT)
-        assertTrue(route != null)
-        route!!
+            ?: error("Expected a reverse GPX route")
         assertEquals(3, route.pointCount)
         assertEquals(41.7020, route.lat(0), 0.000001)
         assertEquals(41.7000, route.lat(route.pointCount - 1), 0.000001)
@@ -50,8 +49,8 @@ class TrackRouteBuilderTest {
             )
         )
         val route = TrackRouteBuilder.reverseFromNearest(split, 42.001, 45.001, RoutingProfile.BIKE)
-        assertTrue(route != null)
-        assertEquals(42.0, route!!.lat(route.pointCount - 1), 0.000001)
+            ?: error("Expected a reverse route for the nearest segment")
+        assertEquals(42.0, route.lat(route.pointCount - 1), 0.000001)
         assertTrue(route.warnings.any { it.contains("сегмент") })
     }
 }
