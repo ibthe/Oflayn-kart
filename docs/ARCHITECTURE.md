@@ -48,6 +48,11 @@ APK assets
 - Bundled maps are installed and user-imported maps are validated on the selected volume. Imported maps are copied and validated before settings switch to the new path; the previous copy is deleted only after the new path is saved.
 - SD storage is app-specific (`Android/data/.../files/maps`), needs no broad storage permission, and is removed by Android when the app is uninstalled. A removed card makes its map unavailable until reconnected or the user selects another volume.
 
+## Offline emergency panel
+
+- `EmergencyPanel` shows only a fresh GPS fix, coordinate accuracy and battery percentage.
+- It can copy coordinates, open the system share chooser, or open the dialer for Georgia's 112 emergency number. The app never places calls or sends messages automatically.
+
 ## Offline regional guidebook
 
 - `GuidebookRepository` provides static, offline summaries for eight Georgian regions, with highlights, recommended seasons and mountain-road cautions.
