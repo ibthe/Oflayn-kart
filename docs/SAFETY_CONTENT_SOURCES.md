@@ -19,7 +19,5 @@ The in-app emergency and incident notes are intentionally short, conservative re
 - American Heart Association / American Red Cross, 2024 First Aid Guidelines: https://cpr.heart.org/en/resuscitation-science/2024-first-aid-guidelines
   - Treat abnormal responsiveness or breathing and severe bleeding as emergencies; activate emergency medical services.
   - Apply direct manual pressure for severe external bleeding.
-- Australian Government, Rider Safety Handbook: https://mylicence.sa.gov.au/__data/assets/pdf_file/0010/1439137/Riders-Safety-Handbook-2025-03.pdf
-  - Motorcycle-specific reminders about avoiding unnecessary helmet removal and limiting movement after a crash.
 
 The app does not automatically place calls or send coordinates. Users must explicitly open the dialer, messaging app, or share sheet.
