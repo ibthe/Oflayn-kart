@@ -2,6 +2,7 @@
 """Verify the debug APK physically contains the generated offline Georgia map."""
 from __future__ import annotations
 
+import gzip
 import hashlib
 import json
 import sys
@@ -14,6 +15,8 @@ APK_PATH = Path(sys.argv[1]) if len(sys.argv) > 1 else next(iter(APK_DIR.glob("*
 MAP_ENTRY = "assets/offline/georgia.map"
 BUILD_MANIFEST_ENTRY = "assets/offline/georgia-map-build.json"
 POI_ENTRY = "assets/offline/georgia-poi.sqlite"
+DEM_MANIFEST_ENTRY = "assets/dem/manifest.json"
+DEM_RAW_TILE_BYTES = 1200 * 1200 * 2
 
 
 def main() -> int:
@@ -23,8 +26,8 @@ def main() -> int:
 
     with zipfile.ZipFile(APK_PATH) as apk:
         entries = set(apk.namelist())
-        if MAP_ENTRY not in entries or BUILD_MANIFEST_ENTRY not in entries or POI_ENTRY not in entries:
-            print("ERROR: APK does not contain the map, searchable POI database, and build manifest.", file=sys.stderr)
+        if MAP_ENTRY not in entries or BUILD_MANIFEST_ENTRY not in entries or POI_ENTRY not in entries or DEM_MANIFEST_ENTRY not in entries:
+            print("ERROR: APK does not contain the map, searchable POI database, build manifest and elevation package.", file=sys.stderr)
             return 3
         build_manifest = json.loads(apk.read(BUILD_MANIFEST_ENTRY))
         map_info = apk.getinfo(MAP_ENTRY)
@@ -47,6 +50,33 @@ def main() -> int:
             for chunk in iter(lambda: poi_stream.read(1024 * 1024), b""):
                 poi_size += len(chunk)
                 poi_digest.update(chunk)
+        dem_manifest = json.loads(apk.read(DEM_MANIFEST_ENTRY))
+        dem_tiles = dem_manifest.get("tiles", [])
+        if dem_manifest.get("dataset") != "Copernicus DEM GLO-90" or len(dem_tiles) != 24:
+            print("ERROR: APK elevation manifest is missing or incomplete.", file=sys.stderr)
+            return 7
+        dem_total_size = 0
+        for tile in dem_tiles:
+            dem_entry = f"assets/dem/{tile.get('file', '')}"
+            if dem_entry not in entries:
+                print(f"ERROR: APK is missing DEM tile {dem_entry}.", file=sys.stderr)
+                return 7
+            tile_digest = hashlib.sha256()
+            with apk.open(dem_entry) as compressed_stream:
+                compressed_bytes = compressed_stream.read()
+            tile_digest.update(compressed_bytes)
+            if tile_digest.hexdigest() != tile.get("sha256"):
+                print(f"ERROR: DEM tile checksum mismatch: {dem_entry}.", file=sys.stderr)
+                return 7
+            try:
+                raw_length = len(gzip.decompress(compressed_bytes))
+            except OSError:
+                print(f"ERROR: DEM tile is not a valid gzip stream: {dem_entry}.", file=sys.stderr)
+                return 7
+            if raw_length != DEM_RAW_TILE_BYTES:
+                print(f"ERROR: DEM tile has an unexpected raw size: {dem_entry}.", file=sys.stderr)
+                return 7
+            dem_total_size += len(compressed_bytes)
 
     digest = digest_builder.hexdigest()
     poi_sha = poi_digest.hexdigest()
@@ -68,7 +98,8 @@ def main() -> int:
 
     print(
         f"OK: {APK_PATH.name} contains georgia.map ({map_size:,} bytes) and "
-        f"georgia-poi.sqlite ({poi_size:,} bytes, {build_manifest['poiCount']:,} POIs)."
+        f"georgia-poi.sqlite ({poi_size:,} bytes, {build_manifest['poiCount']:,} POIs) and "
+        f"Copernicus GLO-90 DEM ({len(dem_tiles)} tiles, {dem_total_size:,} compressed bytes)."
     )
     return 0
 
