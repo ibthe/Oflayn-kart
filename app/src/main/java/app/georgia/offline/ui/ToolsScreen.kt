@@ -2,6 +2,13 @@ package app.georgia.offline.ui
 
 import android.content.Context
 import android.location.Location
+import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.rememberCoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
+import java.io.File
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -26,6 +33,9 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import app.georgia.offline.data.LocalSettings
+import app.georgia.offline.data.GpxCodec
+import app.georgia.offline.data.TrackRepository
+import app.georgia.offline.data.SavedTrackInfo
 import app.georgia.offline.domain.GeoFormatting
 import app.georgia.offline.domain.Qibla
 import app.georgia.offline.ui.theme.Space
@@ -34,7 +44,7 @@ import kotlin.math.abs
 import kotlin.math.roundToInt
 
 @Composable
-fun ToolsScreen(modifier: Modifier = Modifier, settings: LocalSettings, tracker: LocationTracker) {
+fun ToolsScreen(modifier: Modifier = Modifier, settings: LocalSettings, tracker: LocationTracker, trackRecorder: TrackRecorder) {
     val context = LocalContext.current
     val currentLocation = tracker.location?.takeIf { tracker.hasFreshFix() }
     val compass = rememberCompass(currentLocation)
@@ -45,6 +55,7 @@ fun ToolsScreen(modifier: Modifier = Modifier, settings: LocalSettings, tracker:
         PageTitle("Утилиты", "Датчики телефона. Всё работает без интернета.")
 
         GpsPanel(settings, tracker, currentLocation, context)
+        TrackRecorderPanel(context, tracker, trackRecorder)
 
         // ----- Compass -----
         Panel(padding = 0.dp) {
@@ -183,6 +194,156 @@ fun ToolsScreen(modifier: Modifier = Modifier, settings: LocalSettings, tracker:
                     style = MaterialTheme.typography.bodySmall
                 )
             }
+        }
+    }
+}
+
+@Composable
+private fun TrackRecorderPanel(context: Context, tracker: LocationTracker, recorder: TrackRecorder) {
+    val repository = remember(context) { TrackRepository(File(context.filesDir, "tracks")) }
+    val scope = rememberCoroutineScope()
+    var savedTracks by remember { mutableStateOf(emptyList<SavedTrackInfo>()) }
+    var message by remember { mutableStateOf<String?>(null) }
+    var pendingExportId by remember { mutableStateOf<String?>(null) }
+
+    LaunchedEffect(repository) {
+        savedTracks = withContext(Dispatchers.IO) { repository.list() }
+    }
+
+    val exportLauncher = androidx.activity.compose.rememberLauncherForActivityResult(
+        ActivityResultContracts.CreateDocument("application/gpx+xml")
+    ) { uri ->
+        val id = pendingExportId
+        pendingExportId = null
+        if (uri != null && id != null) {
+            scope.launch {
+                runCatching {
+                    val xml = withContext(Dispatchers.IO) { GpxCodec.write(repository.load(id)) }
+                    withContext(Dispatchers.IO) {
+                        context.contentResolver.openOutputStream(uri)?.use { it.write(xml.toByteArray(Charsets.UTF_8)) }
+                            ?: error("Не удалось создать GPX-файл.")
+                    }
+                }.onSuccess {
+                    message = "GPX экспортирован."
+                }.onFailure {
+                    message = it.message ?: "Не удалось экспортировать GPX."
+                }
+            }
+        }
+    }
+    val importLauncher = androidx.activity.compose.rememberLauncherForActivityResult(
+        ActivityResultContracts.OpenDocument()
+    ) { uri ->
+        if (uri != null) {
+            scope.launch {
+                runCatching {
+                    withContext(Dispatchers.IO) {
+                        context.contentResolver.openInputStream(uri)?.use { input ->
+                            repository.save(GpxCodec.parse(input))
+                        } ?: error("Не удалось открыть выбранный файл.")
+                    }
+                }.onSuccess {
+                    savedTracks = withContext(Dispatchers.IO) { repository.list() }
+                    message = "GPX импортирован в локальные треки."
+                }.onFailure {
+                    message = it.message ?: "Не удалось импортировать GPX."
+                }
+            }
+        }
+    }
+
+    Panel(padding = 0.dp) {
+        Column(Modifier.fillMaxWidth().padding(Space.card), verticalArrangement = Arrangement.spacedBy(Space.xs)) {
+            Text("Запись и GPX-треки", style = MaterialTheme.typography.titleMedium)
+            Text(
+                if (recorder.recording) {
+                    "Запись активна · точек: ${recorder.points.size}"
+                } else {
+                    "Записывайте маршрут по GPS и храните GPX-файлы только на этом устройстве."
+                },
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+            if (recorder.recording) {
+                GradientButton(
+                    text = "Завершить и сохранить трек",
+                    onClick = {
+                        val track = recorder.finish()
+                        if (track == null) {
+                            message = "Недостаточно точек GPS: нужно не менее двух."
+                        } else {
+                            scope.launch {
+                                runCatching { withContext(Dispatchers.IO) { repository.save(track) } }
+                                    .onSuccess {
+                                        savedTracks = withContext(Dispatchers.IO) { repository.list() }
+                                        message = "Трек сохранён на устройстве."
+                                    }
+                                    .onFailure { message = it.message ?: "Не удалось сохранить трек." }
+                            }
+                        }
+                    }
+                )
+            } else {
+                GradientButton(
+                    text = if (!tracker.active) "Начать запись · включить GPS" else "Начать запись трека",
+                    onClick = {
+                        if (!tracker.hasPermission() || !tracker.providerEnabled()) {
+                            tracker.start()
+                            message = "После разрешения геолокации нажмите «Начать запись» ещё раз."
+                        } else {
+                            tracker.start()
+                            recorder.start()
+                            message = "Запись начнётся после получения точного GPS-сигнала."
+                        }
+                    }
+                )
+            }
+            Row(horizontalArrangement = Arrangement.spacedBy(Space.xs)) {
+                OutlinedButton(onClick = { importLauncher.launch(arrayOf("application/gpx+xml", "application/xml", "text/xml")) }) {
+                    Text("Импорт GPX")
+                }
+                OutlinedButton(onClick = { pendingExportId = null; message = "Выберите трек ниже для экспорта." }) {
+                    Text("Экспорт GPX")
+                }
+            }
+            message?.let {
+                Text(it, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            }
+            if (savedTracks.isNotEmpty()) {
+                Text("Сохранённые треки", style = MaterialTheme.typography.titleSmall)
+                savedTracks.forEach { track ->
+                    Row(
+                        Modifier.fillMaxWidth(),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(Space.xxs)
+                    ) {
+                        Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                            Text(track.name, style = MaterialTheme.typography.bodyMedium, maxLines = 1)
+                            Text("${track.pointCount} точек", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                        }
+                        androidx.compose.material3.TextButton(
+                            onClick = {
+                                pendingExportId = track.id
+                                exportLauncher.launch("${track.name.replace(Regex("[^A-Za-zА-Яа-я0-9_-]"), "_").take(40)}.gpx")
+                            }
+                        ) { Text("Экспорт") }
+                        androidx.compose.material3.TextButton(
+                            onClick = {
+                                scope.launch {
+                                    withContext(Dispatchers.IO) { repository.delete(track.id) }
+                                    savedTracks = withContext(Dispatchers.IO) { repository.list() }
+                                    message = "Трек удалён."
+                                }
+                            }
+                        ) { Text("Удалить") }
+                    }
+                }
+            }
+            Text(
+                "Запись работает только пока приложение открыто. При сворачивании приложения GPS обновления приостанавливаются; фоновое отслеживание не используется.",
+                style = MaterialTheme.typography.labelSmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
         }
     }
 }
