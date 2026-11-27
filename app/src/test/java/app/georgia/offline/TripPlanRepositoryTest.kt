@@ -43,6 +43,14 @@ class TripPlanRepositoryTest {
     }
 
     @Test
+    fun limitsItineraryToTwentyStops() {
+        val repository = TripPlanRepository(File(temporary.root, "trip-plan.tsv"))
+        repeat(20) { index -> assertTrue(repository.add("node/${index + 1}")) }
+        assertFalse(repository.add("node/21"))
+        assertEquals(20, repository.list().size)
+    }
+
+    @Test
     fun removesAndClearsStops() {
         val repository = TripPlanRepository(File(temporary.root, "trip-plan.tsv"))
         repository.add("node/1")
