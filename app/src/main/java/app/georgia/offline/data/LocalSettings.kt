@@ -237,6 +237,14 @@ class LocalSettings(context: Context) {
         val SUPPORTED_LANGUAGES = setOf("en", "ru", "ka")
         val PALETTES = setOf("mist", "sage", "sand", "dusk", "graphite", "hc_mono", "hc_amber")
         val THEME_MODES = setOf("system", "light", "dim", "dark")
-        val MAP_THEMES = setOf("classic", "oflayn_natural", "oflayn_natural_dark", "outdoor", "motorider", "biker")
+        val MAP_THEME_CHOICES = listOf(
+            "classic" to "Классика",
+            "oflayn_natural" to "Oflayn Natural",
+            "oflayn_natural_dark" to "Oflayn Natural Dark",
+            "outdoor" to "Природа",
+            "motorider" to "Авто",
+            "biker" to "Велосипед"
+        )
+        val MAP_THEMES = MAP_THEME_CHOICES.map { it.first }.toSet()
     }
 }
