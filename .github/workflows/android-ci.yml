@@ -292,6 +292,8 @@ jobs:
             set -o pipefail
             adb shell am instrument -w -r "$instrumentation" | tee artifacts/instrumentation.log
             grep -q "OK (" artifacts/instrumentation.log
+            adb shell am start -n app.georgia.offline.debug/app.georgia.offline.MainActivity
+            sleep 8
             adb shell screencap -p /sdcard/oflayn-kart-map.png
             adb pull /sdcard/oflayn-kart-map.png artifacts/oflayn-kart-map.png
 
