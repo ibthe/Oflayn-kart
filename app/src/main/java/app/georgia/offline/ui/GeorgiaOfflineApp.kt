@@ -103,6 +103,7 @@ import java.io.File
 import app.georgia.offline.data.LocalSettings
 import app.georgia.offline.data.MapFileRepository
 import app.georgia.offline.data.PoiRepository
+import app.georgia.offline.routing.TrackRouteBuilder
 import app.georgia.offline.domain.PoiLabels
 import app.georgia.offline.domain.GeoFormatting
 import app.georgia.offline.domain.MapLanguageResolver
@@ -227,10 +228,34 @@ fun GeorgiaOfflineApp(settings: LocalSettings) {
                                 navigation.startRouteTo(NavigationTarget(name, latitude, longitude))
                                 selectedTab = AppTab.MAP.name
                             }
-                            AppTab.TOOLS -> ToolsScreen(Modifier.padding(padding), settings, tracker, trackRecorder) { points ->
-                                selectedTrackPoints = points.map { LatLong(it.latitude, it.longitude) }
-                                selectedTab = AppTab.MAP.name
-                            }
+                            AppTab.TOOLS -> ToolsScreen(
+                                Modifier.padding(padding),
+                                settings,
+                                tracker,
+                                trackRecorder,
+                                onShowTrack = { points ->
+                                    selectedTrackPoints = points.map { LatLong(it.latitude, it.longitude) }
+                                    selectedTab = AppTab.MAP.name
+                                },
+                                onFollowTrack = { track ->
+                                    val current = tracker.location?.takeIf { tracker.hasFreshFix() }
+                                    if (current == null) {
+                                        tracker.start()
+                                        android.widget.Toast.makeText(context, "Сначала определите текущее положение по GPS, затем нажмите «Возврат» ещё раз.", android.widget.Toast.LENGTH_LONG).show()
+                                    } else {
+                                        val reverseRoute = TrackRouteBuilder.reverseFromNearest(
+                                            track, current.latitude, current.longitude, routeSession.profile
+                                        )
+                                        if (reverseRoute == null) {
+                                            android.widget.Toast.makeText(context, "Подойдите ближе к линии трека (не дальше 150 м). Если вы уже у начала, возврат не требуется.", android.widget.Toast.LENGTH_LONG).show()
+                                        } else {
+                                            selectedTrackPoints = emptyList()
+                                            routeSession.beginTrackFollow(reverseRoute)
+                                            selectedTab = AppTab.MAP.name
+                                        }
+                                    }
+                                }
+                            )
                             AppTab.SETTINGS -> SettingsScreen(Modifier.padding(padding), settings) { placeId ->
                                 navigation.selectedPlaceId = placeId
                                 navigation.focusToken++
