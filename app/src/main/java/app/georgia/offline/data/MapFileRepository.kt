@@ -31,8 +31,8 @@ object MapFileRepository {
         availableStorageOptions(
             context,
             context.getExternalFilesDirs(null),
-            Environment::isExternalStorageRemovable,
-            Environment::getExternalStorageState
+            { directory -> Environment.isExternalStorageRemovable(directory) },
+            { directory -> Environment.getExternalStorageState(directory) }
         )
 
     internal fun availableStorageOptions(
