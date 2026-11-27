@@ -273,6 +273,12 @@ jobs:
             app/src/main/assets/offline/georgia-contours-manifest.json
           key: georgia-contours-v1-${{ runner.os }}-${{ hashFiles('scripts/build_contours.py', 'scripts/build_contours_map.sh', 'scripts/verify_contours_map.py', 'scripts/install_mapsforge_writer.sh', 'scripts/build_georgia_map.sh') }}-${{ hashFiles('app/src/main/assets/dem/manifest.json') }}
 
+      - name: Install Osmosis for contour map build
+        if: ${{ success() && steps.contours_cache.outputs['cache-hit'] != 'true' && steps.map-state.outputs.exists == 'true' }}
+        run: |
+          sudo apt-get update
+          sudo apt-get install --yes osmosis
+
       - name: Build Mapsforge map-writer plugin for contour layer
         if: ${{ success() && steps.contours_cache.outputs['cache-hit'] != 'true' && steps.map-state.outputs.exists == 'true' }}
         run: bash scripts/install_mapsforge_writer.sh
