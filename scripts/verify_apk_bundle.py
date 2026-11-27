@@ -16,6 +16,8 @@ APK_PATH = Path(sys.argv[1]) if len(sys.argv) > 1 else next(iter(APK_DIR.glob("*
 MAP_ENTRY = "assets/offline/georgia.map"
 BUILD_MANIFEST_ENTRY = "assets/offline/georgia-map-build.json"
 POI_ENTRY = "assets/offline/georgia-poi.sqlite"
+CONTOUR_MAP_ENTRY = "assets/offline/georgia-contours.map"
+CONTOUR_MANIFEST_ENTRY = "assets/offline/georgia-contours-manifest.json"
 DEM_MANIFEST_ENTRY = "assets/dem/manifest.json"
 DEM_RAW_TILE_BYTES = 1200 * 1200 * 2
 
@@ -27,18 +29,22 @@ def main() -> int:
 
     with zipfile.ZipFile(APK_PATH) as apk:
         entries = set(apk.namelist())
-        if MAP_ENTRY not in entries or BUILD_MANIFEST_ENTRY not in entries or POI_ENTRY not in entries or DEM_MANIFEST_ENTRY not in entries:
-            print("ERROR: APK does not contain the map, searchable POI database, build manifest and elevation package.", file=sys.stderr)
+        if MAP_ENTRY not in entries or BUILD_MANIFEST_ENTRY not in entries or POI_ENTRY not in entries or DEM_MANIFEST_ENTRY not in entries or CONTOUR_MAP_ENTRY not in entries or CONTOUR_MANIFEST_ENTRY not in entries:
+            print("ERROR: APK does not contain the base map, POI database, DEM/HGT package and contour map.", file=sys.stderr)
             return 3
         build_manifest = json.loads(apk.read(BUILD_MANIFEST_ENTRY))
         map_info = apk.getinfo(MAP_ENTRY)
         poi_info = apk.getinfo(POI_ENTRY)
+        contour_info = apk.getinfo(CONTOUR_MAP_ENTRY)
         if map_info.compress_type != zipfile.ZIP_STORED:
             print("ERROR: georgia.map should be stored uncompressed in the APK.", file=sys.stderr)
             return 6
         if poi_info.compress_type != zipfile.ZIP_STORED:
             print("ERROR: georgia-poi.sqlite should be stored uncompressed in the APK.", file=sys.stderr)
             return 6
+        if contour_info.compress_type != zipfile.ZIP_STORED:
+            print("ERROR: georgia-contours.map should be stored uncompressed in the APK.", file=sys.stderr)
+            return 8
         digest_builder = hashlib.sha256()
         map_size = 0
         with apk.open(MAP_ENTRY) as map_stream:
@@ -51,6 +57,17 @@ def main() -> int:
             for chunk in iter(lambda: poi_stream.read(1024 * 1024), b""):
                 poi_size += len(chunk)
                 poi_digest.update(chunk)
+        contour_manifest = json.loads(apk.read(CONTOUR_MANIFEST_ENTRY))
+        contour_bytes = apk.read(CONTOUR_MAP_ENTRY)
+        if (
+            contour_manifest.get("mapFile") != "georgia-contours.map"
+            or contour_manifest.get("mapFileSizeBytes") != len(contour_bytes)
+            or contour_manifest.get("mapFileSha256") != hashlib.sha256(contour_bytes).hexdigest()
+            or contour_manifest.get("contourWays", 0) <= 0
+            or contour_manifest.get("runtimeNetworkAccessRequired") is not False
+        ):
+            print("ERROR: APK contour map checksum, size or metadata is invalid.", file=sys.stderr)
+            return 8
         dem_manifest = json.loads(apk.read(DEM_MANIFEST_ENTRY))
         dem_tiles = dem_manifest.get("tiles", [])
         if dem_manifest.get("dataset") != "Copernicus DEM GLO-90" or not dem_tiles:
