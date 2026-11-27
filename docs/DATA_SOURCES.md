@@ -46,7 +46,7 @@ Geofabrik Georgia extract здесь означает страну Грузию 
 - Runtime `DemRepository` загружает тайлы по требованию и держит в LRU-кэше не более четырёх. Профиль маршрута рассчитывается примерно через каждые 100 м.
 - Это **DSM**, а не bare-earth DTM: модель может включать здания и растительность и не задаёт точную высоту дорожного покрытия. Высоты отнесены к EGM2008.
 - Attribution: `Produced using Copernicus WorldDEM-90 © DLR e.V. 2010–2014 and © Airbus Defence and Space GmbH 2014–2018, provided under COPERNICUS by the European Union and ESA; all rights reserved.`
-- Контурные линии и hillshade пока не включены; производные данные должны сохранять attribution исходного набора.
+- Производные данные hillshade и контурных линий сохраняют attribution исходного набора. Полная attribution в приложении: `Produced using Copernicus WorldDEM-90 © DLR e.V. 2010–2014 and © Airbus Defence and Space GmbH 2014–2018, provided under COPERNICUS by the European Union and ESA; all rights reserved.`
 
 ## Спутниковый слой (запланировано)
 
