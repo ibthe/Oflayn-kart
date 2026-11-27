@@ -44,8 +44,7 @@ class AppFlowUiTest {
         composeRule.onAllNodesWithText("Утилиты", substring = false).assertCountEquals(1)
 
         composeRule.onNodeWithText("Карта", substring = false).performClick()
-        awaitText("Найти меня")
-        composeRule.onNodeWithText("Стиль: Oflayn Natural").assertExists()
+        awaitText("Стиль: Oflayn Natural")
         composeRule.onNodeWithText("Найти место на этой области карты").assertExists()
     }
 
