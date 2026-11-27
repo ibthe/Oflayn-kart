@@ -16,11 +16,13 @@ class TrackRecorder {
     val points = mutableStateListOf<TrackPoint>()
     var startedAtEpochMillis by mutableStateOf(0L)
         private set
+    var note by mutableStateOf("")
     private var lastElapsedRealtimeNanos = 0L
 
     fun start() {
         points.clear()
         startedAtEpochMillis = System.currentTimeMillis()
+        note = ""
         lastElapsedRealtimeNanos = 0L
         recording = true
     }
@@ -57,14 +59,17 @@ class TrackRecorder {
         lastElapsedRealtimeNanos = elapsedRealtimeNanos
     }
 
-    fun finish(name: String = "Мой трек", description: String? = null): GpxTrack? {
+    fun finish(name: String = "Мой трек", description: String? = note): GpxTrack? {
         recording = false
         if (points.size < 2) {
             points.clear()
             return null
         }
         return GpxTrack(name.trim().ifBlank { "Мой трек" }.take(100), listOf(points.toList()), startedAtEpochMillis, description?.trim()?.take(1_000)?.ifBlank { null })
-            .also { points.clear() }
+            .also {
+                points.clear()
+                note = ""
+            }
     }
 
     fun cancel() {
