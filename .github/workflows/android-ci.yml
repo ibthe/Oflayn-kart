@@ -247,10 +247,59 @@ jobs:
       - name: Verify merged manifest remains offline
         run: python3 scripts/verify_offline_manifest.py --include-merged
 
-      - name: Upload APK
+      - name: Assemble Android UI regression tests
+        run: gradle --no-daemon --stacktrace --console=plain :app:assembleDebugAndroidTest
+
+      - name: Upload APKs for emulator validation
         uses: actions/upload-artifact@v4
         with:
           name: GeorgiaOffline-debug-apk
-          path: app/build/outputs/apk/debug/*.apk
+          path: |
+            app/build/outputs/apk/debug/*.apk
+            app/build/outputs/apk/androidTest/debug/*.apk
           if-no-files-found: error
+          retention-days: 14
+
+  emulator-smoke:
+    needs: build
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+    steps:
+      - name: Download app and instrumentation APKs
+        uses: actions/download-artifact@v4
+        with:
+          name: GeorgiaOffline-debug-apk
+          path: artifacts
+
+      - name: Run UI regression tests on Android emulator
+        uses: reactivecircus/android-emulator-runner@v2
+        with:
+          api-level: 35
+          target: google_apis
+          arch: x86_64
+          profile: pixel_2
+          disable-animations: true
+          script: |
+            set -euo pipefail
+            app_apk="$(find artifacts -type f -name 'app-debug.apk' -print -quit)"
+            test_apk="$(find artifacts -type f -name 'app-debug-androidTest.apk' -print -quit)"
+            test -n "$app_apk" && test -n "$test_apk"
+            adb install -r "$app_apk"
+            adb install -r "$test_apk"
+            adb shell pm clear app.georgia.offline.debug
+            set -o pipefail
+            adb shell am instrument -w -r app.georgia.offline.debug.test/androidx.test.runner.AndroidJUnitRunner | tee artifacts/instrumentation.log
+            grep -q "OK (" artifacts/instrumentation.log
+            adb shell screencap -p /sdcard/oflayn-kart-map.png
+            adb pull /sdcard/oflayn-kart-map.png artifacts/oflayn-kart-map.png
+
+      - name: Upload emulator screenshot and test log
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: Oflayn-kart-emulator-validation
+          path: |
+            artifacts/oflayn-kart-map.png
+            artifacts/instrumentation.log
+          if-no-files-found: ignore
           retention-days: 14
