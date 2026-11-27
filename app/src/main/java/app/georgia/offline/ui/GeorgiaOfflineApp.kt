@@ -1070,6 +1070,10 @@ private fun MapScreen(modifier: Modifier, settings: LocalSettings, navigation: N
                                         currentRoute.project(via.latitude, via.longitude).alongMeters > progress
                                     }.let { if (it < 0) navigation.viaPoints.size else it }
                                     navigation.addWaypoint(NavigationTarget(poiName, poi.latitude, poi.longitude), insertAt)
+                                    // Preserve the exact start of the already-built route if its GPS fix has gone stale.
+                                    if (navigation.origin == null && currentRoute.points.size >= 2) {
+                                        navigation.origin = NavigationTarget("Начало маршрута", currentRoute.points[0], currentRoute.points[1])
+                                    }
                                     session.reset()
                                     selectedMapPoi = null
                                     coroutineScope.launch { delay(120); planFrom(tracker.location, rerouting = false) }
