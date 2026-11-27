@@ -1,6 +1,7 @@
 package app.georgia.offline
 
 import app.georgia.offline.ui.NavigationState
+import app.georgia.offline.ui.NavigationTarget
 import app.georgia.offline.ui.RoutePointRole
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull
