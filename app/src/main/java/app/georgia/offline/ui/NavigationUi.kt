@@ -506,8 +506,8 @@ fun RoutePlannerCard(
 
 /** Big next-turn banner shown while navigating. */
 @Composable
-fun NavigationBanner(route: Route, along: Double, modifier: Modifier = Modifier) {
-    val next = route.nextStep(along)
+fun NavigationBanner(route: Route, along: Double, gpsFresh: Boolean = true, modifier: Modifier = Modifier) {
+    val next = if (gpsFresh) route.nextStep(along) else null
     Box(
         modifier = modifier.fillMaxWidth().appear()
             .shadow(16.dp, RoundedCornerShape(Radius.card))
@@ -528,12 +528,12 @@ fun NavigationBanner(route: Route, along: Double, modifier: Modifier = Modifier)
             }
             Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(Space.xxs)) {
                 Text(
-                    if (next != null) GeoMath.formatDistance((next.distanceFromStartMeters - along).coerceAtLeast(0.0)) else "—",
+                    if (!gpsFresh) "—" else next?.let { GeoMath.formatDistance((it.distanceFromStartMeters - along).coerceAtLeast(0.0)) } ?: "—",
                     style = MaterialTheme.typography.headlineSmall,
                     color = MaterialTheme.colorScheme.onPrimary
                 )
                 Text(
-                    next?.text ?: "Следуйте по маршруту",
+                    if (!gpsFresh) "Ожидаю сигнал GPS" else next?.text ?: "Следуйте по маршруту",
                     style = MaterialTheme.typography.bodyMedium,
                     color = MaterialTheme.colorScheme.onPrimary,
                     maxLines = 2,
@@ -546,7 +546,14 @@ fun NavigationBanner(route: Route, along: Double, modifier: Modifier = Modifier)
 
 /** Compact navigation controls; the map stays dominant while the essential actions remain reachable. */
 @Composable
-fun NavigationFooter(route: Route, session: RouteSession, speaker: Speaker, onStop: () -> Unit) {
+fun NavigationFooter(
+    route: Route,
+    session: RouteSession,
+    speaker: Speaker,
+    gpsStatus: String?,
+    gpsError: Boolean,
+    onStop: () -> Unit
+) {
     val remaining = (route.distanceMeters - session.along).coerceAtLeast(0.0)
     val seconds = if (route.distanceMeters > 0) route.durationSeconds * remaining / route.distanceMeters else 0.0
     Surface(
@@ -570,12 +577,13 @@ fun NavigationFooter(route: Route, session: RouteSession, speaker: Speaker, onSt
                 )
                 Text(
                     when {
+                        gpsStatus != null -> gpsStatus
                         session.busy -> "Перестраиваю · ${formatDuration(seconds)}"
                         session.message != null -> session.message!!
                         else -> "Осталось · ${formatDuration(seconds)}"
                     },
                     style = MaterialTheme.typography.labelSmall,
-                    color = if (session.message != null && !session.busy) MaterialTheme.colorScheme.error
+                    color = if (gpsError || (session.message != null && !session.busy)) MaterialTheme.colorScheme.error
                     else MaterialTheme.colorScheme.onSurfaceVariant,
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis
