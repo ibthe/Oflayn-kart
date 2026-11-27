@@ -1,6 +1,11 @@
 package app.georgia.offline.ui
 
 import android.content.Context
+import android.content.Intent
+import android.content.IntentFilter
+import android.os.BatteryManager
+import android.net.ConnectivityManager
+import android.net.NetworkCapabilities
 import android.location.Location
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.runtime.LaunchedEffect
@@ -48,6 +53,82 @@ import kotlin.math.abs
 import kotlin.math.roundToInt
 import java.util.Locale
 
+
+private data class DeviceStatus(
+    val batteryPercent: Int?,
+    val charging: Boolean,
+    val internetAvailable: Boolean?,
+)
+
+private fun readDeviceStatus(context: Context): DeviceStatus {
+    val batteryIntent = context.registerReceiver(null, IntentFilter(Intent.ACTION_BATTERY_CHANGED))
+    val level = batteryIntent?.getIntExtra(BatteryManager.EXTRA_LEVEL, -1) ?: -1
+    val scale = batteryIntent?.getIntExtra(BatteryManager.EXTRA_SCALE, -1) ?: -1
+    val batteryManager = context.getSystemService(Context.BATTERY_SERVICE) as? BatteryManager
+    val fallbackCapacity = batteryManager?.getIntProperty(BatteryManager.BATTERY_PROPERTY_CAPACITY) ?: -1
+    val percent = when {
+        level >= 0 && scale > 0 -> (level * 100 / scale).coerceIn(0, 100)
+        fallbackCapacity in 0..100 -> fallbackCapacity
+        else -> null
+    }
+    val batteryStatus = batteryIntent?.getIntExtra(BatteryManager.EXTRA_STATUS, -1) ?: -1
+    val charging = batteryStatus == BatteryManager.BATTERY_STATUS_CHARGING ||
+        batteryStatus == BatteryManager.BATTERY_STATUS_FULL
+    val internetAvailable = runCatching {
+        val connectivity = context.getSystemService(Context.CONNECTIVITY_SERVICE) as? ConnectivityManager
+        val network = connectivity?.activeNetwork
+        val capabilities = network?.let { connectivity.getNetworkCapabilities(it) }
+        capabilities?.hasCapability(NetworkCapabilities.NET_CAPABILITY_VALIDATED) == true
+    }.getOrNull()
+    return DeviceStatus(percent, charging, internetAvailable)
+}
+
+@Composable
+private fun DeviceStatusPanel(context: Context) {
+    var status by remember { mutableStateOf(readDeviceStatus(context)) }
+    Panel(padding = 0.dp) {
+        Column(
+            Modifier.fillMaxWidth().padding(Space.card),
+            verticalArrangement = Arrangement.spacedBy(Space.xs)
+        ) {
+            Row(
+                Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Text("Состояние устройства", style = MaterialTheme.typography.titleMedium)
+                OutlinedButton(onClick = { status = readDeviceStatus(context) }) {
+                    Text("Обновить")
+                }
+            }
+            MetricRow(
+                "Заряд батареи",
+                status.batteryPercent?.let { "${it}%" } ?: "нет данных"
+            )
+            MetricRow("Питание", if (status.charging) "зарядка" else "от батареи")
+            MetricRow(
+                "Сеть",
+                when (status.internetAvailable) {
+                    true -> "интернет доступен"
+                    false -> "нет сети · офлайн-карты доступны"
+                    null -> "статус недоступен"
+                }
+            )
+            if (status.batteryPercent != null && status.batteryPercent <= 20 && !status.charging) {
+                Text(
+                    "Низкий заряд. Для длительной поездки подключите питание или включите энергосбережение.",
+                    color = MaterialTheme.colorScheme.error,
+                    style = MaterialTheme.typography.bodySmall
+                )
+            }
+            Text(
+                "Проверка выполняется на устройстве вручную. Приложение не запрашивает доступ к интернету.",
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                style = MaterialTheme.typography.bodySmall
+            )
+        }
+    }
+}
 
 @Composable
 private fun PreRideSafetyChecklist(context: Context) {
@@ -125,6 +206,7 @@ fun ToolsScreen(modifier: Modifier = Modifier, settings: LocalSettings, tracker:
 
         EmergencyPanel(context, currentLocation)
         PreRideSafetyChecklist(context)
+        DeviceStatusPanel(context)
         GpsPanel(settings, tracker, currentLocation, context)
         TrackRecorderPanel(context, tracker, trackRecorder, trackRepository, recoveryLoaded, onShowTrack, onFollowTrack)
 
