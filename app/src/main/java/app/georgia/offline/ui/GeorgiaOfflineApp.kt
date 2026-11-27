@@ -1429,10 +1429,16 @@ private fun SettingsScreen(modifier: Modifier, settings: LocalSettings, onShowOn
                 mapImportMessage = "Копирую и проверяю файл карты…"
                 mapImportError = false
                 try {
+                    val previousFile = settings.mapFilePath?.let(::File)
                     val file = withContext(Dispatchers.IO) {
                         MapFileRepository.importGeorgiaMap(context, uri, settings.mapStorageId)
                     }
                     settings.setMapFilePath(file.absolutePath, bundled = false)
+                    if (previousFile != null && previousFile.isFile) {
+                        withContext(Dispatchers.IO) {
+                            MapFileRepository.deletePreviousMap(previousFile, file)
+                        }
+                    }
                     mapImportMessage = "Карта проверена: ${file.length() / (1024 * 1024)} МБ"
                 } catch (error: Exception) {
                     mapImportError = true
