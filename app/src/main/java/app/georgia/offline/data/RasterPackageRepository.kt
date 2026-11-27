@@ -17,6 +17,7 @@ data class RasterPackageInfo(
     val id: String,
     val name: String,
     val attribution: String,
+    val license: String,
     val extension: String,
     val minZoom: Int,
     val maxZoom: Int,
@@ -47,6 +48,7 @@ object RasterPackageRepository {
     private data class Manifest(
         val name: String,
         val attribution: String,
+        val license: String,
         val extension: String,
         val minZoom: Int,
         val maxZoom: Int,
@@ -67,6 +69,7 @@ object RasterPackageRepository {
             var manifestBytes: ByteArray? = null
             var totalBytes = 0L
             var tileCount = 0
+            val zoomLevels = HashSet<Int>()
             val seenPaths = HashSet<String>()
             val allowedExtension = setOf("png", "jpg")
 
@@ -104,6 +107,7 @@ object RasterPackageRepository {
                         check(tile.zoom in 6..18 && tile.x in 0 until (1 shl tile.zoom) &&
                             tile.y in 0 until (1 shl tile.zoom)
                         ) { "Координаты тайла вне допустимого диапазона: $name" }
+                        zoomLevels += tile.zoom
                         val destination = File(temporary, name)
                         val canonicalRoot = temporary.canonicalFile
                         check(destination.canonicalFile.path.startsWith(canonicalRoot.path + File.separator)) {
@@ -145,6 +149,9 @@ object RasterPackageRepository {
 
             val rawManifest = manifestBytes ?: error("В архиве нет manifest.json.")
             val manifest = parseManifest(JSONObject(String(rawManifest, Charsets.UTF_8)))
+            check(zoomLevels.all { it in manifest.minZoom..manifest.maxZoom }) {
+                "В архиве есть тайлы вне диапазона масштабов манифеста."
+            }
             check(tileCount == manifest.tileCount) {
                 "Количество тайлов не совпадает с манифестом: найдено $tileCount, заявлено ${manifest.tileCount}."
             }
@@ -158,7 +165,7 @@ object RasterPackageRepository {
             val destination = File(packageRoot, id)
             check(temporary.renameTo(destination)) { "Не удалось завершить установку пакета." }
             val installed = RasterPackageInfo(
-                id, manifest.name, manifest.attribution, manifest.extension,
+                id, manifest.name, manifest.attribution, manifest.license, manifest.extension,
                 manifest.minZoom, manifest.maxZoom, manifest.tileCount, storageId, destination
             )
             setActive(context, installed)
@@ -180,7 +187,7 @@ object RasterPackageRepository {
                         val tiles = File(directory, "tiles")
                         if (!tiles.isDirectory) return@runCatching null
                         RasterPackageInfo(
-                            directory.name, manifest.name, manifest.attribution, manifest.extension,
+                            directory.name, manifest.name, manifest.attribution, manifest.license, manifest.extension,
                             manifest.minZoom, manifest.maxZoom, manifest.tileCount, storage.id, directory
                         )
                     }.getOrNull()
@@ -225,8 +232,11 @@ object RasterPackageRepository {
         val root = File(storage.directory.parentFile ?: context.filesDir, "raster-packages").canonicalFile
         val directory = packageInfo.directory.canonicalFile
         if (!directory.path.startsWith(root.path + File.separator)) return false
+        val prefs = context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
+        val wasActive = prefs.getString(KEY_ACTIVE_ID, null) == packageInfo.id &&
+            prefs.getString(KEY_ACTIVE_STORAGE, null) == packageInfo.storageId
         val removed = directory.deleteRecursively()
-        if (removed && active(context)?.id == packageInfo.id) {
+        if (removed && wasActive) {
             setActive(context, null)
             setEnabled(context, false)
         }
@@ -263,12 +273,14 @@ object RasterPackageRepository {
         require(json.optInt("version", -1) == VERSION) { "Версия спутникового пакета не поддерживается." }
         val name = json.optString("name").trim()
         val attribution = json.optString("attribution").trim()
+        val license = json.optString("license").trim()
         val extension = json.optString("extension").lowercase()
         val minZoom = json.optInt("minZoom", -1)
         val maxZoom = json.optInt("maxZoom", -1)
         val tileCount = json.optInt("tileCount", -1)
         require(name.isNotBlank() && name.length <= 80) { "В манифесте неверное название пакета." }
         require(attribution.isNotBlank() && attribution.length <= 240) { "В манифесте отсутствует атрибуция источника снимков." }
+        require(license.isNotBlank() && license.length <= 120) { "В манифесте не указана лицензия снимков." }
         require(json.optString("tileScheme") == "xyz") { "Поддерживается только XYZ-схема тайлов." }
         require(json.optInt("tileSize", -1) == 256) { "Размер тайла должен быть 256×256." }
         require(extension == "png" || extension == "jpg") { "Поддерживаются только PNG и JPG тайлы." }
@@ -288,6 +300,6 @@ object RasterPackageRepository {
                 "Пакет не покрывает территорию Грузии."
             }
         }
-        return Manifest(name, attribution, extension, minZoom, maxZoom, tileCount)
+        return Manifest(name, attribution, license, extension, minZoom, maxZoom, tileCount)
     }
 }
