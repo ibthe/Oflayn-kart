@@ -19,7 +19,7 @@ class TripPlanRepository(private val file: File) {
     fun add(poiId: String, day: Int = 1, note: String = ""): Boolean {
         if (!poiId.matches(Regex("(node|way|relation)/[0-9]+"))) return false
         val current = read().toMutableList()
-        if (current.any { it.poiId == poiId }) return false
+        if (current.size >= MAX_STOPS || current.any { it.poiId == poiId }) return false
         val safeDay = day.coerceIn(1, MAX_DAYS)
         val order = current.filter { it.day == safeDay }.maxOfOrNull { it.order + 1 } ?: 0
         current += TripPlanStop(poiId, safeDay, order, note.take(MAX_NOTE_LENGTH))
@@ -108,6 +108,7 @@ class TripPlanRepository(private val file: File) {
 
     private companion object {
         const val MAX_DAYS = 30
+        const val MAX_STOPS = 20
         const val MAX_NOTE_LENGTH = 500
     }
 }
