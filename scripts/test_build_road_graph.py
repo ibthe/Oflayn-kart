@@ -112,6 +112,8 @@ class ClassificationTest(unittest.TestCase):
         for value in ("8%", "-12%", "up", "down", "10°"):
             info = rg.classify_way({"highway": "residential", "incline": value})
             self.assertTrue(info.flags & rg.FLAG_STEEP, value)
+        directional = rg.classify_way({"highway": "residential", "incline": "0%", "incline:backward": "12%"})
+        self.assertTrue(directional.flags & rg.FLAG_STEEP)
         moderate = rg.classify_way({"highway": "residential", "incline": "5%"})
         self.assertFalse(moderate.flags & rg.FLAG_STEEP)
         unknown = rg.classify_way({"highway": "residential", "incline": "variable"})
