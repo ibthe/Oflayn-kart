@@ -433,12 +433,10 @@ private fun PlaceRow(
                         )
                     }
                 }
-                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-                    TextButton(onClick = onAddToTrip, enabled = !inTrip) {
-                        Text(if (inTrip) "В плане" else "Добавить в план")
-                    }
-                    TextButton(onClick = onCopy) { Text("Копировать координаты") }
+                TextButton(onClick = onAddToTrip, enabled = !inTrip) {
+                    Text(if (inTrip) "В плане" else "Добавить в план поездки")
                 }
+                TextButton(onClick = onCopy) { Text("Копировать координаты") }
             }
         }
     }
