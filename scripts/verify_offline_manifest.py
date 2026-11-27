@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Verify the app does not request network or background-location permissions."""
+"""Verify the app has no internet traffic or background-location permission; read-only network status is allowed."""
 from __future__ import annotations
 
 import argparse
