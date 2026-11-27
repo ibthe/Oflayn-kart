@@ -442,18 +442,22 @@ object PoiRepository {
         val searchRadius = maxOf(corridorMeters.coerceIn(250.0, 10_000.0) * 2.0, sampleSpacing * 0.65)
         val centers = mutableListOf<Pair<Double, Double>>()
         centers += routePoints.first()
+        var nextSampleDistance = sampleSpacing
         for (index in 1 until routePoints.size) {
             val start = routePoints[index - 1]
             val end = routePoints[index]
-            val segmentLength = routeLengths[index] - routeLengths[index - 1]
+            val segmentStart = routeLengths[index - 1]
+            val segmentLength = routeLengths[index] - segmentStart
             if (segmentLength <= 0.1) continue
-            val steps = kotlin.math.ceil(segmentLength / sampleSpacing).toInt().coerceAtLeast(1)
-            for (step in 1..steps) {
-                val fraction = step.toDouble() / steps
+            val segmentEnd = routeLengths[index]
+            while (nextSampleDistance <= segmentEnd) {
+                val fraction = ((nextSampleDistance - segmentStart) / segmentLength).coerceIn(0.0, 1.0)
                 centers += ((start.first + (end.first - start.first) * fraction) to
                     (start.second + (end.second - start.second) * fraction))
+                nextSampleDistance += sampleSpacing
             }
         }
+        centers += routePoints.last()
 
         val boxes = centers.distinct().map { (latitude, longitude) ->
             val latitudeDelta = searchRadius / 110_540.0
