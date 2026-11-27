@@ -271,6 +271,9 @@ class Router(private val graph: RoadGraph) {
             if (usedFlags and RoadGraph.FLAG_SEVERE != 0) {
                 add("Есть очень сложные участки. Даже 4×4 не гарантирует фактическую проходимость.")
             }
+            if (usedFlags and RoadGraph.FLAG_STEEP != 0) {
+                add("Есть участки с крутым уклоном; расчётное время увеличено с учётом рельефа.")
+            }
         }
         return RouteResult.found(Route(profile, all.toArray(), seconds, steps, warnings))
     }
