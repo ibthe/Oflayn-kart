@@ -111,7 +111,8 @@ object DemRepository {
         }
         if (expected.isEmpty()) return@withContext null
 
-        val directory = File(context.filesDir, "dem/hgt")
+        val hillshadeRoot = File(context.filesDir, "dem/hgt")
+        val directory = File(hillshadeRoot, manifestHash.take(12))
         if (!directory.exists() && !directory.mkdirs()) {
             throw IllegalStateException("Не удалось подготовить локальные данные рельефа.")
         }
@@ -140,6 +141,7 @@ object DemRepository {
                 ?.forEach { it.delete() }
             marker.writeText(manifestHash)
         }
+        hillshadeRoot.listFiles()?.filter { it.isDirectory && it != directory }?.forEach { it.deleteRecursively() }
         directory
     }
 
