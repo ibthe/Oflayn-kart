@@ -449,7 +449,7 @@ def write_graph(path: Path, data: GraphData) -> dict:
     with path.open("wb") as handle:
         for chunk in (header, _le(vert), bytes(edge_blob), _le(shape), _le(arc_start), _le(arcs), _le(name_offsets), bytes(name_bytes), _le(turn_start), bytes(turn_blob)):
             handle.write(chunk)
-    return {"vertexCount": vcount, "edgeCount": ecount, "arcCount": len(arcs), "nameCount": len(data.names),
+    return {"formatVersion": FORMAT_VERSION, "vertexCount": vcount, "edgeCount": ecount, "arcCount": len(arcs), "nameCount": len(data.names),
             "turnRestrictionCount": len(turn_blob) // TURN_STRUCT.size,
             "sizeBytes": path.stat().st_size, "bbox": [min_lat / 1e6, min_lon / 1e6, max_lat / 1e6, max_lon / 1e6]}
 
