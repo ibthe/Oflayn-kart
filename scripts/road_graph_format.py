@@ -46,6 +46,8 @@ HIGHWAY_CLASS = {
 }
 FLAG_UNPAVED = 1
 FLAG_ROUNDABOUT = 2
+FLAG_ROUGH = 4
+FLAG_SEVERE = 8
 
 # Average speeds in km/h per class code (index = class). Mirrored in Kotlin `RoutingProfiles`.
 _CAR = {1: 90, 2: 50, 3: 75, 4: 45, 5: 60, 6: 40, 7: 50, 8: 35, 9: 40, 10: 30, 11: 35, 12: 25, 13: 10, 14: 15, 15: 15, 21: 30}
@@ -62,7 +64,11 @@ def speed_mps(profile: int, cls: int, flags: int) -> float:
     kmh = SPEED_KMH[profile].get(cls, 10)
     if flags & FLAG_UNPAVED:
         kmh = max(kmh * UNPAVED_FACTOR[profile], 3.0)
-    return kmh / 3.6
+    if flags & FLAG_SEVERE:
+        kmh *= {PROFILE_CAR: 0.30, PROFILE_OFFROAD: 0.55, PROFILE_BIKE: 0.20, PROFILE_FOOT: 0.65}[profile]
+    elif flags & FLAG_ROUGH:
+        kmh *= {PROFILE_CAR: 0.65, PROFILE_OFFROAD: 0.80, PROFILE_BIKE: 0.55, PROFILE_FOOT: 0.85}[profile]
+    return max(kmh, 1.0) / 3.6
 
 
 def dist_m(lat1: float, lon1: float, lat2: float, lon2: float) -> float:
@@ -187,6 +193,10 @@ def classify_way(tags: dict) -> RoadInfo | None:
         flags |= FLAG_UNPAVED
     if roundabout:
         flags |= FLAG_ROUNDABOUT
+    if smoothness in {"bad", "very_bad", "horrible"}:
+        flags |= FLAG_ROUGH
+    elif smoothness == "very_horrible":
+        flags |= FLAG_SEVERE
     name = tags.get("name:ru") or tags.get("name") or tags.get("name:en") or tags.get("ref")
     return RoadInfo(cls, flags, fwd, back, name)
 
