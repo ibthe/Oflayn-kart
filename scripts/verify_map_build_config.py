@@ -475,7 +475,7 @@ def main() -> int:
     for token in ("incidentSteps", "Сначала безопасность", "Вызови 112", "emergency_contact"):
         if token not in safety_repository:
             return fail(f"Safety guidance or pre-ride checklist is missing: {token}.")
-    if "EmergencyContactRepository.save" not in EMERGENCY_CONTACT_REPOSITORY.read_text(encoding="utf-8"):
+    if "fun save(context: Context" not in emergency_contact_repository or "getSharedPreferences(PREFS" not in emergency_contact_repository:
         return fail("Emergency contact storage must remain local and validated.")
     for token in ("emergencyContactIsValidatedAndStoredOnlyLocally", "expandedChecklistAndIncidentGuidanceAreComplete"):
         if token not in safety_tests:
