@@ -120,6 +120,7 @@ class RoadGraph(buffer: ByteBuffer) {
         const val FLAG_ROUNDABOUT = 2
         const val FLAG_ROUGH = 4
         const val FLAG_SEVERE = 8
+        const val FLAG_STEEP = 16
     }
 }
 
