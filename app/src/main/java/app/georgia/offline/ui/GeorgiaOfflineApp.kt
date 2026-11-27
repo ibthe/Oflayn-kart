@@ -527,7 +527,7 @@ private fun MapScreen(modifier: Modifier, settings: LocalSettings, navigation: N
             mapSearchLoading = false
         }
     }
-    val preferredLanguage = MapLanguageResolver.preferredLanguage(settings.enabledLanguages)
+    val preferredLanguages = MapLanguageResolver.orderedLanguages(settings.mapLanguages)
     var recenterToken by remember { mutableIntStateOf(0) }
     var recenterAfterFreshFix by remember { mutableStateOf(false) }
     var recenterFixBaseline by remember { mutableLongStateOf(0L) }
@@ -628,7 +628,7 @@ private fun MapScreen(modifier: Modifier, settings: LocalSettings, navigation: N
         ) {
             MapsforgeMapSurface(
                 mapFile = mapFile,
-                preferredLanguage = preferredLanguage,
+                preferredLanguages = preferredLanguages,
                 mapTheme = settings.mapTheme,
                 modifier = Modifier.fillMaxSize(),
                 userLocation = tracker.location?.takeIf { tracker.hasFreshFix() },
@@ -1329,14 +1329,34 @@ private fun SettingsScreen(modifier: Modifier, settings: LocalSettings, onShowOn
 
         SectionLabel("Карта")
         Panel {
-            Text("Язык названий", style = MaterialTheme.typography.titleSmall)
+            Text("Язык названий в списке мест", style = MaterialTheme.typography.titleSmall)
             Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(Space.xs)) {
                 listOf("ru" to "Русский", "en" to "English", "ka" to "ქართული").forEach { (code, label) ->
                     SelectPill(label = label, selected = settings.language == code, onClick = { settings.updateLanguage(code) })
                 }
             }
             Text(
-                "Названия на карте и в списке мест показываются только на этом языке. Если перевода в данных нет, берётся ближайший доступный.",
+                "Выбирает язык названий в каталоге мест и карточках. Это не меняет язык подписей на карте.",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+            HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
+            Text("Языки подписей на карте", style = MaterialTheme.typography.titleSmall)
+            Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(Space.xs)) {
+                listOf("ru" to "Русский", "en" to "English", "ka" to "ქართული").forEach { (code, label) ->
+                    SelectPill(
+                        label = label,
+                        selected = code in settings.mapLanguages,
+                        onClick = { settings.updateMapLanguage(code, code !in settings.mapLanguages) }
+                    )
+                }
+            }
+            Text(
+                if (settings.mapLanguages.isEmpty()) {
+                    "Все переключатели выключены: карта показывает исходные названия из OSM."
+                } else {
+                    "Можно включить несколько языков одновременно. Доступность каждой подписи зависит от данных OpenStreetMap."
+                },
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant
             )
