@@ -648,6 +648,7 @@ private fun MapScreen(modifier: Modifier, settings: LocalSettings, navigation: N
     var mapSearchCategory by rememberSaveable { mutableStateOf("all") }
     var mapSearchAlongRoute by rememberSaveable { mutableStateOf(false) }
     var hillshadeDirectory by remember { mutableStateOf<File?>(null) }
+    var contoursMapFile by remember { mutableStateOf<File?>(null) }
     var mapSearchResults by remember { mutableStateOf<List<PoiRepository.PoiRecord>>(emptyList()) }
     var mapSearchViewport by remember { mutableStateOf<MapViewportBounds?>(null) }
     var mapSearchLoading by remember { mutableStateOf(false) }
@@ -659,9 +660,13 @@ private fun MapScreen(modifier: Modifier, settings: LocalSettings, navigation: N
         poiDatabaseLoading = false
     }
     LaunchedEffect(settings.mapTheme) {
-        hillshadeDirectory = if (settings.mapTheme == "oflayn_natural" || settings.mapTheme == "oflayn_natural_dark") {
-            runCatching { DemRepository.ensureHillshadeInstalled(context) }.getOrNull()
-        } else null
+        if (settings.mapTheme == "oflayn_natural" || settings.mapTheme == "oflayn_natural_dark") {
+            hillshadeDirectory = runCatching { DemRepository.ensureHillshadeInstalled(context) }.getOrNull()
+            contoursMapFile = runCatching { TerrainRepository.ensureContoursInstalled(context) }.getOrNull()
+        } else {
+            hillshadeDirectory = null
+            contoursMapFile = null
+        }
     }
     LaunchedEffect(session.route) {
         if (session.route == null) mapSearchAlongRoute = false
@@ -806,6 +811,7 @@ private fun MapScreen(modifier: Modifier, settings: LocalSettings, navigation: N
                 preferredLanguages = preferredLanguages,
                 mapTheme = settings.mapTheme,
                 hillshadeDirectory = hillshadeDirectory,
+                contoursMapFile = contoursMapFile,
                 modifier = Modifier.fillMaxSize(),
                 userLocation = tracker.location?.takeIf { tracker.hasFreshFix() },
                 destination = if (navigation.pointSelection == RoutePointRole.START) null else target?.let { LatLong(it.latitude, it.longitude) },
