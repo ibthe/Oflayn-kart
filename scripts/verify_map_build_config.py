@@ -38,6 +38,8 @@ CONTOUR_THEME_LIGHT = ROOT / "app/src/main/assets/themes/oflayn-contours-light.x
 CONTOUR_THEME_DARK = ROOT / "app/src/main/assets/themes/oflayn-contours-dark.xml"
 ANDROID_MANIFEST = ROOT / "app/src/main/AndroidManifest.xml"
 TOOLS_SCREEN = ROOT / "app/src/main/java/app/georgia/offline/ui/ToolsScreen.kt"
+MAP_ZOOM_POLICY = ROOT / "app/src/main/java/app/georgia/offline/ui/MapZoomPolicy.kt"
+MAP_ZOOM_TESTS = ROOT / "app/src/test/java/app/georgia/offline/ui/MapZoomPolicyTest.kt"
 
 EXPECTED_MIRROR = "https://download.openstreetmap.fr/extracts/asia/georgia.osm.pbf"
 EXPECTED_MIRROR_MD5 = "https://download.openstreetmap.fr/extracts/asia/georgia.osm.pbf.md5"
@@ -54,7 +56,7 @@ def fail(message: str) -> int:
 
 
 def main() -> int:
-    required = (MAP_SCRIPT, PBF_PREP_SCRIPT, WRITER_SCRIPT, WORKFLOW, DATA_SOURCES, SMOKE_FIXTURE, BUNDLE_MANIFEST, POI_BUILDER, POI_VERIFIER, POI_TESTS, POI_SMOKE_TEST, POI_SMOKE_FIXTURE, PBF_CACHE_TEST, APP_BUILD, POI_REPOSITORY, POI_UI, DEM_BUILDER, DEM_VERIFIER, DEM_TESTS, APK_VERIFIER, DEM_REPOSITORY, MAP_SURFACE, CONTOUR_BUILDER, CONTOUR_TESTS, CONTOUR_MAP_BUILDER, CONTOUR_MAP_VERIFIER, TERRAIN_REPOSITORY, CONTOUR_THEME_LIGHT, CONTOUR_THEME_DARK, ANDROID_MANIFEST, TOOLS_SCREEN)
+    required = (MAP_SCRIPT, PBF_PREP_SCRIPT, WRITER_SCRIPT, WORKFLOW, DATA_SOURCES, SMOKE_FIXTURE, BUNDLE_MANIFEST, POI_BUILDER, POI_VERIFIER, POI_TESTS, POI_SMOKE_TEST, POI_SMOKE_FIXTURE, PBF_CACHE_TEST, APP_BUILD, POI_REPOSITORY, POI_UI, DEM_BUILDER, DEM_VERIFIER, DEM_TESTS, APK_VERIFIER, DEM_REPOSITORY, MAP_SURFACE, CONTOUR_BUILDER, CONTOUR_TESTS, CONTOUR_MAP_BUILDER, CONTOUR_MAP_VERIFIER, TERRAIN_REPOSITORY, CONTOUR_THEME_LIGHT, CONTOUR_THEME_DARK, ANDROID_MANIFEST, TOOLS_SCREEN, MAP_ZOOM_POLICY, MAP_ZOOM_TESTS)
     for path in required:
         if not path.is_file():
             return fail(f"required build file is missing: {path.relative_to(ROOT)}")
@@ -84,6 +86,8 @@ def main() -> int:
     terrain_repository = TERRAIN_REPOSITORY.read_text(encoding="utf-8")
     android_manifest = ANDROID_MANIFEST.read_text(encoding="utf-8")
     tools_screen = TOOLS_SCREEN.read_text(encoding="utf-8")
+    map_zoom_policy = MAP_ZOOM_POLICY.read_text(encoding="utf-8")
+    map_zoom_tests = MAP_ZOOM_TESTS.read_text(encoding="utf-8")
     data_sources = DATA_SOURCES.read_text(encoding="utf-8")
     try:
         bundle_manifest = json.loads(BUNDLE_MANIFEST.read_text(encoding="utf-8"))
@@ -359,6 +363,15 @@ def main() -> int:
         return fail("The app may read network status but must not gain network traffic access.")
     if "DeviceStatusPanel" not in tools_screen or "BatteryManager" not in tools_screen or "NET_CAPABILITY_VALIDATED" not in tools_screen:
         return fail("Rider tools must expose on-device battery and connectivity diagnostics.")
+
+
+    if "ROUTE_AUTO_ZOOM_DELAY_MS = 7_000L" not in map_zoom_policy or "speedBasedZoomLevel" not in map_zoom_policy:
+        return fail("Route auto-zoom must use the shared seven-second and speed-based zoom policy.")
+    for token in ("15f", "35f", "60f", "90f"):
+        if token not in map_zoom_policy:
+            return fail(f"Speed-based zoom policy is missing threshold {token}.")
+    if "routeOverviewWaitsSevenSecondsBeforeCloserZoom" not in map_zoom_tests or "speedZoomPullsBackAtEachRidingSpeedThreshold" not in map_zoom_tests:
+        return fail("Map zoom policy regression tests are missing.")
 
     if "continue-on-error: true" in workflow:
         return fail("map preparation must fail fast; do not hide failed prerequisites.")
