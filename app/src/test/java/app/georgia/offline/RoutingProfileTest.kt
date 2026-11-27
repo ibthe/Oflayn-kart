@@ -24,6 +24,17 @@ class RoutingProfileTest {
     }
 
     @Test
+    fun motorcycleProfileHasIndependentAccessBitAndRoadSpeeds() {
+        assertTrue(RoutingProfile.MOTORCYCLE.bit == 16)
+        assertTrue(RoutingProfile.MOTORCYCLE.maxSpeedMps > RoutingProfile.CAR.maxSpeedMps)
+        val paved = RoutingProfile.MOTORCYCLE.speedMps(12, 0)
+        val rough = RoutingProfile.MOTORCYCLE.speedMps(12, RoadGraph.FLAG_ROUGH)
+        val severe = RoutingProfile.MOTORCYCLE.speedMps(12, RoadGraph.FLAG_SEVERE)
+        assertTrue(paved > rough)
+        assertTrue(rough > severe)
+    }
+
+    @Test
     fun newQualityFlagsDoNotOverlapExistingFlags() {
         assertFalse(RoadGraph.FLAG_ROUGH and RoadGraph.FLAG_UNPAVED != 0)
         assertFalse(RoadGraph.FLAG_SEVERE and RoadGraph.FLAG_ROUNDABOUT != 0)
