@@ -27,6 +27,8 @@ DEM_BUILDER = ROOT / "scripts/build_dem.py"
 DEM_VERIFIER = ROOT / "scripts/verify_dem.py"
 DEM_TESTS = ROOT / "scripts/test_build_dem.py"
 APK_VERIFIER = ROOT / "scripts/verify_apk_bundle.py"
+CONTOUR_BUILDER = ROOT / "scripts/build_contours.py"
+CONTOUR_TESTS = ROOT / "scripts/test_build_contours.py"
 DEM_REPOSITORY = ROOT / "app/src/main/java/app/georgia/offline/data/DemRepository.kt"
 MAP_SURFACE = ROOT / "app/src/main/java/app/georgia/offline/ui/MapsforgeMapSurface.kt"
 
@@ -45,7 +47,7 @@ def fail(message: str) -> int:
 
 
 def main() -> int:
-    required = (MAP_SCRIPT, PBF_PREP_SCRIPT, WRITER_SCRIPT, WORKFLOW, DATA_SOURCES, SMOKE_FIXTURE, BUNDLE_MANIFEST, POI_BUILDER, POI_VERIFIER, POI_TESTS, POI_SMOKE_TEST, POI_SMOKE_FIXTURE, PBF_CACHE_TEST, APP_BUILD, POI_REPOSITORY, POI_UI, DEM_BUILDER, DEM_VERIFIER, DEM_TESTS, APK_VERIFIER, DEM_REPOSITORY, MAP_SURFACE)
+    required = (MAP_SCRIPT, PBF_PREP_SCRIPT, WRITER_SCRIPT, WORKFLOW, DATA_SOURCES, SMOKE_FIXTURE, BUNDLE_MANIFEST, POI_BUILDER, POI_VERIFIER, POI_TESTS, POI_SMOKE_TEST, POI_SMOKE_FIXTURE, PBF_CACHE_TEST, APP_BUILD, POI_REPOSITORY, POI_UI, DEM_BUILDER, DEM_VERIFIER, DEM_TESTS, APK_VERIFIER, DEM_REPOSITORY, MAP_SURFACE, CONTOUR_BUILDER, CONTOUR_TESTS)
     for path in required:
         if not path.is_file():
             return fail(f"required build file is missing: {path.relative_to(ROOT)}")
@@ -65,6 +67,8 @@ def main() -> int:
     apk_verifier = APK_VERIFIER.read_text(encoding="utf-8")
     dem_repository = DEM_REPOSITORY.read_text(encoding="utf-8")
     map_surface = MAP_SURFACE.read_text(encoding="utf-8")
+    contour_builder = CONTOUR_BUILDER.read_text(encoding="utf-8")
+    contour_tests = CONTOUR_TESTS.read_text(encoding="utf-8")
     data_sources = DATA_SOURCES.read_text(encoding="utf-8")
     try:
         bundle_manifest = json.loads(BUNDLE_MANIFEST.read_text(encoding="utf-8"))
@@ -289,6 +293,15 @@ def main() -> int:
         return fail("CI must run DEM/HGT encoding tests and verify the generated elevation package.")
     if "ensureHillshadeInstalled" not in poi_ui and "ensureHillshadeInstalled" not in (ROOT / "app/src/main/java/app/georgia/offline/ui/GeorgiaOfflineApp.kt").read_text(encoding="utf-8"):
         return fail("the map screen must install HGT assets before enabling natural-style hillshading.")
+
+
+    for token in ("contourpy.contour_generator", "contour_major", "Copernicus GLO-90", "gzip.decompress"):
+        if token not in contour_builder:
+            return fail(f"Offline contour generation is missing: {token}.")
+    if "python3 scripts/test_build_contours.py" not in workflow or "python3-contourpy" not in workflow:
+        return fail("CI must install ContourPy and run the synthetic contour tests.")
+    if "extract_tile_contours" not in contour_tests or "no-data handling" not in contour_tests:
+        return fail("Contour tests must cover contour geometry and missing DEM cells.")
 
     if "continue-on-error: true" in workflow:
         return fail("map preparation must fail fast; do not hide failed prerequisites.")
