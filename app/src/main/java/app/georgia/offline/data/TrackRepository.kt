@@ -44,7 +44,11 @@ class TrackRepository(private val directory: File) {
     fun loadRecovery(): GpxTrack? {
         val file = File(directory, RECOVERY_FILE_NAME)
         if (!file.isFile) return null
-        return runCatching { file.inputStream().use { GpxCodec.parse(it, "Восстановленный трек") } }.getOrNull()
+        return runCatching { file.inputStream().use { GpxCodec.parse(it, "Восстановленный трек") } }
+            .getOrElse {
+                file.delete()
+                null
+            }
     }
 
     fun clearRecovery() = synchronized(recoveryLock) {
