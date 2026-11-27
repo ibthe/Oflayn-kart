@@ -44,8 +44,8 @@ APK assets
 
 ## Offline trip planner
 
-- `TripPlanRepository` stores POI IDs and day/order metadata locally in an atomic app-private file.
-- Places can be added from the catalog or map, reordered within a day, moved to another day, and routed as a day itinerary using the existing multi-waypoint planner.
+- `TripPlanRepository` stores POI IDs, day/order metadata and per-stop notes locally in an atomic app-private file; an itinerary is limited to 20 stops.
+- Places can be added from the catalog or map, reordered within a day, moved to another day, annotated, and routed as a day itinerary using the existing multi-waypoint planner.
 
 ## GPX tracks and foreground recorder
 
