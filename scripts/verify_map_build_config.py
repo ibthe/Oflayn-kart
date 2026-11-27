@@ -112,10 +112,6 @@ def main() -> int:
     road_builder = ROAD_BUILDER.read_text(encoding="utf-8")
     apk_verifier = APK_VERIFIER.read_text(encoding="utf-8")
     dem_repository = DEM_REPOSITORY.read_text(encoding="utf-8")
-    if r"\.dem\.gzip$" not in contour_builder:
-        return fail("Contour generation must read the preserved .dem.gzip DEM tile names.")
-    if ".dem.gzip" not in dem_sampler:
-        return fail("Road-grade DEM sampling must read the preserved .dem.gzip tile names.")
     if 'context.assets.open("dem/$key.dem.gzip")' not in dem_repository:
         return fail("Android DEM loading must use the preserved .gzip asset path.")
     if 'dem_entry = f"assets/dem/{source_dem_file}"' not in apk_verifier:
@@ -123,6 +119,10 @@ def main() -> int:
     map_surface = MAP_SURFACE.read_text(encoding="utf-8")
     app_ui = APP_UI.read_text(encoding="utf-8")
     contour_builder = CONTOUR_BUILDER.read_text(encoding="utf-8")
+    if r"\.dem\.gzip$" not in contour_builder:
+        return fail("Contour generation must read the preserved .dem.gzip DEM tile names.")
+    if ".dem.gzip" not in dem_sampler:
+        return fail("Road-grade DEM sampling must read the preserved .dem.gzip tile names.")
     contour_tests = CONTOUR_TESTS.read_text(encoding="utf-8")
     contour_map_builder = CONTOUR_MAP_BUILDER.read_text(encoding="utf-8")
     contour_map_verifier = CONTOUR_MAP_VERIFIER.read_text(encoding="utf-8")
