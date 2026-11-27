@@ -250,14 +250,14 @@ jobs:
         run: python3 scripts/verify_bundled_map.py
 
       - name: Restore or cache Georgia Copernicus DEM tiles
-        id: georgia-dem-cache
+        id: georgia_dem_cache
         uses: actions/cache@v4
         with:
           path: app/src/main/assets/dem
           key: georgia-dem-glo90-v1-${{ runner.os }}-${{ hashFiles('scripts/build_dem.py') }}
 
       - name: Build Georgia Copernicus GLO-90 elevation tiles
-        if: steps.georgia-dem-cache.outputs.cache-hit != 'true'
+        if: ${{ steps.georgia_dem_cache.outputs['cache-hit'] != 'true' }}
         run: python3 scripts/build_dem.py --output app/src/main/assets/dem
 
       - name: Verify Georgia DEM package
