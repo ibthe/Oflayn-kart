@@ -32,6 +32,7 @@ class RouterTest {
         assertEquals(5, graph.vertexCount)
         assertEquals(5, graph.edgeCount)
         assertEquals(10, graph.arcCount)
+        assertEquals(0, graph.turnRestrictionCount)
     }
 
     @Test
@@ -65,7 +66,9 @@ class RouterTest {
     @Test
     fun noTurnRestrictionForcesAnAlternateRoute() {
         val bytes = javaClass.classLoader!!.getResourceAsStream("tiny-turns.bin")!!.readBytes()
-        val restrictedRouter = Router(RoadGraph(ByteBuffer.wrap(bytes)))
+        val restrictedGraph = RoadGraph(ByteBuffer.wrap(bytes))
+        assertEquals(4, restrictedGraph.turnRestrictionCount)
+        val restrictedRouter = Router(restrictedGraph)
         val result = restrictedRouter.route(RoutingProfile.CAR, 41.7001, 44.8002, 41.6901, 44.8100)
         org.junit.Assert.assertNotNull("restricted route failed: ${result.failure}", result.route)
         val route = result.route!!
@@ -76,7 +79,9 @@ class RouterTest {
     @Test
     fun onlyTurnRestrictionKeepsThePermittedExit() {
         val bytes = javaClass.classLoader!!.getResourceAsStream("tiny-only-turns.bin")!!.readBytes()
-        val restrictedRouter = Router(RoadGraph(ByteBuffer.wrap(bytes)))
+        val restrictedGraph = RoadGraph(ByteBuffer.wrap(bytes))
+        assertEquals(4, restrictedGraph.turnRestrictionCount)
+        val restrictedRouter = Router(restrictedGraph)
         val result = restrictedRouter.route(RoutingProfile.CAR, 41.7001, 44.8002, 41.6901, 44.8100)
         org.junit.Assert.assertNotNull("restricted route failed: ${result.failure}", result.route)
         assertTrue("only_* should keep the permitted exit direct: ${result.route!!.distanceMeters}",
