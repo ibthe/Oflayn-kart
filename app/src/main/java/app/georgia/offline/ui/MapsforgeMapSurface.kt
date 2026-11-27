@@ -172,44 +172,53 @@ fun MapsforgeMapSurface(
                             resolveMapTheme(mapTheme, viewContext)
                         )
                         layerManager.layers.add(renderLayer)
+                        mapDataStoreRef = dataStore
 
-                        // Natural styles use bundled Copernicus-derived HGT tiles for offline relief.
+                        // Hillshading is an optional renderer layer: if an HGT tile is corrupt or
+                        // unavailable, the base offline map must remain usable.
                         if (hillshadeDirectory?.isDirectory == true &&
                             hillshadeDirectory.listFiles()?.any { it.name.endsWith(".hgt.zip") } == true
                         ) {
-                            val algorithm = AdaptiveClasyHillShading()
-                                .setAdaptiveZoomEnabled(true)
-                                .setCustomQualityScale(1)
-                            val hillTileSource = MemoryCachingHgtReaderTileSource(
-                                DemFolderFS(hillshadeDirectory),
-                                algorithm,
-                                AndroidGraphicFactory.INSTANCE
-                            )
-                            val hillsConfig = HillsRenderConfig(hillTileSource).apply {
-                                setExternal(true)
-                                indexOnThread()
+                            var pendingHillsConfig: HillsRenderConfig? = null
+                            var pendingHillDataStore: MapDataStore? = null
+                            try {
+                                val algorithm = AdaptiveClasyHillShading()
+                                    .setAdaptiveZoomEnabled(true)
+                                    .setCustomQualityScale(1)
+                                val hillTileSource = MemoryCachingHgtReaderTileSource(
+                                    DemFolderFS(hillshadeDirectory),
+                                    algorithm,
+                                    AndroidGraphicFactory.INSTANCE
+                                )
+                                pendingHillsConfig = HillsRenderConfig(hillTileSource).apply {
+                                    setExternal(true)
+                                    indexOnThread()
+                                }
+                                pendingHillDataStore = MapFile(mapFile)
+                                val hillCache = AndroidUtil.createTileCache(
+                                    viewContext,
+                                    "georgia-offline-hillshade-cache",
+                                    model.displayModel.tileSize,
+                                    1f,
+                                    model.frameBufferModel.overdrawFactor
+                                )
+                                val hillLayer = AndroidUtil.createTileRendererLayer(
+                                    hillCache,
+                                    model.mapViewPosition,
+                                    pendingHillDataStore,
+                                    MapsforgeThemes.HILLSHADING,
+                                    true,
+                                    false,
+                                    false,
+                                    pendingHillsConfig
+                                )
+                                layerManager.layers.add(hillLayer)
+                                hillsRenderConfigRef = pendingHillsConfig
+                                hillshadeDataStoreRef = pendingHillDataStore
+                            } catch (_: Exception) {
+                                runCatching { pendingHillDataStore?.close() }
+                                runCatching { pendingHillsConfig?.interruptAndDestroy() }
                             }
-                            val hillDataStore: MapDataStore = MapFile(mapFile)
-                            val hillCache = AndroidUtil.createTileCache(
-                                viewContext,
-                                "georgia-offline-hillshade-cache",
-                                model.displayModel.tileSize,
-                                1f,
-                                model.frameBufferModel.overdrawFactor
-                            )
-                            val hillLayer = AndroidUtil.createTileRendererLayer(
-                                hillCache,
-                                model.mapViewPosition,
-                                hillDataStore,
-                                MapsforgeThemes.HILLSHADING,
-                                true,
-                                false,
-                                false,
-                                hillsConfig
-                            )
-                            layerManager.layers.add(hillLayer)
-                            hillsRenderConfigRef = hillsConfig
-                            hillshadeDataStoreRef = hillDataStore
                         }
                         // The map can neither be shrunk to a speck nor dragged away from Georgia.
                         model.mapViewPosition.setZoomLevelMin(MIN_ZOOM)
