@@ -51,9 +51,9 @@ def verify(directory: Path) -> dict:
     hgt_total = 0
     for tile in tiles:
         name = tile.get("file")
-        if not isinstance(name, str) or not name.endswith(".dem.gz"):
+        if not isinstance(name, str) or not name.endswith(".dem.gzip"):
             raise ValueError(f"Invalid DEM tile name: {name!r}")
-        key = name.removesuffix(".dem.gz")
+        key = name.removesuffix(".dem.gzip")
         if key not in expected or key in present_keys:
             raise ValueError(f"Unexpected DEM tile outside the requested bounding box: {name}")
         present_keys.add(key)
