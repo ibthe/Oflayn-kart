@@ -35,13 +35,31 @@ def verify(path: Path, summary_path: Path | None = None) -> dict:
         metadata = dict(connection.execute("SELECT key,value FROM metadata"))
         if metadata.get("schemaVersion") != "1" or int(metadata.get("poiCount", "0")) != count:
             raise ValueError("POI metadata version or count does not match the database")
-        result = {"poiCount": count, "categoryCounts": category_counts, "schemaVersion": int(metadata["schemaVersion"])}
+        relations_written = int(metadata.get("relationsWritten", "0"))
+        relations_included = metadata.get("relationsIncluded") == "true"
+        if relations_included != (relations_written > 0):
+            raise ValueError("POI relation metadata does not match extracted relation records")
+        duplicates_removed = int(metadata.get("duplicatesRemoved", "0"))
+        if duplicates_removed < 0:
+            raise ValueError("POI duplicate-removal count cannot be negative")
+        result = {
+            "poiCount": count,
+            "categoryCounts": category_counts,
+            "schemaVersion": int(metadata["schemaVersion"]),
+            "relationsIncluded": relations_included,
+            "relationsWritten": relations_written,
+            "duplicatesRemoved": duplicates_removed,
+        }
     finally:
         connection.close()
     if summary_path:
         summary = json.loads(summary_path.read_text(encoding="utf-8"))
         if summary.get("poiCount") != result["poiCount"]:
             raise ValueError("POI summary count does not match SQLite database")
+        if summary.get("relationsIncluded") != result["relationsIncluded"]:
+            raise ValueError("POI summary relation coverage does not match SQLite metadata")
+        if summary.get("duplicatesRemoved") != result["duplicatesRemoved"]:
+            raise ValueError("POI summary duplicate count does not match SQLite metadata")
     return result
 
 
@@ -54,7 +72,7 @@ def main() -> int:
     except Exception as exc:
         print(f"ERROR: {exc}", file=sys.stderr)
         return 1
-    print(f"OK: verified {result['poiCount']:,} offline POIs in {len(result['categoryCounts'])} categories.")
+    print(f"OK: verified {result['poiCount']:,} offline POIs in {len(result['categoryCounts'])} categories; relations={result['relationsWritten']:,}, duplicates removed={result['duplicatesRemoved']:,}.")
     return 0
 
 
