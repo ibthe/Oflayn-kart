@@ -34,8 +34,8 @@ object MapFileRepository {
                 INTERNAL_STORAGE_ID,
                 "Внутренняя память",
                 internalDirectory,
-                internalDirectory.usableSpace,
-                internalDirectory.totalSpace,
+                context.filesDir.usableSpace,
+                context.filesDir.totalSpace,
                 removable = false
             )
         )
@@ -48,8 +48,8 @@ object MapFileRepository {
                     appDirectory.absolutePath,
                     "SD-карта",
                     mapDirectory,
-                    mapDirectory.usableSpace,
-                    mapDirectory.totalSpace,
+                    appDirectory.usableSpace,
+                    appDirectory.totalSpace,
                     removable = true
                 )
             }
