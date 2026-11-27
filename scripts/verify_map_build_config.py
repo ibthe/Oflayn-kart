@@ -522,6 +522,11 @@ def main() -> int:
     for token in ("Copernicus GLO-90", "explicit", "25 m", "2%", "±30%"):
         if token not in road_grade_docs:
             return fail(f"Road grade model documentation is missing: {token}.")
+    if "OSM_ENTITY_TIMESTAMP" not in contour_builder or 'timestamp="{OSM_ENTITY_TIMESTAMP}"' not in contour_builder:
+        return fail("Generated contour nodes and ways must carry OSM timestamps for Osmosis.")
+    if 'element.get("timestamp")' not in contour_tests:
+        return fail("Contour generation tests must validate entity timestamps.")
+
     for token in ("TILE_PIXELS = 1200", "NODATA = -32768", "np.median"):
         if token not in dem_sampler:
             return fail(f"DEM grade sampler is missing: {token}.")
