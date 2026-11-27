@@ -52,5 +52,6 @@ class TrackRouteBuilderTest {
         val route = TrackRouteBuilder.reverseFromNearest(split, 42.001, 45.001, RoutingProfile.BIKE)
         assertTrue(route != null)
         assertEquals(42.0, route!!.lat(route.pointCount - 1), 0.000001)
+        assertTrue(route.warnings.any { it.contains("сегмент") })
     }
 }
