@@ -33,6 +33,7 @@ CONTOUR_MAP_BUILDER = ROOT / "scripts/build_contours_map.sh"
 CONTOUR_MAP_VERIFIER = ROOT / "scripts/verify_contours_map.py"
 DEM_REPOSITORY = ROOT / "app/src/main/java/app/georgia/offline/data/DemRepository.kt"
 MAP_SURFACE = ROOT / "app/src/main/java/app/georgia/offline/ui/MapsforgeMapSurface.kt"
+APP_UI = ROOT / "app/src/main/java/app/georgia/offline/ui/GeorgiaOfflineApp.kt"
 TERRAIN_REPOSITORY = ROOT / "app/src/main/java/app/georgia/offline/data/TerrainRepository.kt"
 CONTOUR_THEME_LIGHT = ROOT / "app/src/main/assets/themes/oflayn-contours-light.xml"
 CONTOUR_THEME_DARK = ROOT / "app/src/main/assets/themes/oflayn-contours-dark.xml"
@@ -82,7 +83,7 @@ def fail(message: str) -> int:
 
 
 def main() -> int:
-    required = (MAP_SCRIPT, PBF_PREP_SCRIPT, WRITER_SCRIPT, WORKFLOW, DATA_SOURCES, SMOKE_FIXTURE, BUNDLE_MANIFEST, POI_BUILDER, POI_VERIFIER, POI_TESTS, POI_SMOKE_TEST, POI_SMOKE_FIXTURE, PBF_CACHE_TEST, APP_BUILD, POI_REPOSITORY, POI_UI, DEM_BUILDER, DEM_VERIFIER, DEM_TESTS, APK_VERIFIER, DEM_REPOSITORY, MAP_SURFACE, CONTOUR_BUILDER, CONTOUR_TESTS, CONTOUR_MAP_BUILDER, CONTOUR_MAP_VERIFIER, TERRAIN_REPOSITORY, CONTOUR_THEME_LIGHT, CONTOUR_THEME_DARK, ANDROID_MANIFEST, TOOLS_SCREEN, MAP_ZOOM_POLICY, MAP_ZOOM_TESTS, ROAD_FORMAT, ROAD_GRAPH_READER, ROUTING_REPOSITORY, ROAD_ROUTER, ROUTING_PROFILE, ROAD_TESTS, ROAD_TURN_SMOKE, ROAD_TURN_FIXTURE, ROUTING_PROFILE_TESTS, TINY_ROAD_GRAPH, TINY_TURN_GRAPH, TINY_ONLY_TURN_GRAPH, GUIDEBOOK_REPOSITORY, GUIDEBOOK_TESTS, GUIDEBOOK_SOURCES, SAFETY_REPOSITORY, EMERGENCY_CONTACT_REPOSITORY, SAFETY_TESTS, SAFETY_SOURCES, APP_FLOW_UI_TESTS, MAP_FILE_REPOSITORY, MAP_STORAGE_TESTS, RASTER_PACKAGE_REPOSITORY, RASTER_PACKAGE_TESTS, RASTER_PACK_DOCS, MAP_SURFACE)
+    required = (MAP_SCRIPT, PBF_PREP_SCRIPT, WRITER_SCRIPT, WORKFLOW, DATA_SOURCES, SMOKE_FIXTURE, BUNDLE_MANIFEST, POI_BUILDER, POI_VERIFIER, POI_TESTS, POI_SMOKE_TEST, POI_SMOKE_FIXTURE, PBF_CACHE_TEST, APP_BUILD, POI_REPOSITORY, POI_UI, DEM_BUILDER, DEM_VERIFIER, DEM_TESTS, APK_VERIFIER, DEM_REPOSITORY, MAP_SURFACE, CONTOUR_BUILDER, CONTOUR_TESTS, CONTOUR_MAP_BUILDER, CONTOUR_MAP_VERIFIER, TERRAIN_REPOSITORY, CONTOUR_THEME_LIGHT, CONTOUR_THEME_DARK, ANDROID_MANIFEST, TOOLS_SCREEN, MAP_ZOOM_POLICY, MAP_ZOOM_TESTS, ROAD_FORMAT, ROAD_GRAPH_READER, ROUTING_REPOSITORY, ROAD_ROUTER, ROUTING_PROFILE, ROAD_TESTS, ROAD_TURN_SMOKE, ROAD_TURN_FIXTURE, ROUTING_PROFILE_TESTS, TINY_ROAD_GRAPH, TINY_TURN_GRAPH, TINY_ONLY_TURN_GRAPH, GUIDEBOOK_REPOSITORY, GUIDEBOOK_TESTS, GUIDEBOOK_SOURCES, SAFETY_REPOSITORY, EMERGENCY_CONTACT_REPOSITORY, SAFETY_TESTS, SAFETY_SOURCES, APP_FLOW_UI_TESTS, MAP_FILE_REPOSITORY, MAP_STORAGE_TESTS, RASTER_PACKAGE_REPOSITORY, RASTER_PACKAGE_TESTS, RASTER_PACK_DOCS, MAP_SURFACE, APP_UI)
     for path in required:
         if not path.is_file():
             return fail(f"required build file is missing: {path.relative_to(ROOT)}")
@@ -105,6 +106,7 @@ def main() -> int:
     apk_verifier = APK_VERIFIER.read_text(encoding="utf-8")
     dem_repository = DEM_REPOSITORY.read_text(encoding="utf-8")
     map_surface = MAP_SURFACE.read_text(encoding="utf-8")
+    app_ui = APP_UI.read_text(encoding="utf-8")
     contour_builder = CONTOUR_BUILDER.read_text(encoding="utf-8")
     contour_tests = CONTOUR_TESTS.read_text(encoding="utf-8")
     contour_map_builder = CONTOUR_MAP_BUILDER.read_text(encoding="utf-8")
@@ -521,8 +523,8 @@ def main() -> int:
             return fail(f"Offline raster package format documentation is missing: {token}.")
     if "TileStoreLayer" not in map_surface or "rasterEnabled" not in map_surface:
         return fail("The optional offline raster package must render through a local Mapsforge tile store layer.")
-    for token in ("Импортировать ZIP", "Спутниковый слой", "rasterPackage = rasterPackage"):
-        if token not in POI_UI.read_text(encoding="utf-8") and token != "rasterPackage = rasterPackage":
+    for token in ("Импортировать ZIP", "Спутниковый слой"):
+        if token not in app_ui:
             return fail(f"Map UI is missing optional raster controls: {token}.")
 
     if "continue-on-error: true" in workflow:
