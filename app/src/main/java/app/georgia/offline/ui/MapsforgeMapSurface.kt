@@ -9,7 +9,9 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
@@ -100,6 +102,12 @@ fun MapsforgeMapSurface(
     onLongPress: ((LatLong) -> Unit)? = null,
     onRouteDrag: ((RouteDragTarget, Int, LatLong) -> Unit)? = null
 ) {
+    // Preserve the map camera when the renderer is recreated for a style/language change
+    // or when the map tab is temporarily removed from the composition.
+    var savedCenterLatitude by rememberSaveable(mapFile.absolutePath) { mutableStateOf<Double?>(null) }
+    var savedCenterLongitude by rememberSaveable(mapFile.absolutePath) { mutableStateOf<Double?>(null) }
+    var savedZoomLevel by rememberSaveable(mapFile.absolutePath) { mutableIntStateOf(-1) }
+
     val currentLongPress by rememberUpdatedState(onLongPress)
     val currentPlaces by rememberUpdatedState(places)
     val currentPlaceTap by rememberUpdatedState(onPlaceTap)
@@ -148,14 +156,22 @@ fun MapsforgeMapSurface(
                         model.mapViewPosition.setZoomLevelMin(MIN_ZOOM)
                         model.mapViewPosition.setZoomLevelMax(MAX_ZOOM)
                         dataStore.boundingBox()?.let { model.mapViewPosition.setMapLimit(it) }
-                        val initialPosition = dataStore.startPosition()
-                        if (initialPosition != null) {
-                            setCenter(initialPosition)
+                        val canRestoreCamera = savedCenterLatitude != null &&
+                            savedCenterLongitude != null &&
+                            savedZoomLevel in MIN_ZOOM.toInt()..MAX_ZOOM.toInt()
+                        if (canRestoreCamera) {
+                            setCenter(LatLong(savedCenterLatitude!!, savedCenterLongitude!!))
+                            setZoomLevel(savedZoomLevel.toByte())
                         } else {
-                            setCenter(LatLong(42.0, 43.5))
+                            val initialPosition = dataStore.startPosition()
+                            if (initialPosition != null) {
+                                setCenter(initialPosition)
+                            } else {
+                                setCenter(LatLong(42.0, 43.5))
+                            }
+                            val initialZoom = dataStore.startZoomLevel()
+                            setZoomLevel(initialZoom?.takeIf { it.toInt() in MIN_ZOOM..MAX_ZOOM } ?: 7.toByte())
                         }
-                        val initialZoom = dataStore.startZoomLevel()
-                        setZoomLevel(initialZoom?.takeIf { it.toInt() in MIN_ZOOM..MAX_ZOOM } ?: 7.toByte())
                         mapDataStoreRef = dataStore
                     } catch (error: Exception) {
                         rendererError = error.message ?: "Не удалось открыть карту."
@@ -370,7 +386,15 @@ fun MapsforgeMapSurface(
 
         DisposableEffect(Unit) {
             onDispose {
-                runCatching { mapViewRef?.destroyAll() }
+                mapViewRef?.let { view ->
+                    runCatching {
+                        val camera = view.model.mapViewPosition.mapPosition
+                        savedCenterLatitude = camera.latLong.latitude
+                        savedCenterLongitude = camera.latLong.longitude
+                        savedZoomLevel = camera.zoomLevel.toInt()
+                    }
+                    runCatching { view.destroyAll() }
+                }
                 runCatching { mapDataStoreRef?.close() }
                 AndroidGraphicFactory.clearResourceMemoryCache()
             }
