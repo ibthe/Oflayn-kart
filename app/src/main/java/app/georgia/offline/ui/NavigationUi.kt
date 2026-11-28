@@ -19,6 +19,7 @@ import android.location.Location
 import android.speech.tts.TextToSpeech
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.horizontalScroll
+import androidx.compose.foundation.gestures.detectDragGesturesAfterLongPress
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
@@ -47,6 +48,8 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.draw.rotate
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -352,6 +355,7 @@ fun RoutePlannerCard(
     onCancel: () -> Unit
 ) {
     val plannerScrollState = rememberScrollState()
+    val waypointRowHeightPx = with(LocalDensity.current) { 48.dp.toPx() }
     LaunchedEffect(target, origin, viaPoints) { plannerScrollState.scrollTo(0) }
     Surface(
         modifier = Modifier.fillMaxWidth().appear()
@@ -458,6 +462,27 @@ fun RoutePlannerCard(
                             ) {
                                 Text("${index + 1}.", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.primary)
                                 Text(point.name, modifier = Modifier.weight(1f), style = MaterialTheme.typography.bodyMedium, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                                var dragDistancePx = 0f
+                                Text(
+                                    "⠿",
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                    modifier = Modifier.pointerInput(index, viaPoints.size) {
+                                        detectDragGesturesAfterLongPress(
+                                            onDragEnd = {
+                                                val steps = (dragDistancePx / waypointRowHeightPx).toInt()
+                                                if (steps != 0) {
+                                                    onMoveWaypoint(index, (index + steps).coerceIn(0, viaPoints.lastIndex))
+                                                }
+                                                dragDistancePx = 0f
+                                            },
+                                            onDragCancel = { dragDistancePx = 0f },
+                                            onDrag = { change, dragAmount ->
+                                                change.consume()
+                                                dragDistancePx += dragAmount.y
+                                            }
+                                        )
+                                    }
+                                )
                                 TextButton(onClick = { onMoveWaypoint(index, index - 1) }, enabled = index > 0, contentPadding = PaddingValues(horizontal = Space.xxs)) { Text("↑") }
                                 TextButton(onClick = { onMoveWaypoint(index, index + 1) }, enabled = index < viaPoints.lastIndex, contentPadding = PaddingValues(horizontal = Space.xxs)) { Text("↓") }
                                 TextButton(onClick = { onRemoveWaypoint(index) }, contentPadding = PaddingValues(horizontal = Space.xxs)) { Text("×") }
