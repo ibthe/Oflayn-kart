@@ -64,6 +64,7 @@ import app.georgia.offline.routing.RoutingRepository
 import app.georgia.offline.ui.theme.Radius
 import app.georgia.offline.ui.theme.Space
 import java.util.Locale
+import kotlin.math.roundToInt
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
@@ -469,7 +470,7 @@ fun RoutePlannerCard(
                                     modifier = Modifier.pointerInput(index, viaPoints.size) {
                                         detectDragGesturesAfterLongPress(
                                             onDragEnd = {
-                                                val steps = (dragDistancePx / waypointRowHeightPx).toInt()
+                                                val steps = (dragDistancePx / waypointRowHeightPx).roundToInt()
                                                 if (steps != 0) {
                                                     onMoveWaypoint(index, (index + steps).coerceIn(0, viaPoints.lastIndex))
                                                 }
