@@ -464,10 +464,8 @@ fun RoutePlannerCard(
                                 Text("${index + 1}.", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.primary)
                                 Text(point.name, modifier = Modifier.weight(1f), style = MaterialTheme.typography.bodyMedium, maxLines = 1, overflow = TextOverflow.Ellipsis)
                                 var dragDistancePx = 0f
-                                Text(
-                                    "⠿",
-                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                    modifier = Modifier.pointerInput(index, viaPoints.size) {
+                                Box(
+                                    modifier = Modifier.size(48.dp).pointerInput(index, viaPoints.size) {
                                         detectDragGesturesAfterLongPress(
                                             onDragEnd = {
                                                 val steps = (dragDistancePx / waypointRowHeightPx).roundToInt()
@@ -482,8 +480,11 @@ fun RoutePlannerCard(
                                                 dragDistancePx += dragAmount.y
                                             }
                                         )
-                                    }
-                                )
+                                    },
+                                    contentAlignment = Alignment.Center
+                                ) {
+                                    Text("⠿", color = MaterialTheme.colorScheme.onSurfaceVariant)
+                                }
                                 TextButton(onClick = { onMoveWaypoint(index, index - 1) }, enabled = index > 0, contentPadding = PaddingValues(horizontal = Space.xxs)) { Text("↑") }
                                 TextButton(onClick = { onMoveWaypoint(index, index + 1) }, enabled = index < viaPoints.lastIndex, contentPadding = PaddingValues(horizontal = Space.xxs)) { Text("↓") }
                                 TextButton(onClick = { onRemoveWaypoint(index) }, contentPadding = PaddingValues(horizontal = Space.xxs)) { Text("×") }
