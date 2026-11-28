@@ -16,7 +16,7 @@ adb install -r "$APP_APK"
 adb install -r "$TEST_APK"
 adb shell pm clear "$APP_ID"
 
-RUNNER="$(adb shell pm list instrumentation | tr -d '\r' | grep "target=$APP_ID" | sed -n 's/^instrumentation:\\([^ ]*\\).*/\\1/p' | head -n 1)"
+RUNNER="$(adb shell pm list instrumentation | tr -d '\r' | grep "target=$APP_ID" | sed -n 's/^instrumentation:\([^ ]*\).*/\1/p' | head -n 1)"
 if [[ -z "$RUNNER" ]]; then
   echo "ERROR: instrumentation runner for $APP_ID was not registered." >&2
   adb shell pm list instrumentation
