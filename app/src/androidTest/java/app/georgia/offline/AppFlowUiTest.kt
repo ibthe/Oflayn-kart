@@ -1,7 +1,10 @@
 package app.georgia.offline
 
 import androidx.compose.ui.test.assertCountEquals
+import androidx.compose.ui.test.hasClickAction
+import androidx.compose.ui.test.hasText
 import androidx.compose.ui.test.junit4.createAndroidComposeRule
+import androidx.compose.ui.test.onNode
 import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
@@ -18,7 +21,7 @@ class AppFlowUiTest {
     @Test
     fun stylePickerAndTabTransitionsKeepPanelsExclusive() {
         awaitText("Карта")
-        composeRule.onNodeWithText("Карта", substring = false).performClick()
+        clickTab("Карта")
         composeRule.onAllNodesWithText("Найти место на этой области карты").assertCountEquals(1)
 
         // Expanding the style picker must not leave the search panel stacked beneath it.
@@ -31,7 +34,7 @@ class AppFlowUiTest {
         composeRule.onAllNodesWithText("Найти место на этой области карты").assertCountEquals(1)
 
         // At the end of each transition, only the target page title remains beside its tab label.
-        composeRule.onNodeWithText("Места", substring = false).performClick()
+        clickTab("Места")
         awaitCount("Места", 2)
         composeRule.onNodeWithText("План поездки · 0", substring = false).performClick()
         composeRule.onAllNodesWithText("План пока пуст", substring = false).assertCountEquals(1)
@@ -39,7 +42,7 @@ class AppFlowUiTest {
         composeRule.onNodeWithText("Путеводитель", substring = false).performClick()
         composeRule.onAllNodesWithText("Тушетия", substring = false).assertCountEquals(1)
         composeRule.onNodeWithText("Каталог", substring = false).performClick()
-        composeRule.onNodeWithText("Утилиты", substring = false).performClick()
+        clickTab("Утилиты")
         awaitCount("Утилиты", 2)
         composeRule.onAllNodesWithText("Экстренная помощь", substring = false).assertCountEquals(1)
         awaitText("Состояние устройства")
@@ -51,14 +54,14 @@ class AppFlowUiTest {
         composeRule.onAllNodesWithText("Импорт GPX", substring = false).assertCountEquals(1)
         composeRule.onAllNodesWithText("Заметка к треку", substring = false).assertCountEquals(1)
 
-        composeRule.onNodeWithText("Ещё", substring = false).performClick()
+        clickTab("Ещё")
         awaitCount("Ещё", 2)
         awaitText("Хранение")
         awaitText("Внутренняя память")
         composeRule.waitForIdle()
         composeRule.onAllNodesWithText("Утилиты", substring = false).assertCountEquals(1)
 
-        composeRule.onNodeWithText("Карта", substring = false).performClick()
+        clickTab("Карта")
         awaitText("Стиль: Oflayn Natural")
         composeRule.onNodeWithText("Найти место на этой области карты").assertExists()
     }
@@ -66,8 +69,8 @@ class AppFlowUiTest {
     @Test
     fun guidebookAndEmergencyToolsExposeTheirExpandedContent() {
         awaitText("Карта")
-        composeRule.onNodeWithText("Карта", substring = false).performClick()
-        composeRule.onNodeWithText("Места", substring = false).performClick()
+        clickTab("Карта")
+        clickTab("Места")
         awaitCount("Места", 2)
         composeRule.onNodeWithText("Путеводитель", substring = false).performClick()
         awaitText("Тушетия")
@@ -76,8 +79,8 @@ class AppFlowUiTest {
         awaitText("Полезные сервисы и подготовка")
         awaitCount("Найти", 4)
 
-        composeRule.onNodeWithText("Карта", substring = false).performClick()
-        composeRule.onNodeWithText("Утилиты", substring = false).performClick()
+        clickTab("Карта")
+        clickTab("Утилиты")
         awaitText("Экстренная помощь")
         composeRule.onNodeWithText("Открыть", substring = false).performClick()
         awaitText("Если произошло ДТП")
@@ -87,6 +90,11 @@ class AppFlowUiTest {
         awaitText("Имя контакта")
         awaitText("Телефон с кодом страны")
         composeRule.onNodeWithText("Отмена", substring = false).performClick()
+    }
+
+    private fun clickTab(label: String) {
+        // Page headings can repeat the tab label; select only the clickable navigation item.
+        composeRule.onNode(hasText(label, substring = false) and hasClickAction()).performClick()
     }
 
     private fun awaitText(text: String) {
