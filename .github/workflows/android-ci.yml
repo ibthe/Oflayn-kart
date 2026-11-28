@@ -403,10 +403,16 @@ jobs:
           ANDROID_I_WANT_MY_TCG: "yes"
         with:
           api-level: 35
-          target: google_apis
+          # Android Test Devices image omits most consumer Google services.
+          # This keeps the emulator lighter and avoids unrelated background ANRs.
+          target: aosp_atd
           arch: x86_64
           profile: pixel_2
+          cores: 4
+          ram-size: 4096M
+          heap-size: 512M
           disable-animations: true
+          disable-spellchecker: true
           script: bash .github/scripts/android-emulator-smoke.sh
 
       - name: Upload emulator screenshots and logs
