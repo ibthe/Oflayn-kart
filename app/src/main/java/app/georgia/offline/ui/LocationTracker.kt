@@ -41,8 +41,9 @@ enum class LocationDialog { RATIONALE, ENABLE_GPS, DENIED }
 
 /**
  * Location updates shared by the whole app. Nothing starts until [start] is called from a user
- * action; updates stop when the app leaves the screen. Uses only the system location providers,
- * so no network permission is needed and no coordinates leave the device.
+ * action; updates stop when the app leaves the foreground. The app has no INTERNET permission
+ * and does not send coordinates to its own servers. Android's system location provider may use
+ * system services or network assistance when approximate location is selected.
  */
 class LocationTracker internal constructor() {
     var active by mutableStateOf(false)
