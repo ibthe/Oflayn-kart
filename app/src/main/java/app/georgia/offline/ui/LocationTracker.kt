@@ -41,14 +41,23 @@ enum class LocationDialog { RATIONALE, ENABLE_GPS, DENIED }
 
 /**
  * Location updates shared by the whole app. Nothing starts until [start] is called from a user
- * action; updates stop when the app leaves the screen. Uses only the system location providers,
- * so no network permission is needed and no coordinates leave the device.
+ * action; updates stop when the app leaves the foreground. The app has no INTERNET permission
+ * and does not send coordinates to its own servers. Android's system location provider may use
+ * system services or network assistance when approximate location is selected.
  */
 class LocationTracker internal constructor() {
     var active by mutableStateOf(false)
         internal set
     var location by mutableStateOf<Location?>(null)
         internal set
+
+    /** Last-known fixes are useful while acquiring GPS, but must not be used as a current position. */
+    fun hasFreshFix(maxAgeMillis: Long = 30_000L): Boolean {
+        val fix = location ?: return false
+        val ageNanos = android.os.SystemClock.elapsedRealtimeNanos() - fix.elapsedRealtimeNanos
+        return fix.elapsedRealtimeNanos > 0L && ageNanos in 0L..(maxAgeMillis * 1_000_000L)
+    }
+
     var error by mutableStateOf<String?>(null)
         internal set
 
@@ -68,8 +77,14 @@ class LocationTracker internal constructor() {
     fun start() {
         error = null
         when {
-            !hasPermission() -> dialog = LocationDialog.RATIONALE
-            !providerEnabled() -> dialog = LocationDialog.ENABLE_GPS
+            !hasPermission() -> {
+                active = false
+                dialog = LocationDialog.RATIONALE
+            }
+            !providerEnabled() -> {
+                active = false
+                dialog = LocationDialog.ENABLE_GPS
+            }
             else -> active = true
         }
     }
@@ -163,6 +178,7 @@ fun rememberLocationTracker(): LocationTracker {
                     tracker.error = null
                 }
                 override fun onProviderDisabled(provider: String) {
+                    tracker.active = false
                     tracker.error = "Геолокация отключена в настройках телефона."
                 }
             }
@@ -180,6 +196,7 @@ fun rememberLocationTracker(): LocationTracker {
                 tracker.error = "Android не разрешил доступ к геолокации."
                 tracker.active = false
             } catch (_: IllegalArgumentException) {
+                tracker.active = false
                 tracker.error = "На устройстве нет подходящего источника геолокации."
             }
             onDispose { runCatching { manager.removeUpdates(listener) } }
@@ -220,15 +237,17 @@ fun LocationDialogs(tracker: LocationTracker) {
     when (kind) {
         LocationDialog.RATIONALE -> Sheet(
             title = "Определить, где вы находитесь?",
-            body = "Приложению нужен доступ к геолокации, чтобы показать вас на карте и построить маршрут. " +
-                "Координаты остаются на телефоне и никуда не отправляются, в фоне положение не отслеживается.",
+            body = "Приложению нужен доступ к системной геолокации, чтобы показать ваше положение на карте и построить маршрут. " +
+                "Само приложение не имеет разрешения на доступ в интернет и не отправляет координаты на свои серверы. " +
+                "Приблизительное местоположение Android может определять с помощью системных служб. " +
+                "В фоне приложение не отслеживает ваше положение.",
             confirm = "Разрешить"
         ) {
             tracker.dismissDialog()
             tracker.requestPermission()
         }
         LocationDialog.ENABLE_GPS -> Sheet(
-            title = "GPS выключен",
+            title = "Геолокация выключена",
             body = "Включите геолокацию в настройках телефона и вернитесь в приложение: определение начнётся само.",
             confirm = "Открыть настройки"
         ) {

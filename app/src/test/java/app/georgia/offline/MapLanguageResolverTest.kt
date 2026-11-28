@@ -18,6 +18,18 @@ class MapLanguageResolverTest {
         assertEquals("ka", MapLanguageResolver.preferredLanguage(setOf("ka")))
     }
 
+    @Test fun allEnabledLanguagesAreReturnedInStableOrder() {
+        assertEquals(listOf("en", "ru", "ka"), MapLanguageResolver.orderedLanguages(setOf("ka", "ru", "en")))
+    }
+
+    @Test fun disabledLanguagesAreExcluded() {
+        assertEquals(listOf("ru", "ka"), MapLanguageResolver.orderedLanguages(setOf("ru", "ka")))
+    }
+
+    @Test fun unsupportedLanguageCodesAreIgnored() {
+        assertEquals(listOf("en"), MapLanguageResolver.orderedLanguages(setOf("en", "fr")))
+    }
+
     @Test fun noLanguageReturnsNullForMapsforgeDefault() {
         assertNull(MapLanguageResolver.preferredLanguage(emptySet()))
     }

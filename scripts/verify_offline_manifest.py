@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Verify the app does not request network or background-location permissions."""
+"""Verify the app has no internet traffic or background-location permission; read-only network status is allowed."""
 from __future__ import annotations
 
 import argparse
@@ -13,7 +13,6 @@ ANDROID_NS = "{http://schemas.android.com/apk/res/android}"
 TOOLS_NS = "{http://schemas.android.com/tools}"
 FORBIDDEN = {
     "android.permission.INTERNET",
-    "android.permission.ACCESS_NETWORK_STATE",
     "android.permission.ACCESS_WIFI_STATE",
     "android.permission.ACCESS_BACKGROUND_LOCATION",
 }
@@ -68,7 +67,7 @@ def main() -> int:
         return 1
 
     checked = len(set(manifests))
-    print(f"OK: checked {checked} manifest(s); no network/background-location permissions found.")
+    print(f"OK: checked {checked} manifest(s); INTERNET, Wi-Fi-state and background-location permissions are absent. Read-only ACCESS_NETWORK_STATE is allowed.")
     return 0
 
 

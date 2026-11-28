@@ -1,5 +1,6 @@
 package app.georgia.offline.ui
 
+import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.AnimatedVisibility
@@ -49,6 +50,7 @@ import org.mapsforge.core.model.LatLong
 import androidx.compose.ui.draw.rotate
 import androidx.compose.ui.graphics.toArgb
 import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.foundation.layout.RowScope
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.text.style.TextOverflow
@@ -59,6 +61,7 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
@@ -76,6 +79,7 @@ import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Switch
+import androidx.compose.material3.Slider
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -92,17 +96,25 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import java.io.File
 import app.georgia.offline.data.LocalSettings
+import app.georgia.offline.data.DemRepository
+import app.georgia.offline.data.TerrainRepository
 import app.georgia.offline.data.MapFileRepository
+import app.georgia.offline.data.MapStorageOption
+import app.georgia.offline.data.RasterPackageInfo
+import app.georgia.offline.data.RasterPackageRepository
 import app.georgia.offline.data.PoiRepository
+import app.georgia.offline.data.TrackRepository
+import app.georgia.offline.data.TripPlanRepository
+import app.georgia.offline.routing.TrackRouteBuilder
 import app.georgia.offline.domain.PoiLabels
 import app.georgia.offline.domain.GeoFormatting
 import app.georgia.offline.domain.MapLanguageResolver
-import app.georgia.offline.domain.FeatureCatalog
 import app.georgia.offline.ui.theme.AppPalette
 import app.georgia.offline.ui.theme.AppPalettes
 import app.georgia.offline.ui.theme.GeorgiaTheme
@@ -113,7 +125,7 @@ import app.georgia.offline.ui.theme.THEME_MODE_CHOICES
 import app.georgia.offline.ui.theme.ThemeMode
 import app.georgia.offline.ui.theme.paletteById
 import app.georgia.offline.ui.theme.resolveThemeMode
-import androidx.compose.material3.Slider
+
 
 private enum class AppTab(val label: String) {
     MAP("Карта"),
@@ -124,14 +136,129 @@ private enum class AppTab(val label: String) {
 
 @Composable
 fun GeorgiaOfflineApp(settings: LocalSettings) {
+    val context = LocalContext.current
     var selectedTab by rememberSaveable { mutableStateOf(AppTab.MAP.name) }
     val navigation = remember { NavigationState() }
     val tracker = rememberLocationTracker()
-    // Keep route data above AnimatedContent so switching tabs does not discard it.
+    val trackRecorder = remember { TrackRecorder() }
+    val trackRepository = remember(context) { TrackRepository(File(context.filesDir, "tracks")) }
+    val tripPlanRepository = remember(context) { TripPlanRepository(File(context.filesDir, "trip-plan.tsv")) }
+    var tripPlanRevision by remember { mutableStateOf(0) }
+    val tripPlanIds = remember(tripPlanRevision) { tripPlanRepository.list().map { it.poiId }.toSet() }
+    var recoveryLoaded by remember { mutableStateOf(false) }
+    var selectedTrackPoints by remember { mutableStateOf<List<LatLong>>(emptyList()) }
+    val coroutineScope = rememberCoroutineScope()
+    LaunchedEffect(Unit) {
+        val recovery = withContext(Dispatchers.IO) { trackRepository.loadRecovery() }
+        if (recovery != null) trackRecorder.restore(recovery)
+        recoveryLoaded = true
+    }
+    // Recording follows fresh foreground GPS fixes and survives tab switches.
+    val fix = tracker.location?.takeIf { tracker.hasFreshFix() }
+    LaunchedEffect(fix, trackRecorder.recording) {
+        if (trackRecorder.recording && fix != null) {
+            trackRecorder.addFix(fix)
+            trackRecorder.checkpointIfDue(fix.elapsedRealtimeNanos)?.let { checkpoint ->
+                val generation = trackRecorder.checkpointGeneration
+                coroutineScope.launch(Dispatchers.IO) {
+                    trackRepository.saveRecovery(checkpoint) {
+                        trackRecorder.checkpointGeneration == generation
+                    }
+                }
+            }
+        }
+    }
+    // Route state and its lifecycle belong to the app, not to the currently selected tab.
     val routeSession = remember { RouteSession() }
-    LaunchedEffect(navigation.target, navigation.origin, navigation.viaPoints.toList()) { routeSession.reset() }
+    LaunchedEffect(routeSession.route) {
+        val activeRoute = routeSession.route
+        if (activeRoute == null) {
+            routeSession.elevationProfile = null
+            routeSession.elevationLoading = false
+        } else {
+            routeSession.elevationLoading = true
+            try {
+                val geometry = buildList(activeRoute.pointCount) {
+                    repeat(activeRoute.pointCount) { index ->
+                        add(LatLong(activeRoute.lat(index), activeRoute.lon(index)))
+                    }
+                }
+                routeSession.elevationProfile = DemRepository.profile(context, geometry)
+            } catch (cancelled: kotlinx.coroutines.CancellationException) {
+                throw cancelled
+            } catch (_: Exception) {
+                routeSession.elevationProfile = null
+            } finally {
+                routeSession.elevationLoading = false
+            }
+        }
+    }
+    val speaker = remember { Speaker(context) }
+    DisposableEffect(Unit) { onDispose { speaker.shutdown() } }
+    val hostView = LocalView.current
+    DisposableEffect(routeSession.navigating) {
+        hostView.keepScreenOn = routeSession.navigating
+        onDispose { hostView.keepScreenOn = false }
+    }
+    LaunchedEffect(navigation.target, navigation.origin, navigation.viaPoints.toList()) {
+        if (!routeSession.followingTrack || navigation.target != null || navigation.origin != null || navigation.viaPoints.isNotEmpty()) {
+            routeSession.reset()
+        }
+    }
+
+    // Keep GPS progress, voice prompts, arrival detection and rerouting alive across tab changes.
+    LaunchedEffect(fix, routeSession.navigating, navigation.target, routeSession.followingTrack) {
+        val target = navigation.target
+        if (!routeSession.navigating || fix == null) return@LaunchedEffect
+        if (!routeSession.followingTrack && target == null) return@LaunchedEffect
+        when (routeSession.update(fix.latitude, fix.longitude, System.currentTimeMillis())) {
+            TrackingEvent.ARRIVED -> {
+                val announcement = if (routeSession.followingTrack) "Вы вернулись к началу записанного трека" else "Вы прибыли в пункт назначения"
+                if (routeSession.voice) speaker.speak(announcement)
+                android.widget.Toast.makeText(context, announcement, android.widget.Toast.LENGTH_LONG).show()
+                navigation.clearRoute()
+                routeSession.reset()
+            }
+            TrackingEvent.OFF_TRACK -> {
+                android.widget.Toast.makeText(context, "Вы отклонились от записанного трека", android.widget.Toast.LENGTH_SHORT).show()
+            }
+            TrackingEvent.REROUTE -> {
+                // Rerouting always starts at the latest GPS fix, never the old
+                // explicitly selected origin. Keep only via stops still ahead.
+                val destination = target ?: return@LaunchedEffect
+                val via = routeSession.remainingWaypoints()
+                coroutineScope.launch {
+                    routeSession.plan(
+                        context,
+                        fix.latitude,
+                        fix.longitude,
+                        destination.latitude,
+                        destination.longitude,
+                        rerouting = true,
+                        waypoints = via
+                    )
+                    if (routeSession.navigating && routeSession.voice && routeSession.message == null) {
+                        speaker.speak("Маршрут перестроен")
+                    }
+                }
+            }
+            TrackingEvent.NONE -> routeSession.pendingAnnouncement()?.let {
+                if (routeSession.voice) speaker.speak(it)
+            }
+        }
+    }
+
     // A tab name saved by an older version (for example the removed ROUTE tab) falls back to the map.
     val currentTab = AppTab.entries.firstOrNull { it.name == selectedTab } ?: AppTab.MAP
+    LaunchedEffect(currentTab) {
+        if (currentTab != AppTab.MAP) {
+            navigation.closeRouteMenu()
+            navigation.selectedPlaceId = null
+        }
+    }
+    BackHandler(enabled = currentTab != AppTab.MAP) {
+        selectedTab = AppTab.MAP.name
+    }
     val mode = resolveThemeMode(settings.themeMode, isSystemInDarkTheme())
     GeorgiaTheme(paletteId = settings.palette, mode = mode) {
         CompositionLocalProvider(LocalLayerAlpha provides settings.layerOpacity) {
@@ -143,18 +270,92 @@ fun GeorgiaOfflineApp(settings: LocalSettings) {
                 ) { padding ->
                     AnimatedContent(
                         targetState = currentTab,
-                        transitionSpec = { fadeIn(tween(280)) togetherWith fadeOut(tween(160)) },
+                        // Finish fading the previous tab before revealing the next one; avoid blended screens.
+                        transitionSpec = { fadeIn(tween(180, delayMillis = 160)) togetherWith fadeOut(tween(160)) },
                         label = "tabs"
                     ) { tab ->
                         when (tab) {
-                            AppTab.MAP -> MapScreen(Modifier.padding(padding), settings, navigation, tracker, routeSession)
-                            AppTab.DISCOVER -> DiscoverScreen(Modifier.padding(padding), settings, tracker) { name, latitude, longitude ->
-                                navigation.target = NavigationTarget(name, latitude, longitude)
-                                navigation.routeMenuVisible = true
-                                navigation.selectedPlaceId = null
-                                selectedTab = AppTab.MAP.name
-                            }
-                            AppTab.TOOLS -> ToolsScreen(Modifier.padding(padding), settings, tracker)
+                            AppTab.MAP -> MapScreen(
+                                Modifier.padding(padding),
+                                settings,
+                                navigation,
+                                tracker,
+                                routeSession,
+                                speaker,
+                                selectedTrackPoints,
+                                trackRecorder.recording,
+                                trackRecorder.points.size,
+                                tripPlanIds,
+                                onAddToTrip = { poi ->
+                                    if (tripPlanIds.size >= TripPlanRepository.MAX_STOPS) {
+                                        android.widget.Toast.makeText(context, "В плане может быть не более 20 мест", android.widget.Toast.LENGTH_SHORT).show()
+                                    } else if (tripPlanRepository.add(poi.poiId)) {
+                                        tripPlanRevision++
+                                        android.widget.Toast.makeText(context, "Добавлено в план поездки", android.widget.Toast.LENGTH_SHORT).show()
+                                    } else {
+                                        android.widget.Toast.makeText(context, "Место уже есть в плане", android.widget.Toast.LENGTH_SHORT).show()
+                                    }
+                                },
+                                onClearTrack = { selectedTrackPoints = emptyList() },
+                                onOpenTrackTools = { selectedTab = AppTab.TOOLS.name }
+                            )
+                            AppTab.DISCOVER -> DiscoverScreen(
+                                Modifier.padding(padding),
+                                settings,
+                                tracker,
+                                tripPlanRepository,
+                                tripPlanRevision,
+                                onNavigate = { name, latitude, longitude ->
+                                    routeSession.reset()
+                                    navigation.startRouteTo(NavigationTarget(name, latitude, longitude))
+                                    selectedTab = AppTab.MAP.name
+                                },
+                                onPlanRoute = { stops ->
+                                    if (stops.isNotEmpty()) {
+                                        routeSession.reset()
+                                        val destination = stops.last()
+                                        navigation.startRouteTo(NavigationTarget(destination.nameIn(settings.language), destination.latitude, destination.longitude))
+                                        stops.dropLast(1).forEach { poi ->
+                                            navigation.addWaypoint(NavigationTarget(poi.nameIn(settings.language), poi.latitude, poi.longitude))
+                                        }
+                                        selectedTab = AppTab.MAP.name
+                                    }
+                                },
+                                onTripPlanChanged = { tripPlanRevision++ }
+                            )
+                            AppTab.TOOLS -> ToolsScreen(
+                                Modifier.padding(padding),
+                                settings,
+                                tracker,
+                                trackRecorder,
+                                trackRepository,
+                                recoveryLoaded = recoveryLoaded,
+                                onShowTrack = { points ->
+                                    selectedTrackPoints = points.map { LatLong(it.latitude, it.longitude) }
+                                    routeSession.fitToken++
+                                    selectedTab = AppTab.MAP.name
+                                },
+                                onFollowTrack = { track ->
+                                    val current = tracker.location?.takeIf { tracker.hasFreshFix() }
+                                    if (current == null) {
+                                        tracker.start()
+                                        android.widget.Toast.makeText(context, "Сначала определите текущее положение по GPS, затем нажмите «Возврат» ещё раз.", android.widget.Toast.LENGTH_LONG).show()
+                                    } else {
+                                        val reverseRoute = TrackRouteBuilder.reverseFromNearest(
+                                            track, current.latitude, current.longitude, routeSession.profile
+                                        )
+                                        if (reverseRoute == null) {
+                                            android.widget.Toast.makeText(context, "Подойдите ближе к линии трека (не дальше 150 м). Если вы уже у начала, возврат не требуется.", android.widget.Toast.LENGTH_LONG).show()
+                                        } else {
+                                            navigation.clearRoute()
+                                            selectedTrackPoints = emptyList()
+                                            routeSession.beginTrackFollow(reverseRoute)
+                                            routeSession.fitToken++
+                                            selectedTab = AppTab.MAP.name
+                                        }
+                                    }
+                                }
+                            )
                             AppTab.SETTINGS -> SettingsScreen(Modifier.padding(padding), settings) { placeId ->
                                 navigation.selectedPlaceId = placeId
                                 navigation.focusToken++
@@ -275,22 +476,31 @@ private fun MapChip(
 ) = GlassPill(modifier = modifier, onClick = onClick, centered = centered, content = content)
 
 @Composable
-private fun MapStylePicker(settings: LocalSettings) {
-    val choices = listOf(
-        "classic" to "Классика",
-        "outdoor" to "Природа",
-        "motorider" to "Авто",
-        "biker" to "Велосипед"
-    )
-    var expanded by rememberSaveable { mutableStateOf(false) }
+private fun MapStylePicker(
+    settings: LocalSettings,
+    expanded: Boolean,
+    onExpandedChange: (Boolean) -> Unit,
+    rasterPackage: RasterPackageInfo?,
+    rasterEnabled: Boolean,
+    rasterOpacity: Float,
+    rasterImporting: Boolean,
+    rasterMessage: String?,
+    onImportRaster: () -> Unit,
+    onRasterEnabledChange: (Boolean) -> Unit,
+    onRasterOpacityChange: (Float) -> Unit,
+    onRemoveRaster: () -> Unit
+) {
+    val choices = LocalSettings.MAP_THEME_CHOICES
     val selectedLabel = choices.firstOrNull { it.first == settings.mapTheme }?.second ?: "Классика"
 
     Column(verticalArrangement = Arrangement.spacedBy(Space.xs)) {
-        MapChip(onClick = { expanded = !expanded }) {
+        MapChip(onClick = { onExpandedChange(!expanded) }) {
             Text(
                 "Стиль: $selectedLabel",
                 style = MaterialTheme.typography.labelLarge,
-                fontWeight = FontWeight.SemiBold
+                fontWeight = FontWeight.SemiBold,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis
             )
             Text(
                 if (expanded) "⌃" else "⌄",
@@ -312,7 +522,9 @@ private fun MapStylePicker(settings: LocalSettings) {
                 shadowElevation = 6.dp
             ) {
                 Column(
-                    Modifier.padding(horizontal = Space.s, vertical = Space.xs),
+                    Modifier.heightIn(max = 420.dp)
+                        .verticalScroll(rememberScrollState())
+                        .padding(horizontal = Space.s, vertical = Space.xs),
                     verticalArrangement = Arrangement.spacedBy(Space.xs)
                 ) {
                     choices.chunked(2).forEach { rowChoices ->
@@ -326,11 +538,49 @@ private fun MapStylePicker(settings: LocalSettings) {
                                     selected = settings.mapTheme == value,
                                     onClick = {
                                         settings.updateMapTheme(value)
-                                        expanded = false
+                                        onExpandedChange(false)
                                     }
                                 )
                             }
                         }
+                    }
+                    HorizontalDivider()
+                    Text("Спутниковый слой", style = MaterialTheme.typography.labelLarge)
+                    if (rasterPackage == null) {
+                        Text(
+                            "Импортируй ZIP формата Oflayn raster pack v1 (XYZ, 256×256 PNG/JPG). Приложение не загружает снимки из интернета.",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                        TextButton(onClick = onImportRaster, enabled = !rasterImporting) {
+                            Text(if (rasterImporting) "Проверка пакета…" else "Импортировать ZIP")
+                        }
+                    } else {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                                Text(rasterPackage.name, style = MaterialTheme.typography.bodySmall, fontWeight = FontWeight.SemiBold)
+                                Text("${rasterPackage.minZoom}–${rasterPackage.maxZoom} · ${rasterPackage.tileCount} тайлов", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                                Text(
+                                    "${rasterPackage.attribution} · ${rasterPackage.license}",
+                                    style = MaterialTheme.typography.labelSmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                    maxLines = 2,
+                                    overflow = TextOverflow.Ellipsis
+                                )
+                            }
+                            Switch(checked = rasterEnabled, onCheckedChange = onRasterEnabledChange)
+                        }
+                        if (rasterEnabled) {
+                            Text("Прозрачность", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                            Slider(value = rasterOpacity, onValueChange = onRasterOpacityChange, valueRange = 0.25f..0.9f)
+                        }
+                        Row(horizontalArrangement = Arrangement.spacedBy(Space.xs)) {
+                            TextButton(onClick = onImportRaster, enabled = !rasterImporting) { Text("Заменить") }
+                            TextButton(onClick = onRemoveRaster) { Text("Удалить") }
+                        }
+                    }
+                    if (rasterMessage != null) {
+                        Text(rasterMessage, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                     }
                 }
             }
@@ -342,7 +592,6 @@ private fun MapStylePicker(settings: LocalSettings) {
 private fun MapDetails(
     settings: LocalSettings,
     hasMap: Boolean,
-    preferredLanguage: String?,
     isImporting: Boolean,
     importMessage: String?,
     importError: Boolean,
@@ -350,12 +599,6 @@ private fun MapDetails(
 ) {
     Column(verticalArrangement = Arrangement.spacedBy(Space.s)) {
         if (hasMap) {
-            Text("Язык подписей", style = MaterialTheme.typography.titleMedium)
-            Text(
-                "${preferredLanguage ?: "по умолчанию"} · включено: ${languageSummary(settings.enabledLanguages)}. Карта показывает один язык; одновременные подписи на нескольких языках появятся отдельным слоем.",
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant
-            )
             OutlinedButton(onClick = onPickFile, modifier = Modifier.fillMaxWidth(), enabled = !isImporting) { Text("Заменить файл карты") }
             if (!settings.mapFileIsBundled) {
                 OutlinedButton(onClick = { settings.restoreBundledMap() }, modifier = Modifier.fillMaxWidth(), enabled = !isImporting) {
@@ -404,90 +647,252 @@ private fun openExternalNavigator(context: android.content.Context, target: Navi
 }
 
 @Composable
-private fun MapScreen(modifier: Modifier, settings: LocalSettings, navigation: NavigationState, tracker: LocationTracker, session: RouteSession) {
+private fun MapScreen(modifier: Modifier, settings: LocalSettings, navigation: NavigationState, tracker: LocationTracker, session: RouteSession, speaker: Speaker, selectedTrackPoints: List<LatLong>, isRecordingTrack: Boolean, recordedTrackPointCount: Int, tripPlanIds: Set<String>, onAddToTrip: (PoiRepository.PoiRecord) -> Unit, onClearTrack: () -> Unit, onOpenTrackTools: () -> Unit) {
     val context = LocalContext.current
     val coroutineScope = rememberCoroutineScope()
     // A full-map CI build packages offline/georgia.map in the APK. Keep imported
     // maps untouched; refresh only the bundled copy when its embedded SHA-256 changes.
-    LaunchedEffect(settings.mapDisabled, settings.mapFilePath, settings.mapFileIsBundled) {
+    LaunchedEffect(settings.mapDisabled, settings.mapFilePath, settings.mapFileIsBundled, settings.mapStorageId) {
         val savedPath = settings.mapFilePath
-        val savedFileExists = !savedPath.isNullOrBlank() && File(savedPath).isFile
+        val savedFile = savedPath?.let(::File)
+        val savedFileExists = savedFile?.isFile == true
         val keepUserImportedMap = savedFileExists && !settings.mapFileIsBundled
-        if (!settings.mapDisabled && !keepUserImportedMap) {
+        if (!settings.mapDisabled) {
             try {
-                val bundled = withContext(Dispatchers.IO) {
-                    MapFileRepository.installBundledMap(context)
+                if (keepUserImportedMap && savedFile != null) {
+                    val moved = withContext(Dispatchers.IO) {
+                        MapFileRepository.moveImportedMap(context, savedFile, settings.mapStorageId)
+                    }
+                    if (moved.absolutePath != savedFile.absolutePath) {
+                        settings.setMapFilePath(moved.absolutePath, bundled = false)
+                        withContext(Dispatchers.IO) {
+                            MapFileRepository.deletePreviousMap(savedFile, moved)
+                        }
+                    }
+                } else if (!keepUserImportedMap) {
+                    val bundled = withContext(Dispatchers.IO) {
+                        MapFileRepository.installBundledMap(context, settings.mapStorageId)
+                    }
+                    if (bundled != null) {
+                        if (settings.mapFileIsBundled && savedFile?.isFile == true && savedFile.canonicalFile != bundled.canonicalFile) {
+                            MapFileRepository.deletePreviousMap(savedFile, bundled)
+                        }
+                        settings.setMapFilePath(bundled.absolutePath, bundled = true)
+                    }
                 }
-                if (bundled != null) settings.setMapFilePath(bundled.absolutePath, bundled = true)
             } catch (error: Exception) {
                 android.widget.Toast.makeText(
                     context,
-                    error.message ?: "Не удалось установить встроенную карту.",
+                    error.message ?: "Не удалось подготовить карту на выбранном накопителе.",
                     android.widget.Toast.LENGTH_LONG
                 ).show()
             }
         }
     }
     val mapFile = settings.mapFilePath?.let(::File)?.takeIf { it.isFile && it.length() > 0L }
-    val preferredLanguage = MapLanguageResolver.preferredLanguage(settings.enabledLanguages)
+    var poiDatabase by remember { mutableStateOf<File?>(null) }
+    var poiDatabaseLoading by remember { mutableStateOf(true) }
+    var poiDatabaseMessage by remember { mutableStateOf<String?>(null) }
+    var mapSearchError by remember { mutableStateOf<String?>(null) }
+    var poiLookupJob by remember { mutableStateOf<Job?>(null) }
+    var selectedMapPoi by remember { mutableStateOf<PoiRepository.PoiRecord?>(null) }
+    DisposableEffect(Unit) { onDispose { poiLookupJob?.cancel() } }
+    var mapSearchQuery by rememberSaveable { mutableStateOf("") }
+    var mapSearchCategory by rememberSaveable { mutableStateOf("all") }
+    var mapSearchAlongRoute by rememberSaveable { mutableStateOf(false) }
+    var hillshadeDirectory by remember { mutableStateOf<File?>(null) }
+    var contoursMapFile by remember { mutableStateOf<File?>(null) }
+    var mapSearchResults by remember { mutableStateOf<List<PoiRepository.PoiRecord>>(emptyList()) }
+    var mapSearchViewport by remember { mutableStateOf<MapViewportBounds?>(null) }
+    var mapSearchLoading by remember { mutableStateOf(false) }
+    var mapStyleExpanded by remember { mutableStateOf(false) }
+    var rasterPackage by remember { mutableStateOf<RasterPackageInfo?>(null) }
+    var rasterEnabled by remember { mutableStateOf(false) }
+    var rasterOpacity by remember { mutableStateOf(0.62f) }
+    var rasterImporting by remember { mutableStateOf(false) }
+    var rasterMessage by remember { mutableStateOf<String?>(null) }
+    LaunchedEffect(settings.mapStorageId) {
+        rasterPackage = withContext(Dispatchers.IO) { RasterPackageRepository.active(context) }
+        rasterEnabled = rasterPackage != null && RasterPackageRepository.isEnabled(context)
+        rasterOpacity = RasterPackageRepository.opacity(context)
+    }
+    val rasterImportLauncher = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
+        if (uri != null) {
+            coroutineScope.launch {
+                rasterImporting = true
+                rasterMessage = null
+                try {
+                    val previousPackage = rasterPackage
+                    val imported = withContext(Dispatchers.IO) {
+                        RasterPackageRepository.importZip(
+                            context,
+                            uri,
+                            settings.mapStorageId ?: MapFileRepository.INTERNAL_STORAGE_ID
+                        ).also { installed ->
+                            if (previousPackage != null && previousPackage.id != installed.id) {
+                                RasterPackageRepository.remove(context, previousPackage)
+                            }
+                        }
+                    }
+                    rasterPackage = imported
+                    rasterEnabled = false
+                    rasterMessage = "Пакет «${imported.name}» установлен. Включи слой, когда понадобится."
+                } catch (error: Exception) {
+                    rasterMessage = error.message ?: "Не удалось импортировать спутниковый пакет."
+                } finally {
+                    rasterImporting = false
+                }
+            }
+        }
+    }
+    LaunchedEffect(Unit) {
+        val installation = PoiRepository.ensureInstalled(context)
+        poiDatabase = installation.database
+        poiDatabaseMessage = installation.message
+        poiDatabaseLoading = false
+    }
+    LaunchedEffect(settings.mapTheme) {
+        if (settings.mapTheme == "oflayn_natural" || settings.mapTheme == "oflayn_natural_dark") {
+            hillshadeDirectory = runCatching { DemRepository.ensureHillshadeInstalled(context) }.getOrNull()
+            contoursMapFile = runCatching { TerrainRepository.ensureContoursInstalled(context) }.getOrNull()
+        } else {
+            hillshadeDirectory = null
+            contoursMapFile = null
+        }
+    }
+    LaunchedEffect(session.route) {
+        if (session.route == null) mapSearchAlongRoute = false
+    }
+    LaunchedEffect(poiDatabase, if (mapSearchAlongRoute) null else mapSearchViewport, mapSearchQuery, mapSearchCategory, mapSearchAlongRoute, session.route) {
+        val db = poiDatabase ?: return@LaunchedEffect
+        val route = session.route
+        val searchRoute = mapSearchAlongRoute && route != null
+        val bounds = if (searchRoute) null else mapSearchViewport
+        if (!searchRoute && bounds == null) return@LaunchedEffect
+        if (!searchRoute && mapSearchQuery.isBlank() && mapSearchCategory == "all") {
+            mapSearchResults = emptyList()
+            mapSearchError = null
+            mapSearchLoading = false
+            return@LaunchedEffect
+        }
+        // Never leave old results tappable while a new query, route or viewport is being resolved.
+        mapSearchResults = emptyList()
+        mapSearchError = null
+        mapSearchLoading = true
+        delay(180)
+        try {
+            mapSearchResults = if (searchRoute && route != null) {
+                val points = List(route.pointCount) { index -> route.lat(index) to route.lon(index) }
+                PoiRepository.searchAlongRoute(
+                    db, mapSearchQuery, points, category = mapSearchCategory, limit = 60
+                )
+            } else {
+                PoiRepository.searchInBounds(
+                    db, mapSearchQuery, bounds!!.north, bounds.south, bounds.east, bounds.west,
+                    category = mapSearchCategory, limit = 60
+                )
+            }
+        } catch (error: Exception) {
+            mapSearchResults = emptyList()
+            mapSearchError = error.message ?: "Не удалось выполнить поиск по локальной базе."
+        } finally {
+            mapSearchLoading = false
+        }
+    }
+    val preferredLanguages = MapLanguageResolver.orderedLanguages(settings.mapLanguages)
     var recenterToken by remember { mutableIntStateOf(0) }
+    var recenterAfterFreshFix by remember { mutableStateOf(false) }
+    var recenterFixBaseline by remember { mutableLongStateOf(0L) }
     var zoomInToken by remember { mutableIntStateOf(0) }
     var zoomOutToken by remember { mutableIntStateOf(0) }
     val target = navigation.target
     // Choosing a destination is the person's request for guidance, so start positioning for it.
     // (A route that starts from a chosen point needs no GPS to be drawn.)
     LaunchedEffect(target, navigation.origin) { if (target != null && navigation.origin == null && !tracker.active) tracker.start() }
+    LaunchedEffect(tracker.location, tracker.error) {
+        val fix = tracker.location
+        if (tracker.error != null) {
+            recenterAfterFreshFix = false
+        } else if (recenterAfterFreshFix && fix != null && tracker.hasFreshFix() && fix.elapsedRealtimeNanos > recenterFixBaseline) {
+            recenterToken++
+            recenterAfterFreshFix = false
+        }
+    }
 
     val savedPlaces = settings.allPlaces()
     val mapPlaces = remember(savedPlaces) {
         savedPlaces.map { MapPlace(it.id, it.latitude, it.longitude, if (it.id == LocalSettings.CAR_PLACE_ID) PlaceKind.CAR else PlaceKind.SAVED) }
     }
     val selectedPlace = savedPlaces.firstOrNull { it.id == navigation.selectedPlaceId }
-
-    val speaker = remember { Speaker(context) }
-    DisposableEffect(Unit) { onDispose { speaker.shutdown() } }
-    val hostView = LocalView.current
-    DisposableEffect(session.navigating) {
-        hostView.keepScreenOn = session.navigating
-        onDispose { hostView.keepScreenOn = false }
+    BackHandler(
+        enabled = navigation.routeMenuVisible || navigation.pointSelection != null ||
+            selectedMapPoi != null || navigation.selectedPlaceId != null ||
+            (navigation.origin != null && target == null)
+    ) {
+        when {
+            navigation.routeMenuVisible || navigation.pointSelection != null -> navigation.closeRouteMenu()
+            selectedMapPoi != null -> selectedMapPoi = null
+            navigation.selectedPlaceId != null -> navigation.selectedPlaceId = null
+            navigation.origin != null && target == null -> navigation.origin = null
+        }
     }
-    // Route state is owned by GeorgiaOfflineApp and survives MapScreen leaving composition.
+    // Keep contextual cards mutually exclusive with the search panel so they do not stack over the map.
+    val showMapSearch = !session.navigating &&
+        navigation.pointSelection == null &&
+        !navigation.routeMenuVisible &&
+        (navigation.origin == null || session.route != null) &&
+        selectedMapPoi == null &&
+        selectedPlace == null
+
+    val showMapStylePicker = navigation.pointSelection == null &&
+        !navigation.routeMenuVisible &&
+        navigation.origin == null &&
+        selectedMapPoi == null &&
+        selectedPlace == null
+
+    LaunchedEffect(navigation.routeMenuVisible, navigation.pointSelection, navigation.origin, selectedMapPoi?.poiId, selectedPlace?.id) {
+        if (navigation.routeMenuVisible || navigation.pointSelection != null ||
+            navigation.origin != null || selectedMapPoi != null || selectedPlace != null
+        ) {
+            mapStyleExpanded = false
+        }
+    }
+
+    // Route tracking, speech and keep-screen-on are owned by GeorgiaOfflineApp so they
+    // continue while another tab is temporarily visible.
 
     fun planFrom(fix: android.location.Location?, rerouting: Boolean) {
         val goal = navigation.target ?: return
         // "Route from here" starts at the chosen point; otherwise at the GPS position.
-        val startLat = navigation.origin?.latitude ?: fix?.latitude ?: return
-        val startLon = navigation.origin?.longitude ?: fix?.longitude ?: return
+        val currentFix = fix?.takeIf { tracker.hasFreshFix() }
+        // An off-route recalculation must begin where the person is now. The explicit
+        // origin is used only for the initial route; reusing it would send the route
+        // backwards to the original starting point.
+        val start = navigation.resolveRouteStart(
+            currentFix?.latitude,
+            currentFix?.longitude,
+            rerouting
+        ) ?: return
+        val waypoints = if (rerouting) session.remainingWaypoints()
+            else navigation.viaPoints.map { it.latitude to it.longitude }
         coroutineScope.launch {
             session.plan(
                 context,
-                startLat,
-                startLon,
+                start.first,
+                start.second,
                 goal.latitude,
                 goal.longitude,
                 rerouting,
-                navigation.viaPoints.map { it.latitude to it.longitude }
+                waypoints
             )
             if (!rerouting && session.route != null) {
-                delay(7_000)
-                if (!session.navigating && session.route != null) session.fitToken++
+                delay(ROUTE_AUTO_ZOOM_DELAY_MS)
+                if (!session.navigating && session.route != null) {
+                    session.fitToken++
+                    zoomInToken++ // after fitting the route, remove the extra fit margin for a closer view
+                }
             }
             if (rerouting && session.navigating && session.voice && session.message == null) speaker.speak("Маршрут перестроен")
-        }
-    }
-
-    // Follow GPS fixes while navigating: progress, off-route detection and spoken guidance.
-    val fix = tracker.location
-    LaunchedEffect(fix, session.navigating) {
-        if (!session.navigating || fix == null || navigation.target == null) return@LaunchedEffect
-        when (session.update(fix.latitude, fix.longitude, System.currentTimeMillis())) {
-            TrackingEvent.ARRIVED -> {
-                if (session.voice) speaker.speak("Вы прибыли в пункт назначения")
-                android.widget.Toast.makeText(context, "Вы прибыли в пункт назначения", android.widget.Toast.LENGTH_LONG).show()
-                navigation.target = null
-            }
-            TrackingEvent.REROUTE -> planFrom(fix, rerouting = true)
-            TrackingEvent.NONE -> session.pendingAnnouncement()?.let { if (session.voice) speaker.speak(it) }
         }
     }
 
@@ -498,10 +903,15 @@ private fun MapScreen(modifier: Modifier, settings: LocalSettings, navigation: N
         ) {
             MapsforgeMapSurface(
                 mapFile = mapFile,
-                preferredLanguage = preferredLanguage,
+                preferredLanguages = preferredLanguages,
                 mapTheme = settings.mapTheme,
+                hillshadeDirectory = hillshadeDirectory,
+                contoursMapFile = contoursMapFile,
+                rasterPackage = rasterPackage,
+                rasterEnabled = rasterEnabled,
+                rasterOpacity = rasterOpacity,
                 modifier = Modifier.fillMaxSize(),
-                userLocation = tracker.location,
+                userLocation = tracker.location?.takeIf { tracker.hasFreshFix() },
                 destination = if (navigation.pointSelection == RoutePointRole.START) null else target?.let { LatLong(it.latitude, it.longitude) },
                 accentColor = MaterialTheme.colorScheme.tertiary.toArgb(),
                 destinationColor = MaterialTheme.colorScheme.primary.toArgb(),
@@ -509,24 +919,65 @@ private fun MapScreen(modifier: Modifier, settings: LocalSettings, navigation: N
                 zoomInToken = zoomInToken,
                 zoomOutToken = zoomOutToken,
                 routePoints = if (navigation.pointSelection == null) session.route?.points else null,
+                trackPoints = selectedTrackPoints,
                 viaPoints = session.route?.steps
                     ?.filter { it.maneuver == app.georgia.offline.routing.Maneuver.WAYPOINT }
                     ?.map { LatLong(it.lat, it.lon) }
                     ?: emptyList(),
                 routeColor = MaterialTheme.colorScheme.tertiary.toArgb(),
+                trackColor = MaterialTheme.colorScheme.secondary.toArgb(),
                 followUser = session.navigating,
                 fitToken = session.fitToken,
                 places = mapPlaces,
                 selectedPlaceId = navigation.selectedPlaceId,
-                origin = navigation.origin?.let { LatLong(it.latitude, it.longitude) },
+                selectedPoi = selectedMapPoi?.let { LatLong(it.latitude, it.longitude) },
+                searchResultPoints = if (showMapSearch && !mapStyleExpanded) mapSearchResults.take(6).map { LatLong(it.latitude, it.longitude) } else emptyList(),
+                // During turn-by-turn navigation the live GPS marker replaces the
+                // historical route-start marker; keeping both is visually misleading.
+                origin = navigation.origin?.takeUnless { session.navigating }?.let { LatLong(it.latitude, it.longitude) },
                 savedColor = MaterialTheme.colorScheme.primary.toArgb(),
                 carColor = MaterialTheme.colorScheme.tertiary.toArgb(),
                 originColor = MaterialTheme.colorScheme.tertiary.toArgb(),
                 focusToken = navigation.focusToken,
-                onPlaceTap = { id -> if (!session.navigating) navigation.selectedPlaceId = id },
+                onPlaceTap = { id ->
+                    if (!session.navigating) {
+                        poiLookupJob?.cancel()
+                        selectedMapPoi = null
+                        navigation.selectedPlaceId = id
+                    }
+                },
+                onViewportChanged = { bounds -> mapSearchViewport = bounds },
+                onSearchResultTap = { index ->
+                    poiLookupJob?.cancel()
+                    mapSearchResults.getOrNull(index)?.let { poi ->
+                        selectedMapPoi = poi
+                        navigation.selectedPlaceId = null
+                        mapSearchQuery = ""
+                        mapSearchResults = emptyList()
+                    }
+                },
+                onMapTap = { point ->
+                    if (!session.navigating) {
+                        poiLookupJob?.cancel()
+                        navigation.selectedPlaceId = null
+                        selectedMapPoi = null
+                        poiLookupJob = coroutineScope.launch {
+                            val database = poiDatabase ?: return@launch
+                            selectedMapPoi = try {
+                                PoiRepository.nearestPoi(database, point.latitude, point.longitude)
+                            } catch (_: Exception) {
+                                null
+                            }
+                        }
+                    }
+                },
                 onLongPress = { point ->
-                    if (!session.navigating) session.reset()
-                    navigation.chooseMapPoint("Точка на карте", point.latitude, point.longitude)
+                    if (!session.navigating) {
+                        poiLookupJob?.cancel()
+                        session.reset()
+                        selectedMapPoi = null
+                        navigation.chooseMapPoint("Точка на карте", point.latitude, point.longitude)
+                    }
                 },
                 onRouteDrag = { handle, index, point ->
                     if (!session.navigating) {
@@ -552,17 +1003,6 @@ private fun MapScreen(modifier: Modifier, settings: LocalSettings, navigation: N
                     }
                 }
             )
-            if (target != null && !navigation.routeMenuVisible && !session.navigating && navigation.pointSelection == null) {
-                MapChip(
-                    modifier = Modifier.align(Alignment.TopCenter).padding(Space.s),
-                    onClick = { navigation.openRouteMenu() }
-                ) {
-                    Text("Маршрут", style = MaterialTheme.typography.labelLarge, fontWeight = FontWeight.SemiBold)
-                    if (session.route != null) {
-                        Text(GeoMath.formatDistance(session.route!!.distanceMeters), style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.primary)
-                    }
-                }
-            }
             if (navigation.pointSelection != null) {
                 MapChip(
                     modifier = Modifier.align(Alignment.TopCenter).padding(Space.s),
@@ -584,38 +1024,173 @@ private fun MapScreen(modifier: Modifier, settings: LocalSettings, navigation: N
                         horizontalAlignment = Alignment.CenterHorizontally,
                         verticalArrangement = Arrangement.spacedBy(Space.xs)
                     ) {
-                        NavigationBanner(session.route!!, session.along)
-                        MapStylePicker(settings)
+                        NavigationBanner(session.route!!, session.along, gpsFresh = tracker.hasFreshFix())
+                        if (showMapStylePicker) {
+                            MapStylePicker(
+                                settings = settings,
+                                expanded = mapStyleExpanded,
+                                onExpandedChange = { mapStyleExpanded = it },
+                                rasterPackage = rasterPackage,
+                                rasterEnabled = rasterEnabled,
+                                rasterOpacity = rasterOpacity,
+                                rasterImporting = rasterImporting,
+                                rasterMessage = rasterMessage,
+                                onImportRaster = {
+                                    rasterImportLauncher.launch(arrayOf("application/zip", "application/x-zip-compressed", "application/octet-stream"))
+                                },
+                                onRasterEnabledChange = { enabled ->
+                                    rasterEnabled = enabled && rasterPackage != null
+                                    RasterPackageRepository.setEnabled(context, rasterEnabled)
+                                },
+                                onRasterOpacityChange = { opacity ->
+                                    rasterOpacity = opacity
+                                    RasterPackageRepository.setOpacity(context, opacity)
+                                },
+                                onRemoveRaster = {
+                                    val current = rasterPackage
+                                    if (current != null) {
+                                        coroutineScope.launch {
+                                            val removed = withContext(Dispatchers.IO) {
+                                                RasterPackageRepository.remove(context, current)
+                                            }
+                                            if (removed) {
+                                                rasterPackage = null
+                                                rasterEnabled = false
+                                                rasterMessage = "Спутниковый пакет удалён."
+                                            } else {
+                                                rasterMessage = "Не удалось удалить пакет. Проверь доступность накопителя."
+                                            }
+                                        }
+                                    }
+                                }
+                            )
+                        }
+                        rasterPackage?.takeIf { rasterEnabled }?.let { activeRasterPackage ->
+                            MapChip {
+                                Text(
+                                    "Снимки: ${activeRasterPackage.attribution} · ${activeRasterPackage.license}",
+                                    style = MaterialTheme.typography.labelSmall,
+                                    maxLines = 3,
+                                    overflow = TextOverflow.Clip
+                                )
+                            }
+                        }
+                        if (selectedTrackPoints.isNotEmpty()) {
+                            MapChip(onClick = onClearTrack) { Text("Скрыть GPX-трек") }
+                        }
+                        if (isRecordingTrack) {
+                            MapChip(onClick = onOpenTrackTools) { Text("Запись трека · $recordedTrackPointCount") }
+                        }
                     }
                 } else {
                     Column(
-                        Modifier.align(Alignment.TopStart).padding(Space.s),
+                        Modifier.align(Alignment.TopStart).fillMaxWidth().padding(Space.s),
                         verticalArrangement = Arrangement.spacedBy(Space.xs)
                     ) {
-                        MapChip {
-                            PulseDot(MaterialTheme.colorScheme.tertiary)
-                            Text("Без сети", style = MaterialTheme.typography.labelLarge)
-                        }
                         val trackerError = tracker.error
                         if (trackerError != null) {
-                            MapChip { Text(trackerError, style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.error) }
-                        } else if (tracker.active && tracker.location == null) {
+                            MapChip {
+                                Text(
+                                    trackerError,
+                                    style = MaterialTheme.typography.labelMedium,
+                                    color = MaterialTheme.colorScheme.error,
+                                    maxLines = 1,
+                                    overflow = TextOverflow.Ellipsis
+                                )
+                            }
+                        } else if (tracker.active && !tracker.hasFreshFix()) {
                             MapChip { Text("Ищу сигнал GPS…", style = MaterialTheme.typography.labelMedium) }
                         }
-                        MapStylePicker(settings)
+                        if (showMapStylePicker) {
+                            MapStylePicker(
+                                settings = settings,
+                                expanded = mapStyleExpanded,
+                                onExpandedChange = { mapStyleExpanded = it },
+                                rasterPackage = rasterPackage,
+                                rasterEnabled = rasterEnabled,
+                                rasterOpacity = rasterOpacity,
+                                rasterImporting = rasterImporting,
+                                rasterMessage = rasterMessage,
+                                onImportRaster = {
+                                    rasterImportLauncher.launch(arrayOf("application/zip", "application/x-zip-compressed", "application/octet-stream"))
+                                },
+                                onRasterEnabledChange = { enabled ->
+                                    rasterEnabled = enabled && rasterPackage != null
+                                    RasterPackageRepository.setEnabled(context, rasterEnabled)
+                                },
+                                onRasterOpacityChange = { opacity ->
+                                    rasterOpacity = opacity
+                                    RasterPackageRepository.setOpacity(context, opacity)
+                                },
+                                onRemoveRaster = {
+                                    val current = rasterPackage
+                                    if (current != null) {
+                                        coroutineScope.launch {
+                                            val removed = withContext(Dispatchers.IO) {
+                                                RasterPackageRepository.remove(context, current)
+                                            }
+                                            if (removed) {
+                                                rasterPackage = null
+                                                rasterEnabled = false
+                                                rasterMessage = "Спутниковый пакет удалён."
+                                            } else {
+                                                rasterMessage = "Не удалось удалить пакет. Проверь доступность накопителя."
+                                            }
+                                        }
+                                    }
+                                }
+                            )
+                        }
+                        rasterPackage?.takeIf { rasterEnabled }?.let { activeRasterPackage ->
+                            MapChip {
+                                Text(
+                                    "Снимки: ${activeRasterPackage.attribution} · ${activeRasterPackage.license}",
+                                    style = MaterialTheme.typography.labelSmall,
+                                    maxLines = 3,
+                                    overflow = TextOverflow.Clip
+                                )
+                            }
+                        }
+                        if (selectedTrackPoints.isNotEmpty()) {
+                            MapChip(onClick = onClearTrack) { Text("Скрыть GPX-трек") }
+                        }
+                        if (showMapSearch && !mapStyleExpanded) {
+                            MapViewportSearchBox(
+                                query = mapSearchQuery,
+                                onQueryChange = { mapSearchQuery = it },
+                                selectedCategory = mapSearchCategory,
+                                onCategoryChange = { mapSearchCategory = it },
+                                alongRouteAvailable = session.route != null,
+                                alongRoute = mapSearchAlongRoute,
+                                onAlongRouteChange = { mapSearchAlongRoute = it },
+                                results = mapSearchResults,
+                                loading = mapSearchLoading,
+                                databaseLoading = poiDatabaseLoading,
+                                databaseMessage = poiDatabaseMessage,
+                                searchError = mapSearchError,
+                                language = settings.language,
+                                onSelect = { poi ->
+                                    poiLookupJob?.cancel()
+                                    selectedMapPoi = poi
+                                    navigation.selectedPlaceId = null
+                                    mapSearchQuery = ""
+                                    mapSearchResults = emptyList()
+                                }
+                            )
+                        }
                     }
-                    Text(
-                        "© OpenStreetMap",
-                        modifier = Modifier.align(Alignment.TopEnd).padding(top = Space.m, end = Space.m),
-                        style = MaterialTheme.typography.labelSmall,
-                        color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f)
-                    )
                 }
             }
             Column(
                 Modifier.align(Alignment.BottomCenter).fillMaxWidth().padding(Space.s),
                 verticalArrangement = Arrangement.spacedBy(Space.xs)
             ) {
+                Text(
+                    "© OpenStreetMap contributors · Copernicus WorldDEM-90",
+                    modifier = Modifier.align(Alignment.End).padding(end = Space.s),
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f)
+                )
                 Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.Bottom) {
                     Column(verticalArrangement = Arrangement.spacedBy(Space.xs)) {
                         MapChip(modifier = Modifier.size(48.dp), onClick = { zoomInToken++ }, centered = true) {
@@ -625,6 +1200,13 @@ private fun MapScreen(modifier: Modifier, settings: LocalSettings, navigation: N
                             ZoomGlyph(color = MaterialTheme.colorScheme.onSurface, zoomIn = false)
                         }
                     }
+                    if (target != null && !navigation.routeMenuVisible && !session.navigating &&
+                        navigation.pointSelection == null && selectedMapPoi == null && selectedPlace == null
+                    ) {
+                        MapChip(onClick = { navigation.openRouteMenu() }) {
+                            Text("Маршрут", style = MaterialTheme.typography.labelLarge, fontWeight = FontWeight.SemiBold)
+                        }
+                    }
                     Column(horizontalAlignment = Alignment.End, verticalArrangement = Arrangement.spacedBy(Space.xs)) {
                         Row(
                                 Modifier.height(48.dp)
@@ -632,8 +1214,13 @@ private fun MapScreen(modifier: Modifier, settings: LocalSettings, navigation: N
                                     .clip(CircleShape)
                                     .background(MaterialTheme.colorScheme.accentBrush())
                                     .bounceClick {
-                                        tracker.start()
-                                        recenterToken++
+                                        if (!tracker.active || !tracker.hasFreshFix()) {
+                                            recenterFixBaseline = tracker.location?.elapsedRealtimeNanos ?: 0L
+                                            recenterAfterFreshFix = true
+                                            tracker.start()
+                                        } else {
+                                            recenterToken++
+                                        }
                                     }
                                     .padding(horizontal = Space.m),
                                 verticalAlignment = Alignment.CenterVertically,
@@ -641,7 +1228,7 @@ private fun MapScreen(modifier: Modifier, settings: LocalSettings, navigation: N
                             ) {
                                 CrosshairGlyph(MaterialTheme.colorScheme.onPrimary)
                                 Text(
-                                    if (tracker.location != null) "Где я" else "Найти меня",
+                                    if (tracker.active && tracker.hasFreshFix()) "Где я" else "Найти меня",
                                     style = MaterialTheme.typography.labelLarge,
                                     fontWeight = FontWeight.SemiBold,
                                     color = MaterialTheme.colorScheme.onPrimary
@@ -650,33 +1237,77 @@ private fun MapScreen(modifier: Modifier, settings: LocalSettings, navigation: N
                     }
                 }
                 val activeRoute = session.route
-                if (target != null && activeRoute != null && !session.navigating) {
-                    RouteSummaryBar(activeRoute)
-                }
-                if (target != null && session.navigating && activeRoute != null) {
-                        NavigationFooter(activeRoute, session) {
+                if ((target != null || session.followingTrack) && session.navigating && activeRoute != null) {
+                        NavigationFooter(
+                            activeRoute,
+                            session,
+                            speaker,
+                            gpsStatus = if (tracker.hasFreshFix()) null else tracker.error ?: "Жду сигнал GPS…",
+                            gpsError = tracker.error != null,
+                            location = tracker.location?.takeIf { tracker.hasFreshFix() }
+                        ) {
+                            speaker.stop()
                             session.reset()
                             navigation.clearRoute()
                         }
+                    } else if (selectedMapPoi != null) {
+                        val poi = selectedMapPoi!!
+                        val poiName = poi.nameIn(settings.language).ifBlank { "Без названия" }
+                        val alreadySaved = settings.allPlaces().any {
+                            kotlin.math.abs(it.latitude - poi.latitude) < 1e-5 &&
+                                kotlin.math.abs(it.longitude - poi.longitude) < 1e-5
+                        }
+                        MapPoiCard(
+                            poi = poi,
+                            name = poiName,
+                            distanceText = tracker.location?.takeIf { tracker.hasFreshFix() }?.let {
+                                GeoMath.formatDistance(GeoMath.distanceMeters(it.latitude, it.longitude, poi.latitude, poi.longitude)) + " от вас"
+                            },
+                            saved = alreadySaved,
+                            inTrip = poi.poiId in tripPlanIds,
+                            planFull = tripPlanIds.size >= 20,
+                            routeAvailable = session.route != null && !session.navigating,
+                            onAddToRoute = {
+                                val currentRoute = session.route
+                                if (currentRoute != null && navigation.target != null) {
+                                    val progress = currentRoute.project(poi.latitude, poi.longitude).alongMeters
+                                    val insertAt = navigation.viaPoints.indexOfFirst { via ->
+                                        currentRoute.project(via.latitude, via.longitude).alongMeters > progress
+                                    }.let { if (it < 0) navigation.viaPoints.size else it }
+                                    navigation.addWaypoint(NavigationTarget(poiName, poi.latitude, poi.longitude), insertAt)
+                                    // Preserve the exact start of the already-built route if its GPS fix has gone stale.
+                                    if (navigation.origin == null && currentRoute.points.size >= 2) {
+                                        navigation.origin = NavigationTarget("Начало маршрута", currentRoute.points[0], currentRoute.points[1])
+                                    }
+                                    session.reset()
+                                    selectedMapPoi = null
+                                    coroutineScope.launch { delay(120); planFrom(tracker.location, rerouting = false) }
+                                }
+                            },
+                            onRoute = {
+                                session.reset()
+                                navigation.startRouteTo(NavigationTarget(poiName, poi.latitude, poi.longitude))
+                                selectedMapPoi = null
+                            },
+                            onSave = { settings.addPlace(poiName, poi.latitude, poi.longitude) },
+                            onAddToTrip = { onAddToTrip(poi) },
+                            onClose = { selectedMapPoi = null }
+                        )
                     } else if (selectedPlace != null) {
                         val isCar = selectedPlace.id == LocalSettings.CAR_PLACE_ID
                         SavedPlaceCard(
                             place = selectedPlace,
-                            distanceText = tracker.location?.let {
+                            distanceText = tracker.location?.takeIf { tracker.hasFreshFix() }?.let {
                                 GeoMath.formatDistance(GeoMath.distanceMeters(it.latitude, it.longitude, selectedPlace.latitude, selectedPlace.longitude)) + " от вас"
                             },
                             isCar = isCar,
                             onRouteHere = {
-                                navigation.target = NavigationTarget(selectedPlace.name, selectedPlace.latitude, selectedPlace.longitude)
-                                navigation.routeMenuVisible = true
-                                navigation.pointSelection = null
-                                navigation.selectedPlaceId = null
+                                session.reset()
+                                navigation.startRouteTo(NavigationTarget(selectedPlace.name, selectedPlace.latitude, selectedPlace.longitude))
                             },
                             onRouteFrom = {
-                                navigation.origin = NavigationTarget(selectedPlace.name, selectedPlace.latitude, selectedPlace.longitude)
-                                navigation.routeMenuVisible = true
-                                navigation.pointSelection = null
-                                navigation.selectedPlaceId = null
+                                session.reset()
+                                navigation.startRouteFrom(NavigationTarget(selectedPlace.name, selectedPlace.latitude, selectedPlace.longitude))
                             },
                             onRename = { settings.renamePlace(selectedPlace.id, it) },
                             onDelete = {
@@ -692,7 +1323,7 @@ private fun MapScreen(modifier: Modifier, settings: LocalSettings, navigation: N
                         RoutePlannerCard(
                             target = target,
                             origin = navigation.origin,
-                            viaPoints = navigation.viaPoints,
+                            viaPoints = navigation.viaPoints.toList(),
                             onMoveWaypoint = { from, to ->
                                 navigation.moveWaypoint(from, to)
                                 session.reset()
@@ -706,27 +1337,38 @@ private fun MapScreen(modifier: Modifier, settings: LocalSettings, navigation: N
                             onSave = if (alreadySaved) null else {
                                 { settings.addPlace(target.name, target.latitude, target.longitude) }
                             },
-                            location = tracker.location,
+                            location = tracker.location?.takeIf { tracker.hasFreshFix() },
                             session = session,
                             onProfile = { option ->
                                 session.profile = option
-                                if (session.route != null) planFrom(tracker.location, rerouting = true)
+                                if (session.route != null) planFrom(tracker.location, rerouting = session.navigating)
                             },
                             selectionMode = navigation.pointSelection,
                             onChooseOrigin = { session.reset(); navigation.pointSelection = RoutePointRole.START },
                             onChooseDestination = { session.reset(); navigation.pointSelection = RoutePointRole.DESTINATION },
-                            onUseMyLocation = { navigation.useMyLocation() },
+                            onUseMyLocation = {
+                                session.reset()
+                                navigation.useMyLocation()
+                            },
                             onDestinationMyLocation = {
-                                tracker.location?.let { fix ->
+                                tracker.location?.takeIf { tracker.hasFreshFix() }?.let { fix ->
+                                    session.reset()
                                     navigation.target = NavigationTarget("Моё местоположение", fix.latitude, fix.longitude)
                                     navigation.routeMenuVisible = true
                                     navigation.pointSelection = null
                                 }
                             },
-                            onSwap = { navigation.swapEndpoints() },
+                            onSwap = {
+                                session.reset()
+                                navigation.swapEndpoints()
+                            },
                             onPlan = { planFrom(tracker.location, rerouting = false) },
                             onStart = {
                                 session.beginNavigation()
+                                mapStyleExpanded = false
+                                // Planning controls must leave the map when turn-by-turn guidance starts.
+                                // Closing the sheet preserves the route and all of its waypoints.
+                                navigation.closeRouteMenu()
                                 if (session.voice) activeRoute?.steps?.firstOrNull()?.let { speaker.speak(it.text) }
                             },
                             onExternal = { openExternalNavigator(context, target) },
@@ -741,12 +1383,307 @@ private fun MapScreen(modifier: Modifier, settings: LocalSettings, navigation: N
         PageColumn(modifier) {
             PageTitle("Карта")
             Panel {
-                Text("Карта не подключена", style = MaterialTheme.typography.titleMedium)
                 Text(
-                    "В этой сборке нет встроенного файла карты. Полная сборка GitHub Actions добавляет его в APK; можно также выбрать Mapsforge .map-файл Грузии вручную.",
+                    if (settings.mapDisabled) "Карта отключена" else "Карта недоступна",
+                    style = MaterialTheme.typography.titleMedium
+                )
+                Text(
+                    if (settings.mapDisabled) {
+                        "Карта была отключена в настройках. Включите встроенную карту, чтобы продолжить работу."
+                    } else {
+                        "Не удалось найти встроенную карту в этой сборке. Откройте «Ещё» → «О карте», чтобы выбрать Mapsforge .map-файл Грузии."
+                    },
                     style = MaterialTheme.typography.bodyMedium,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
+                if (settings.mapDisabled) {
+                    GradientButton(
+                        text = "Включить встроенную карту",
+                        onClick = settings::enableBundledMap,
+                        modifier = Modifier.fillMaxWidth()
+                    )
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun MapViewportSearchBox(
+    query: String,
+    onQueryChange: (String) -> Unit,
+    selectedCategory: String,
+    onCategoryChange: (String) -> Unit,
+    alongRouteAvailable: Boolean,
+    alongRoute: Boolean,
+    onAlongRouteChange: (Boolean) -> Unit,
+    results: List<PoiRepository.PoiRecord>,
+    loading: Boolean,
+    databaseLoading: Boolean,
+    databaseMessage: String?,
+    searchError: String?,
+    language: String,
+    onSelect: (PoiRepository.PoiRecord) -> Unit
+) {
+    val categories = listOf(
+        "all" to "Все", "food" to "Еда", "transport" to "Транспорт",
+        "medical" to "Аптеки и медицина", "tourism" to "Достопримечательности",
+        "historic" to "История", "nature" to "Природа", "shops" to "Магазины"
+    )
+    val resultsScrollState = rememberScrollState()
+    LaunchedEffect(query, selectedCategory, alongRoute, results) { resultsScrollState.scrollTo(0) }
+    Card(
+        modifier = Modifier.fillMaxWidth(),
+        shape = RoundedCornerShape(Radius.card),
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+        elevation = CardDefaults.cardElevation(defaultElevation = 8.dp)
+    ) {
+        Column(
+            Modifier.fillMaxWidth().padding(horizontal = Space.s, vertical = Space.xs),
+            verticalArrangement = Arrangement.spacedBy(Space.xs)
+        ) {
+            OutlinedTextField(
+                value = query,
+                onValueChange = onQueryChange,
+                modifier = Modifier.fillMaxWidth(),
+                singleLine = true,
+                shape = RoundedCornerShape(50),
+                placeholder = { Text(if (alongRoute) "Найти место вдоль маршрута" else "Найти место на этой области карты", maxLines = 1, overflow = TextOverflow.Ellipsis) },
+                trailingIcon = {
+                    if (query.isNotEmpty()) {
+                        TextButton(onClick = { onQueryChange("") }) { Text("Очистить") }
+                    }
+                },
+                colors = OutlinedTextFieldDefaults.colors(
+                    focusedContainerColor = MaterialTheme.colorScheme.surfaceContainerHighest,
+                    unfocusedContainerColor = MaterialTheme.colorScheme.surfaceContainerHighest,
+                    focusedBorderColor = MaterialTheme.colorScheme.primary,
+                    unfocusedBorderColor = MaterialTheme.colorScheme.outlineVariant
+                )
+            )
+            Row(
+                Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()),
+                horizontalArrangement = Arrangement.spacedBy(Space.xs)
+            ) {
+                if (alongRouteAvailable) {
+                    FilterChip(
+                        selected = alongRoute,
+                        onClick = { onAlongRouteChange(!alongRoute) },
+                        label = { Text("По маршруту", maxLines = 1) },
+                        shape = RoundedCornerShape(50)
+                    )
+                }
+                categories.forEach { (key, label) ->
+                    FilterChip(
+                        selected = selectedCategory == key,
+                        onClick = { onCategoryChange(key) },
+                        label = { Text(label, maxLines = 1) },
+                        shape = RoundedCornerShape(50)
+                    )
+                }
+            }
+            if (databaseLoading) {
+                Row(Modifier.fillMaxWidth().padding(vertical = Space.xs), horizontalArrangement = Arrangement.Center) {
+                    CircularProgressIndicator(modifier = Modifier.size(18.dp), strokeWidth = 2.dp)
+                    Text(
+                        "Подготавливаю офлайн-базу…",
+                        modifier = Modifier.padding(start = Space.s),
+                        style = MaterialTheme.typography.bodySmall
+                    )
+                }
+            } else if (databaseMessage != null) {
+                Text(
+                    databaseMessage,
+                    modifier = Modifier.padding(horizontal = Space.xs, vertical = Space.xs),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.error
+                )
+            } else if (searchError != null) {
+                Text(
+                    searchError,
+                    modifier = Modifier.padding(horizontal = Space.xs, vertical = Space.xs),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.error
+                )
+            } else if (query.isNotBlank() || selectedCategory != "all" || alongRoute) {
+                if (loading) {
+                    Row(Modifier.fillMaxWidth().padding(vertical = Space.xs), horizontalArrangement = Arrangement.Center) {
+                        CircularProgressIndicator(modifier = Modifier.size(18.dp), strokeWidth = 2.dp)
+                        Text(
+                            "Ищу офлайн…",
+                            modifier = Modifier.padding(start = Space.s),
+                            style = MaterialTheme.typography.bodySmall
+                        )
+                    }
+                } else if (results.isEmpty()) {
+                    Text(
+                        if (alongRoute) "Вдоль маршрута ничего не найдено" else "В видимой области ничего не найдено",
+                        modifier = Modifier.padding(horizontal = Space.xs, vertical = Space.xs),
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                } else {
+                    Column(
+                        Modifier.fillMaxWidth().heightIn(max = 240.dp).verticalScroll(resultsScrollState)
+                    ) {
+                        results.take(6).forEachIndexed { index, poi ->
+                            if (index > 0) HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
+                            Column(
+                                Modifier.fillMaxWidth().clickable { onSelect(poi) }.padding(horizontal = Space.xs, vertical = Space.xs),
+                                verticalArrangement = Arrangement.spacedBy(2.dp)
+                            ) {
+                                Text(
+                                    poi.nameIn(language).ifBlank { "Без названия" },
+                                    style = MaterialTheme.typography.bodyMedium,
+                                    fontWeight = FontWeight.SemiBold,
+                                    maxLines = 1,
+                                    overflow = TextOverflow.Ellipsis
+                                )
+                                Text(
+                                    "${PoiLabels.subcategoryLabel(poi.subcategory).ifBlank { poiCategoryLabel(poi.category) }} · ${"%.5f".format(java.util.Locale.ROOT, poi.latitude)}, ${"%.5f".format(java.util.Locale.ROOT, poi.longitude)}",
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                    maxLines = 1,
+                                    overflow = TextOverflow.Ellipsis
+                                )
+                            }
+                        }
+                    }
+                    if (results.size > 6) {
+                        Text(
+                            "Показаны первые 6 из ${results.size}. Уточните запрос.",
+                            modifier = Modifier.padding(horizontal = Space.xs),
+                            style = MaterialTheme.typography.labelSmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun MapPoiCard(
+    poi: PoiRepository.PoiRecord,
+    name: String,
+    distanceText: String?,
+    saved: Boolean,
+    inTrip: Boolean,
+    planFull: Boolean,
+    routeAvailable: Boolean,
+    onAddToRoute: () -> Unit,
+    onRoute: () -> Unit,
+    onSave: () -> Unit,
+    onAddToTrip: () -> Unit,
+    onClose: () -> Unit
+) {
+    var expanded by remember(poi.poiId) { mutableStateOf(false) }
+    val context = LocalContext.current
+    val details = poi.detailLines()
+    val detailScrollState = rememberScrollState()
+    LaunchedEffect(poi.poiId) { detailScrollState.scrollTo(0) }
+    val settlement = poi.taggedSettlement()
+    Card(
+        modifier = Modifier.fillMaxWidth()
+            .dismissOnSwipeDown(onClose, canDismiss = { detailScrollState.value == 0 }),
+        shape = RoundedCornerShape(Radius.card),
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+        elevation = CardDefaults.cardElevation(defaultElevation = 8.dp)
+    ) {
+        Column(
+            Modifier.fillMaxWidth().padding(Space.m),
+            verticalArrangement = Arrangement.spacedBy(Space.xs)
+        ) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Column(
+                    Modifier.weight(1f),
+                    verticalArrangement = Arrangement.spacedBy(2.dp)
+                ) {
+                    Text(
+                        name,
+                        style = MaterialTheme.typography.titleMedium,
+                        fontWeight = FontWeight.SemiBold,
+                        maxLines = 2,
+                        overflow = TextOverflow.Ellipsis
+                    )
+                    Text(
+                        listOfNotNull(
+                            PoiLabels.subcategoryLabel(poi.subcategory).ifBlank { poiCategoryLabel(poi.category) },
+                            settlement,
+                            distanceText
+                        ).joinToString(" · "),
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        maxLines = 2,
+                        overflow = TextOverflow.Ellipsis
+                    )
+                }
+                TextButton(onClick = onClose) { Text("Закрыть") }
+            }
+            Column(
+                Modifier.fillMaxWidth().heightIn(max = 160.dp).verticalScroll(detailScrollState),
+                verticalArrangement = Arrangement.spacedBy(Space.xxs)
+            ) {
+                details.take(if (expanded) details.size else 2).forEach { (label, value) ->
+                    Text(
+                        "$label: $value",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        maxLines = if (expanded) 3 else 1,
+                        overflow = TextOverflow.Ellipsis
+                    )
+                }
+            }
+            Row(
+                Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                TextButton(
+                    onClick = { expanded = !expanded },
+                    enabled = details.size > 2
+                ) {
+                    Text(if (expanded) "Свернуть" else "Подробнее")
+                }
+                TextButton(
+                    onClick = {
+                        val clipboard = context.getSystemService(android.content.Context.CLIPBOARD_SERVICE) as android.content.ClipboardManager
+                        clipboard.setPrimaryClip(
+                            android.content.ClipData.newPlainText(
+                                "Координаты $name",
+                                "${poi.latitude}, ${poi.longitude}"
+                            )
+                        )
+                        android.widget.Toast.makeText(context, "Координаты скопированы", android.widget.Toast.LENGTH_SHORT).show()
+                    }
+                ) {
+                    Text("Координаты")
+                }
+            }
+            Row(
+                Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(Space.xs),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Button(onClick = onRoute, modifier = Modifier.weight(1f)) {
+                    Text("Маршрут")
+                }
+                OutlinedButton(
+                    onClick = onSave,
+                    modifier = Modifier.weight(1f),
+                    enabled = !saved
+                ) {
+                    Text(if (saved) "В избранном" else "В избранное", maxLines = 1, softWrap = false)
+                }
+            }
+            if (routeAvailable) {
+                OutlinedButton(onClick = onAddToRoute, modifier = Modifier.fillMaxWidth()) {
+                    Text("Добавить остановку в маршрут")
+                }
+            }
+            TextButton(onClick = onAddToTrip, enabled = !inTrip && !planFull) {
+                Text(if (inTrip) "Уже в плане поездки" else if (planFull) "План заполнен" else "Добавить в план поездки")
             }
         }
     }
@@ -759,6 +1696,32 @@ private fun SettingsScreen(modifier: Modifier, settings: LocalSettings, onShowOn
     var isImportingMap by remember { mutableStateOf(false) }
     var mapImportMessage by remember { mutableStateOf<String?>(null) }
     var mapImportError by remember { mutableStateOf(false) }
+    var storageOptions by remember { mutableStateOf<List<MapStorageOption>>(emptyList()) }
+    var storageOptionsLoaded by remember { mutableStateOf(false) }
+    var isMovingMap by remember { mutableStateOf(false) }
+    var storageMessage by remember { mutableStateOf<String?>(null) }
+    var storageError by remember { mutableStateOf(false) }
+    var bundledHillshadeBytes by remember { mutableStateOf(0L) }
+    var installedHillshadeBytes by remember { mutableStateOf(0L) }
+    var bundledContoursBytes by remember { mutableStateOf(0L) }
+    var installedContoursBytes by remember { mutableStateOf(0L) }
+    LaunchedEffect(context, settings.mapTheme) {
+        val sizes = withContext(Dispatchers.IO) {
+            Triple(
+                DemRepository.bundledHillshadeBytes(context),
+                DemRepository.installedHillshadeBytes(context),
+                TerrainRepository.bundledContoursBytes(context) to TerrainRepository.installedContoursBytes(context)
+            )
+        }
+        bundledHillshadeBytes = sizes.first
+        installedHillshadeBytes = sizes.second
+        bundledContoursBytes = sizes.third.first
+        installedContoursBytes = sizes.third.second
+    }
+    LaunchedEffect(context) {
+        storageOptions = withContext(Dispatchers.IO) { MapFileRepository.availableStorageOptions(context) }
+        storageOptionsLoaded = true
+    }
     val mapPicker = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
         if (uri != null) {
             coroutineScope.launch {
@@ -766,10 +1729,16 @@ private fun SettingsScreen(modifier: Modifier, settings: LocalSettings, onShowOn
                 mapImportMessage = "Копирую и проверяю файл карты…"
                 mapImportError = false
                 try {
+                    val previousFile = settings.mapFilePath?.let(::File)
                     val file = withContext(Dispatchers.IO) {
-                        MapFileRepository.importGeorgiaMap(context, uri)
+                        MapFileRepository.importGeorgiaMap(context, uri, settings.mapStorageId)
                     }
                     settings.setMapFilePath(file.absolutePath, bundled = false)
+                    if (previousFile != null && previousFile.isFile) {
+                        withContext(Dispatchers.IO) {
+                            MapFileRepository.deletePreviousMap(previousFile, file)
+                        }
+                    }
                     mapImportMessage = "Карта проверена: ${file.length() / (1024 * 1024)} МБ"
                 } catch (error: Exception) {
                     mapImportError = true
@@ -780,21 +1749,8 @@ private fun SettingsScreen(modifier: Modifier, settings: LocalSettings, onShowOn
             }
         }
     }
-    val preferredLanguage = MapLanguageResolver.preferredLanguage(settings.enabledLanguages)
     val hasMap = settings.mapFilePath?.let(::File)?.let { it.isFile && it.length() > 0L } == true
     val openMapPicker: () -> Unit = { mapPicker.launch(arrayOf("*/*")) }
-    val folderPicker = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocumentTree()) { uri ->
-        if (uri != null) {
-            runCatching {
-                context.contentResolver.takePersistableUriPermission(
-                    uri,
-                    android.content.Intent.FLAG_GRANT_READ_URI_PERMISSION or android.content.Intent.FLAG_GRANT_WRITE_URI_PERMISSION
-                )
-            }
-            settings.setStorageTree(uri)
-        }
-    }
-
     PageColumn(modifier) {
         PageTitle("Ещё")
 
@@ -839,14 +1795,34 @@ private fun SettingsScreen(modifier: Modifier, settings: LocalSettings, onShowOn
 
         SectionLabel("Карта")
         Panel {
-            Text("Язык названий", style = MaterialTheme.typography.titleSmall)
+            Text("Язык названий в списке мест", style = MaterialTheme.typography.titleSmall)
             Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(Space.xs)) {
                 listOf("ru" to "Русский", "en" to "English", "ka" to "ქართული").forEach { (code, label) ->
                     SelectPill(label = label, selected = settings.language == code, onClick = { settings.updateLanguage(code) })
                 }
             }
             Text(
-                "Названия на карте и в списке мест показываются только на этом языке. Если перевода в данных нет, берётся ближайший доступный.",
+                "Выбирает язык названий в каталоге мест и карточках. Это не меняет язык подписей на карте.",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+            HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
+            Text("Языки подписей на карте", style = MaterialTheme.typography.titleSmall)
+            Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(Space.xs)) {
+                listOf("ru" to "Русский", "en" to "English", "ka" to "ქართული").forEach { (code, label) ->
+                    SelectPill(
+                        label = label,
+                        selected = code in settings.mapLanguages,
+                        onClick = { settings.updateMapLanguage(code, code !in settings.mapLanguages) }
+                    )
+                }
+            }
+            Text(
+                if (settings.mapLanguages.isEmpty()) {
+                    "Все переключатели выключены: карта показывает исходные названия из OSM."
+                } else {
+                    "Можно включить несколько языков одновременно. Доступность каждой подписи зависит от данных OpenStreetMap."
+                },
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant
             )
@@ -860,27 +1836,125 @@ private fun SettingsScreen(modifier: Modifier, settings: LocalSettings, onShowOn
 
         SectionLabel("Хранение")
         Panel {
-            Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.SpaceBetween) {
-                Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(Space.xxs)) {
-                    Text("Папка для карт", style = MaterialTheme.typography.titleSmall)
+            Text("Место хранения офлайн-карт", style = MaterialTheme.typography.titleSmall)
+            val selectedStorageId = settings.mapStorageId ?: MapFileRepository.INTERNAL_STORAGE_ID
+            val selectedStorageAvailable = storageOptions.any { it.id == selectedStorageId }
+            if (storageOptionsLoaded && !selectedStorageAvailable) {
+                Text(
+                    "Выбранная SD-карта не подключена. Подключи её или выбери внутреннюю память.",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.error
+                )
+            }
+            if (!storageOptionsLoaded) {
+                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(Space.xs)) {
+                    CircularProgressIndicator(modifier = Modifier.size(16.dp), strokeWidth = 2.dp)
+                    Text("Проверяю доступные накопители…", style = MaterialTheme.typography.bodySmall)
+                }
+            }
+            Column(verticalArrangement = Arrangement.spacedBy(Space.xs)) {
+                storageOptions.forEach { option ->
+                    val freeGb = option.availableBytes / (1024.0 * 1024.0 * 1024.0)
+                    val totalGb = option.totalBytes / (1024.0 * 1024.0 * 1024.0)
+                    SelectPill(
+                        label = option.label,
+                        selected = selectedStorageId == option.id,
+                        onClick = {
+                            if (selectedStorageId != option.id && storageOptionsLoaded && !isMovingMap && !isImportingMap) {
+                                coroutineScope.launch {
+                                    isMovingMap = true
+                                    storageError = false
+                                    storageMessage = "Подготавливаю выбранный накопитель…"
+                                    try {
+                                        val currentFile = settings.mapFilePath?.let(::File)
+                                        val userMap = currentFile?.isFile == true && !settings.mapFileIsBundled
+                                        if (userMap && currentFile != null) {
+                                            val moved = withContext(Dispatchers.IO) {
+                                                MapFileRepository.moveImportedMap(context, currentFile, option.id)
+                                            }
+                                            settings.updateMapStorageId(option.id)
+                                            settings.setMapFilePath(moved.absolutePath, bundled = false)
+                                            withContext(Dispatchers.IO) {
+                                                MapFileRepository.deletePreviousMap(currentFile, moved)
+                                            }
+                                            storageMessage = "Карта перенесена · ${moved.length() / (1024 * 1024)} МБ"
+                                        } else if (settings.mapDisabled) {
+                                            settings.updateMapStorageId(option.id)
+                                            storageMessage = "Место выбрано. Карта установится после включения офлайн-карты."
+                                        } else {
+                                            val bundled = withContext(Dispatchers.IO) {
+                                                MapFileRepository.installBundledMap(context, option.id)
+                                            }
+                                            settings.updateMapStorageId(option.id)
+                                            if (bundled != null) {
+                                                settings.setMapFilePath(bundled.absolutePath, bundled = true)
+                                                storageMessage = "Встроенная карта подготовлена · ${bundled.length() / (1024 * 1024)} МБ"
+                                            } else {
+                                                storageMessage = "Место выбрано, но встроенная карта в этой сборке отсутствует."
+                                            }
+                                        }
+                                    } catch (error: Exception) {
+                                        storageError = true
+                                        storageMessage = error.message ?: "Не удалось сменить место хранения."
+                                    } finally {
+                                        isMovingMap = false
+                                    }
+                                }
+                            }
+                        }
+                    )
                     Text(
-                        if (settings.storageTreeUri == null) "Внутреннее хранилище" else "Папка выбрана",
-                        style = MaterialTheme.typography.bodySmall,
+                        if (option.totalBytes > 0L) "Свободно: ${"%.1f".format(java.util.Locale.US, freeGb)} ГБ · Всего: ${"%.1f".format(java.util.Locale.US, totalGb)} ГБ" else "Свободное место недоступно",
+                        style = MaterialTheme.typography.labelSmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
                 }
-                TextButton(onClick = { folderPicker.launch(settings.storageUri()) }) { Text("Выбрать") }
-                if (settings.storageTreeUri != null) {
-                    TextButton(onClick = { settings.setStorageTree(null) }) { Text("Сбросить") }
+            }
+            if (isMovingMap) {
+                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(Space.xs)) {
+                    CircularProgressIndicator(modifier = Modifier.size(16.dp), strokeWidth = 2.dp)
+                    Text("Подготовка карты…", style = MaterialTheme.typography.bodySmall)
                 }
             }
-            if (settings.storageTreeUri != null) {
-                Text(
-                    "Пока карта копируется в защищённую папку приложения; прямое хранение на SD-карте появится вместе с менеджером данных.",
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
+            storageMessage?.let {
+                Text(it, style = MaterialTheme.typography.bodySmall, color = if (storageError) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.onSurfaceVariant)
             }
+            Text(
+                "На SD-карту помещаются большие офлайн-карты в папку приложения. Если карта извлечена, она станет недоступна до подключения.",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+            HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
+            Text("Офлайн-рельеф Copernicus GLO-90", style = MaterialTheme.typography.titleSmall)
+            Text(
+                if (bundledHillshadeBytes > 0L) {
+                    "Пакет в приложении: ${"%.1f".format(java.util.Locale.US, bundledHillshadeBytes / (1024.0 * 1024.0))} МБ · Во внутренней памяти: ${"%.1f".format(java.util.Locale.US, installedHillshadeBytes / (1024.0 * 1024.0))} МБ"
+                } else {
+                    "Пакет рельефа отсутствует в этой сборке."
+                },
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+            Text(
+                "HGT-данные копируются во внутреннюю память при выборе стиля Oflayn Natural. Они используются для затенения рельефа и не требуют интернета.",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+            Text("Контурные линии", style = MaterialTheme.typography.titleSmall)
+            Text(
+                if (bundledContoursBytes > 0L) {
+                    "Пакет в приложении: ${"%.1f".format(java.util.Locale.US, bundledContoursBytes / (1024.0 * 1024.0))} МБ · Во внутренней памяти: ${"%.1f".format(java.util.Locale.US, installedContoursBytes / (1024.0 * 1024.0))} МБ"
+                } else {
+                    "Пакет контурных линий отсутствует в этой сборке."
+                },
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+            Text(
+                "Векторный пакет контуров копируется во внутреннюю память при выборе Oflayn Natural и отображается без интернета.",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
         }
 
         SectionLabel("О карте")
@@ -888,7 +1962,6 @@ private fun SettingsScreen(modifier: Modifier, settings: LocalSettings, onShowOn
             MapDetails(
                 settings = settings,
                 hasMap = hasMap,
-                preferredLanguage = preferredLanguage,
                 isImporting = isImportingMap,
                 importMessage = mapImportMessage,
                 importError = mapImportError,
@@ -898,6 +1971,12 @@ private fun SettingsScreen(modifier: Modifier, settings: LocalSettings, onShowOn
 
         Text(
             "Без интернета, аккаунтов, рекламы и аналитики. Координаты никуда не отправляются. Данные карты © OpenStreetMap contributors, ODbL 1.0.",
+            modifier = Modifier.padding(horizontal = Space.xs, vertical = Space.xs),
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant
+        )
+        Text(
+            "Высоты: Copernicus WorldDEM-90, 90 м. Produced using Copernicus WorldDEM-90 © DLR e.V. 2010–2014 and © Airbus Defence and Space GmbH 2014–2018, provided under COPERNICUS by the European Union and ESA; all rights reserved. Высоты указаны относительно геоида EGM2008. Модель включает здания и растительность и не измеряет точную высоту дорожного покрытия.",
             modifier = Modifier.padding(horizontal = Space.xs, vertical = Space.xs),
             style = MaterialTheme.typography.bodySmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant
@@ -960,9 +2039,4 @@ internal fun InfoCard(title: String, body: String) {
     }
 }
 
-private fun languageSummary(languages: Set<String>): String {
-    val labels = listOf("en" to "English", "ru" to "Русский", "ka" to "ქართული")
-        .filter { it.first in languages }
-        .map { it.second }
-    return if (labels.isEmpty()) "Ни один язык не включён" else labels.joinToString(" · ")
-}
+

@@ -32,6 +32,7 @@ class RouterTest {
         assertEquals(5, graph.vertexCount)
         assertEquals(5, graph.edgeCount)
         assertEquals(10, graph.arcCount)
+        assertEquals(0, graph.turnRestrictionCount)
     }
 
     @Test
@@ -60,6 +61,31 @@ class RouterTest {
         assertTrue("car forward ${carForward.distanceMeters}", carForward.distanceMeters < 1500.0)
         assertTrue("car back ${carBack.distanceMeters}", carBack.distanceMeters > 1800.0)
         assertTrue("foot ${foot.distanceMeters}", foot.distanceMeters < 1500.0)
+    }
+
+    @Test
+    fun noTurnRestrictionForcesAnAlternateRoute() {
+        val bytes = javaClass.classLoader!!.getResourceAsStream("tiny-turns.bin")!!.readBytes()
+        val restrictedGraph = RoadGraph(ByteBuffer.wrap(bytes))
+        assertEquals(4, restrictedGraph.turnRestrictionCount)
+        val restrictedRouter = Router(restrictedGraph)
+        val result = restrictedRouter.route(RoutingProfile.CAR, 41.7001, 44.8002, 41.6901, 44.8100)
+        org.junit.Assert.assertNotNull("restricted route failed: ${result.failure}", result.route)
+        val route = result.route!!
+        assertTrue("route should detour around the prohibited turn: ${route.distanceMeters}", route.distanceMeters > 4_500.0)
+        assertTrue((0 until route.pointCount).any { kotlin.math.abs(route.lat(it) - 41.710) < 0.0001 })
+    }
+
+    @Test
+    fun onlyTurnRestrictionKeepsThePermittedExit() {
+        val bytes = javaClass.classLoader!!.getResourceAsStream("tiny-only-turns.bin")!!.readBytes()
+        val restrictedGraph = RoadGraph(ByteBuffer.wrap(bytes))
+        assertEquals(4, restrictedGraph.turnRestrictionCount)
+        val restrictedRouter = Router(restrictedGraph)
+        val result = restrictedRouter.route(RoutingProfile.CAR, 41.7001, 44.8002, 41.6901, 44.8100)
+        org.junit.Assert.assertNotNull("restricted route failed: ${result.failure}", result.route)
+        assertTrue("only_* should keep the permitted exit direct: ${result.route!!.distanceMeters}",
+            result.route!!.distanceMeters < 2_500.0)
     }
 
     @Test

@@ -2,6 +2,7 @@ package app.georgia.offline.data
 
 import android.content.Context
 import android.net.Uri
+import android.os.Environment
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import org.mapsforge.map.reader.MapFile
@@ -13,8 +14,60 @@ import java.nio.file.Files
 import java.nio.file.StandardCopyOption
 import java.security.MessageDigest
 
+data class MapStorageOption(
+    val id: String,
+    val label: String,
+    val directory: File,
+    val availableBytes: Long,
+    val totalBytes: Long,
+    val removable: Boolean
+)
+
 /** Installs, imports and validates Mapsforge .map files without network access. */
 object MapFileRepository {
+    const val INTERNAL_STORAGE_ID = "internal"
+
+    fun availableStorageOptions(context: Context): List<MapStorageOption> =
+        availableStorageOptions(
+            context,
+            context.getExternalFilesDirs(null),
+            { directory -> Environment.isExternalStorageRemovable(directory) },
+            { directory -> Environment.getExternalStorageState(directory) }
+        )
+
+    internal fun availableStorageOptions(
+        context: Context,
+        externalDirectories: Array<File?>,
+        isRemovable: (File) -> Boolean,
+        storageState: (File) -> String
+    ): List<MapStorageOption> {
+        val internalDirectory = File(context.filesDir, "maps")
+        val options = mutableListOf(
+            MapStorageOption(
+                INTERNAL_STORAGE_ID,
+                "Внутренняя память",
+                internalDirectory,
+                context.filesDir.usableSpace,
+                context.filesDir.totalSpace,
+                removable = false
+            )
+        )
+        externalDirectories.filterNotNull().forEach { appDirectory ->
+            if (isRemovable(appDirectory) && storageState(appDirectory) == Environment.MEDIA_MOUNTED) {
+                val mapDirectory = File(appDirectory, "maps")
+                options += MapStorageOption(
+                    appDirectory.absolutePath,
+                    "SD-карта",
+                    mapDirectory,
+                    appDirectory.usableSpace,
+                    appDirectory.totalSpace,
+                    removable = true
+                )
+            }
+        }
+        return options
+    }
+
     private const val BUNDLED_ASSET = "offline/georgia.map"
     private const val BUNDLED_MANIFEST = "offline/georgia-map-build.json"
     private const val MINIMUM_MAP_BYTES = 1024L
@@ -24,8 +77,8 @@ object MapFileRepository {
      * Installs the map embedded in this APK and refreshes it when a newer APK contains
      * a different SHA-256. The caller must not invoke this for a user-imported map.
      */
-    suspend fun installBundledMap(context: Context): File? = withContext(Dispatchers.IO) {
-        val destination = mapDestination(context)
+    suspend fun installBundledMap(context: Context, storageId: String? = null): File? = withContext(Dispatchers.IO) {
+        val destination = mapDestination(context, storageId)
         val marker = File(destination.parentFile, BUNDLED_HASH_MARKER)
         val expectedSha = readBundledMapSha256(context)
         val expectedSize = readBundledMapSize(context)
@@ -103,9 +156,18 @@ object MapFileRepository {
     }
 
     /** Imports a Mapsforge file selected via Android's Storage Access Framework. */
-    suspend fun importGeorgiaMap(context: Context, source: Uri): File = withContext(Dispatchers.IO) {
-        val destination = mapDestination(context)
+    suspend fun importGeorgiaMap(context: Context, source: Uri, storageId: String? = null): File = withContext(Dispatchers.IO) {
+        val destination = mapDestination(context, storageId)
         val temporary = File(destination.parentFile, "georgia-import.map.part")
+        val sourceLength = runCatching {
+            context.contentResolver.openAssetFileDescriptor(source, "r")?.use { it.length }
+        }.getOrNull()
+        if (sourceLength != null && sourceLength > 0L) {
+            val required = sourceLength + 32L * 1024L * 1024L
+            if ((destination.parentFile?.usableSpace ?: Long.MAX_VALUE) < required) {
+                error("Недостаточно свободного места для импорта карты на выбранный накопитель.")
+            }
+        }
 
         try {
             val input = context.contentResolver.openInputStream(source)
@@ -129,10 +191,49 @@ object MapFileRepository {
         }
     }
 
-    private fun mapDestination(context: Context): File {
-        val directory = File(context.filesDir, "maps")
+    /** Moves a user-imported map to the selected volume without deleting the source until validation succeeds. */
+    suspend fun moveImportedMap(context: Context, source: File, storageId: String?): File = withContext(Dispatchers.IO) {
+        require(source.isFile) { "Текущий файл карты недоступен." }
+        val destination = mapDestination(context, storageId)
+        if (source.canonicalFile == destination.canonicalFile) return@withContext source
+        val required = source.length() + 32L * 1024L * 1024L
+        val available = destination.parentFile?.usableSpace ?: Long.MAX_VALUE
+        if (available < required) {
+            error("Недостаточно свободного места на выбранном накопителе для переноса карты.")
+        }
+        val temporary = File(destination.parentFile, "georgia-move.map.part")
+        try {
+            source.copyTo(temporary, overwrite = true)
+            validateGeorgiaMap(temporary)
+            moveIntoPlace(temporary, destination)
+            File(destination.parentFile, BUNDLED_HASH_MARKER).delete()
+            destination
+        } catch (error: Exception) {
+            temporary.delete()
+            throw IllegalArgumentException(error.message ?: "Не удалось перенести карту.", error)
+        }
+    }
+
+    /** Deletes the previous managed copy only after settings point at the validated destination. */
+    fun deletePreviousMap(source: File, destination: File) {
+        if (runCatching { source.canonicalFile != destination.canonicalFile }.getOrDefault(false) &&
+            source.name == "georgia.map" && source.parentFile?.name == "maps"
+        ) {
+            source.delete()
+            File(source.parentFile, BUNDLED_HASH_MARKER).delete()
+        }
+    }
+
+    private fun mapDestination(context: Context, storageId: String? = null): File {
+        val option = if (storageId == null || storageId == INTERNAL_STORAGE_ID) {
+            availableStorageOptions(context).first()
+        } else {
+            availableStorageOptions(context).firstOrNull { it.id == storageId }
+                ?: error("Выбранный накопитель недоступен. Подключи SD-карту или выбери внутреннюю память.")
+        }
+        val directory = option.directory
         if (!directory.exists() && !directory.mkdirs()) {
-            error("Не удалось создать папку для карты.")
+            error("Не удалось создать папку для карты на выбранном накопителе.")
         }
         return File(directory, "georgia.map")
     }

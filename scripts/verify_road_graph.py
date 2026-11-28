@@ -23,7 +23,8 @@ def main() -> int:
         print("ERROR: road graph is missing or unexpectedly small.", file=sys.stderr)
         return 3
     graph = rg.Graph.load(path)
-    print(f"[roads-verify] vertices={graph.V:,}, edges={graph.E:,}, size={path.stat().st_size:,} bytes")
+    incline_edges = sum(1 for edge in graph.edges if edge[9] != 0 or edge[10] != 0)
+    print(f"[roads-verify] vertices={graph.V:,}, edges={graph.E:,}, turn restrictions={len(graph.turn_records):,}, incline-bearing edges={incline_edges:,}, size={path.stat().st_size:,} bytes")
     if graph.V < 20_000 or graph.E < 30_000:
         print("ERROR: road graph is much smaller than a country-wide network.", file=sys.stderr)
         return 4
@@ -38,17 +39,18 @@ def main() -> int:
         print("ERROR: graph extent is outside Georgia.", file=sys.stderr)
         return 4
     for name, start, end, low, high in ROUTES:
-        a = graph.nearest_vertex(rg.PROFILE_CAR, *start)
-        b = graph.nearest_vertex(rg.PROFILE_CAR, *end)
-        result = graph.route_vertices(rg.PROFILE_CAR, a, b) if a is not None and b is not None else None
-        if result is None:
-            print(f"ERROR: no car route found for {name}; the graph is disconnected.", file=sys.stderr)
-            return 5
-        seconds, metres = result
-        print(f"[roads-verify] {name}: {metres / 1000:.0f} km, {seconds / 3600:.1f} h")
-        if not low <= metres / 1000 <= high:
-            print(f"ERROR: {name} distance {metres / 1000:.0f} km is outside {low}-{high} km.", file=sys.stderr)
-            return 5
+        for profile, label in ((rg.PROFILE_CAR, "car"), (rg.PROFILE_MOTORCYCLE, "motorcycle")):
+            a = graph.nearest_vertex(profile, *start)
+            b = graph.nearest_vertex(profile, *end)
+            result = graph.route_vertices(profile, a, b) if a is not None and b is not None else None
+            if result is None:
+                print(f"ERROR: no {label} route found for {name}; the graph is disconnected or its access mask is missing.", file=sys.stderr)
+                return 5
+            seconds, metres = result
+            print(f"[roads-verify] {label} {name}: {metres / 1000:.0f} km, {seconds / 3600:.1f} h")
+            if not low <= metres / 1000 <= high:
+                print(f"ERROR: {label} {name} distance {metres / 1000:.0f} km is outside {low}-{high} km.", file=sys.stderr)
+                return 5
     print("Road graph verification passed.")
     return 0
 

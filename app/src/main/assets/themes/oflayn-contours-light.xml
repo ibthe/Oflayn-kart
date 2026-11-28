@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<rendertheme xmlns="http://mapsforge.org/renderTheme"
+    xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+    xsi:schemaLocation="http://mapsforge.org/renderTheme https://raw.githubusercontent.com/mapsforge/mapsforge/master/resources/renderTheme.xsd"
+    version="5"
+    map-background="#00000000"
+    map-background-outside="#00000000">
+    <rule e="way" k="contour" v="elevation" zoom-min="11" zoom-max="17">
+        <line stroke="#B9A985" stroke-width="0.55"/>
+    </rule>
+    <rule e="way" k="contour_major" v="yes" zoom-min="11" zoom-max="17">
+        <line stroke="#927B59" stroke-width="0.95"/>
+        <caption k="ele" font-size="9" fill="#806B4C" stroke="#F3F5EF" stroke-width="2.0" priority="2"/>
+    </rule>
+</rendertheme>

@@ -50,6 +50,9 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import app.georgia.offline.data.LocalSettings
 import app.georgia.offline.data.PoiRepository
+import app.georgia.offline.data.TripPlanRepository
+import app.georgia.offline.data.TripPlanStop
+import app.georgia.offline.data.GuidebookRepository
 import app.georgia.offline.domain.GeoFormatting
 import app.georgia.offline.domain.GeoMath
 import app.georgia.offline.domain.PoiLabels
@@ -69,7 +72,11 @@ internal fun DiscoverScreen(
     modifier: Modifier,
     settings: LocalSettings,
     tracker: LocationTracker,
-    onNavigate: (String, Double, Double) -> Unit
+    tripPlanRepository: TripPlanRepository,
+    tripPlanRevision: Int,
+    onNavigate: (String, Double, Double) -> Unit,
+    onPlanRoute: (List<PoiRepository.PoiRecord>) -> Unit,
+    onTripPlanChanged: () -> Unit
 ) {
     val context = LocalContext.current
     val language = settings.language
@@ -83,7 +90,12 @@ internal fun DiscoverScreen(
     var loading by remember { mutableStateOf(false) }
     var statusMessage by remember { mutableStateOf("Подготавливаю локальную базу объектов…") }
     var statusIsError by remember { mutableStateOf(false) }
-    val here = tracker.location
+    var planMode by rememberSaveable { mutableStateOf(false) }
+    var guidebookMode by rememberSaveable { mutableStateOf(false) }
+    var tripStops by remember { mutableStateOf(tripPlanRepository.list()) }
+    var tripPois by remember { mutableStateOf<List<PoiRepository.PoiRecord>>(emptyList()) }
+    var tripPoisLoading by remember { mutableStateOf(false) }
+    val here = tracker.location?.takeIf { tracker.hasFreshFix() }
 
     LaunchedEffect(Unit) {
         loading = true
@@ -95,10 +107,36 @@ internal fun DiscoverScreen(
         loading = false
     }
 
+    LaunchedEffect(tripPlanRevision, database) {
+        val stops = tripPlanRepository.list()
+        tripStops = stops
+        val localDatabase = database
+        tripPoisLoading = localDatabase != null && stops.isNotEmpty()
+        try {
+            tripPois = if (localDatabase != null) {
+                PoiRepository.byIds(localDatabase, stops.map { it.poiId })
+            } else {
+                emptyList()
+            }
+        } catch (error: Exception) {
+            tripPois = emptyList()
+            statusIsError = true
+            statusMessage = error.message ?: "Не удалось загрузить места плана."
+        } finally {
+            tripPoisLoading = false
+        }
+    }
+
     LaunchedEffect(database, query, selectedCategory) {
         val localDatabase = database ?: return@LaunchedEffect
-        delay(180)
+        // Do not leave old rows tappable while a new offline query is pending.
+        results = emptyList()
+        settlementOf = emptyMap()
+        expandedId = null
         loading = true
+        statusIsError = false
+        statusMessage = "Ищу в офлайн-базе…"
+        delay(180)
         try {
             val found = PoiRepository.search(localDatabase, query, selectedCategory)
             val settlements = PoiRepository.settlements(localDatabase)
@@ -128,6 +166,51 @@ internal fun DiscoverScreen(
 
     PageColumn(modifier) {
         PageTitle("Места")
+        Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(Space.xs)) {
+            SelectPill("Каталог", selected = !planMode && !guidebookMode, onClick = { planMode = false; guidebookMode = false })
+            SelectPill("План поездки · ${tripStops.size}", selected = planMode, onClick = { planMode = true; guidebookMode = false })
+            SelectPill("Путеводитель", selected = guidebookMode, onClick = { guidebookMode = true; planMode = false })
+        }
+        if (guidebookMode) {
+            GuidebookContent(onSearchPlace = { searchTerm ->
+                query = searchTerm
+                selectedCategory = "all"
+                guidebookMode = false
+            })
+        } else if (planMode) {
+            if (tripPoisLoading || (database == null && loading)) {
+                Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(Space.s)) {
+                    CircularProgressIndicator(modifier = Modifier.size(16.dp), strokeWidth = 2.dp)
+                    Text("Загружаю места плана…", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                }
+            } else if (database == null && tripStops.isNotEmpty()) {
+                InfoCard("Офлайн-база недоступна", statusMessage)
+            } else {
+            TripPlanContent(
+                stops = tripStops,
+                pois = tripPois,
+                language = language,
+                onPlanRoute = onPlanRoute,
+                onMove = { id, direction ->
+                    tripPlanRepository.move(id, direction)
+                    tripStops = tripPlanRepository.list()
+                },
+                onSetDay = { id, day ->
+                    tripPlanRepository.setDay(id, day)
+                    tripStops = tripPlanRepository.list()
+                },
+                onRemove = { id ->
+                    tripPlanRepository.remove(id)
+                    tripStops = tripPlanRepository.list()
+                    onTripPlanChanged()
+                },
+                onUpdateNote = { id, note ->
+                    tripPlanRepository.updateNote(id, note)
+                    tripStops = tripPlanRepository.list()
+                }
+            )
+            }
+        } else {
         OutlinedTextField(
             value = query,
             onValueChange = { query = it },
@@ -195,6 +278,20 @@ internal fun DiscoverScreen(
                         onToggle = { expandedId = if (expandedId == poi.poiId) null else poi.poiId },
                         onRoute = { onNavigate(name, poi.latitude, poi.longitude) },
                         onSave = { settings.addPlace(name, poi.latitude, poi.longitude) },
+                        inTrip = tripStops.any { it.poiId == poi.poiId },
+                        planFull = tripStops.size >= TripPlanRepository.MAX_STOPS,
+                        onAddToTrip = {
+                            if (tripStops.size >= 20) {
+                                statusMessage = "В плане может быть не более 20 мест."
+                            } else if (tripPlanRepository.add(poi.poiId)) {
+                                tripStops = tripPlanRepository.list()
+                                tripPois = (tripPois + poi).distinctBy { it.poiId }
+                                onTripPlanChanged()
+                                statusMessage = "Добавлено в план поездки."
+                            } else {
+                                statusMessage = "Это место уже есть в плане."
+                            }
+                        },
                         onCopy = { copyToClipboard(context, GeoFormatting.decimalCoordinates(poi.latitude, poi.longitude)) }
                     )
                 }
@@ -206,6 +303,173 @@ internal fun DiscoverScreen(
             style = MaterialTheme.typography.labelSmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant
         )
+        }
+    }
+}
+
+@Composable
+private fun GuidebookContent(onSearchPlace: (String) -> Unit) {
+    var expandedRegion by rememberSaveable { mutableStateOf<String?>(null) }
+    Column(verticalArrangement = Arrangement.spacedBy(Space.s)) {
+        Text(
+            "Офлайн-подборки мест, последовательности остановок и практические заметки по регионам.",
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant
+        )
+        GuidebookRepository.regions.forEach { region ->
+            Panel(padding = 0.dp) {
+                Column(Modifier.fillMaxWidth().padding(Space.m), verticalArrangement = Arrangement.spacedBy(Space.xs)) {
+                    Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                        Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                            Text(region.title, style = MaterialTheme.typography.titleMedium)
+                            Text(region.subtitle, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                        }
+                        TextButton(onClick = {
+                            expandedRegion = if (expandedRegion == region.id) null else region.id
+                        }) { Text(if (expandedRegion == region.id) "Свернуть" else "Подробнее") }
+                    }
+                    if (expandedRegion == region.id) {
+                        Text(region.overview, style = MaterialTheme.typography.bodyMedium)
+
+                        Text("Места", style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.primary)
+                        region.places.forEach { place ->
+                            Row(
+                                Modifier.fillMaxWidth(),
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(Space.xs)
+                            ) {
+                                Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                                    Text(place.name, style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.SemiBold)
+                                    Text(place.category, style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.primary)
+                                    Text(place.description, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                                }
+                                TextButton(onClick = { onSearchPlace(place.searchQuery) }) { Text("Найти") }
+                            }
+                        }
+
+                        Text("Маршруты и последовательности", style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.primary)
+                        region.routes.forEach { route ->
+                            val placeNames = route.stopIds.mapNotNull { id -> region.places.firstOrNull { it.id == id }?.name }
+                            Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                                Text(route.title, style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.SemiBold)
+                                Text(placeNames.joinToString(" → "), style = MaterialTheme.typography.bodySmall)
+                                Text(route.advice, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                            }
+                        }
+
+                        Text("Полезные сервисы и подготовка", style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.primary)
+                        region.services.forEach { service ->
+                            Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                                Text(service.title, style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.SemiBold)
+                                Text(service.advice, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                            }
+                        }
+
+                        Text("Лучшее время", style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.primary)
+                        Text(region.bestSeason, style = MaterialTheme.typography.bodySmall)
+                        Text("Дороги и безопасность", style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.primary)
+                        Text(region.roadAdvice, style = MaterialTheme.typography.bodySmall)
+                    }
+                }
+            }
+        }
+        InfoCard(
+            "Важно перед поездкой",
+            "Подборки и последовательности остановок — справочные, не рассчитанные маршруты. Наличие места в путеводителе не подтверждает его доступность, открытие или состояние дороги. Ищи объекты в офлайн-каталоге и проверяй текущие ограничения перед выездом."
+        )
+    }
+}
+
+@Composable
+private fun TripPlanContent(
+    stops: List<TripPlanStop>,
+    pois: List<PoiRepository.PoiRecord>,
+    language: String,
+    onPlanRoute: (List<PoiRepository.PoiRecord>) -> Unit,
+    onMove: (String, Int) -> Unit,
+    onSetDay: (String, Int) -> Unit,
+    onRemove: (String) -> Unit,
+    onUpdateNote: (String, String) -> Unit
+) {
+    val byId = remember(pois) { pois.associateBy { it.poiId } }
+    var editingNoteId by rememberSaveable { mutableStateOf<String?>(null) }
+    var noteDrafts by remember { mutableStateOf<Map<String, String>>(emptyMap()) }
+    if (stops.isEmpty()) {
+        InfoCard(
+            "План пока пуст",
+            "Добавляйте интересные места из каталога. План хранится на устройстве и доступен без интернета."
+        )
+        return
+    }
+    stops.groupBy { it.day }.toSortedMap().forEach { (day, dayStops) ->
+        Panel(padding = 0.dp) {
+            Column(Modifier.fillMaxWidth().padding(Space.m), verticalArrangement = Arrangement.spacedBy(Space.xs)) {
+                Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                    Column(Modifier.weight(1f)) {
+                        Text("День $day", style = MaterialTheme.typography.titleMedium)
+                        Text("${dayStops.size} мест", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    }
+                    OutlinedButton(
+                        onClick = { onPlanRoute(dayStops.mapNotNull { byId[it.poiId] }) },
+                        enabled = dayStops.any { byId[it.poiId] != null }
+                    ) { Text("Маршрут дня") }
+                }
+                dayStops.forEachIndexed { index, stop ->
+                    val poi = byId[stop.poiId]
+                    if (index > 0) HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
+                    Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                        Text(
+                            poi?.nameIn(language)?.ifBlank { "Без названия" } ?: "Место отсутствует в офлайн-базе",
+                            style = MaterialTheme.typography.bodyMedium,
+                            fontWeight = FontWeight.SemiBold,
+                            maxLines = 2,
+                            overflow = TextOverflow.Ellipsis
+                        )
+                        poi?.let {
+                            Text(
+                                "${poiCategoryLabel(it.category)} · ${"%.5f".format(java.util.Locale.US, it.latitude)}, ${"%.5f".format(java.util.Locale.US, it.longitude)}",
+                                style = MaterialTheme.typography.labelSmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        }
+                        stop.note.takeIf { it.isNotBlank() }?.let {
+                            Text(it, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                        }
+                        TextButton(
+                            onClick = {
+                                editingNoteId = if (editingNoteId == stop.poiId) null else stop.poiId
+                                noteDrafts = noteDrafts + (stop.poiId to stop.note)
+                            }
+                        ) { Text(if (stop.note.isBlank()) "Добавить заметку" else "Изменить заметку") }
+                        if (editingNoteId == stop.poiId) {
+                            OutlinedTextField(
+                                value = noteDrafts[stop.poiId].orEmpty(),
+                                onValueChange = { noteDrafts = noteDrafts + (stop.poiId to it.take(TripPlanRepository.MAX_NOTE_LENGTH)) },
+                                modifier = Modifier.fillMaxWidth(),
+                                label = { Text("Заметка к месту") },
+                                maxLines = 2
+                            )
+                            Row(horizontalArrangement = Arrangement.spacedBy(Space.xs)) {
+                                TextButton(onClick = {
+                                    onUpdateNote(stop.poiId, noteDrafts[stop.poiId].orEmpty())
+                                    editingNoteId = null
+                                }) { Text("Сохранить заметку") }
+                                TextButton(onClick = { editingNoteId = null }) { Text("Отмена") }
+                            }
+                        }
+                        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(Space.xxs)) {
+                            TextButton(onClick = { onMove(stop.poiId, -1) }, enabled = index > 0) { Text("↑") }
+                            TextButton(onClick = { onMove(stop.poiId, 1) }, enabled = index < dayStops.lastIndex) { Text("↓") }
+                        }
+                        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(Space.xxs)) {
+                            TextButton(onClick = { onSetDay(stop.poiId, day - 1) }, enabled = day > 1) { Text("День −") }
+                            TextButton(onClick = { onSetDay(stop.poiId, day + 1) }, enabled = day < TripPlanRepository.MAX_DAYS) { Text("День +") }
+                            TextButton(onClick = { onRemove(stop.poiId) }) { Text("Убрать") }
+                        }
+                    }
+                }
+            }
+        }
     }
 }
 
@@ -224,9 +488,12 @@ private fun PlaceRow(
     distance: String?,
     expanded: Boolean,
     saved: Boolean,
+    inTrip: Boolean,
+    planFull: Boolean,
     onToggle: () -> Unit,
     onRoute: () -> Unit,
     onSave: () -> Unit,
+    onAddToTrip: () -> Unit,
     onCopy: () -> Unit
 ) {
     val scheme = MaterialTheme.colorScheme
@@ -280,26 +547,31 @@ private fun PlaceRow(
                 if (settlementName != null) InfoLine("Населённый пункт", settlementName)
                 poi.detailLines().forEach { (label, value) -> InfoLine(label, value) }
                 InfoLine("Координаты", "${"%.5f".format(java.util.Locale.US, poi.latitude)}, ${"%.5f".format(java.util.Locale.US, poi.longitude)}")
-                Column(
+                // Keep the two primary actions side by side, with equal visual weight.
+                Row(
                     Modifier.fillMaxWidth(),
-                    verticalArrangement = Arrangement.spacedBy(Space.xs)
+                    horizontalArrangement = Arrangement.spacedBy(Space.xs),
+                    verticalAlignment = Alignment.CenterVertically
                 ) {
                     GradientButton(
-                        text = "Маршрут сюда",
+                        text = "Маршрут",
                         onClick = onRoute,
-                        modifier = Modifier.fillMaxWidth()
+                        modifier = Modifier.weight(1f)
                     )
                     OutlinedButton(
                         onClick = onSave,
-                        modifier = Modifier.fillMaxWidth(),
+                        modifier = Modifier.weight(1f),
                         enabled = !saved
                     ) {
                         Text(
-                            if (saved) "Сохранено" else "Сохранить",
+                            if (saved) "В избранном" else "В избранное",
                             maxLines = 1,
                             softWrap = false
                         )
                     }
+                }
+                TextButton(onClick = onAddToTrip, enabled = !inTrip && !planFull) {
+                    Text(if (inTrip) "В плане" else if (planFull) "План заполнен" else "Добавить в план поездки")
                 }
                 TextButton(onClick = onCopy) { Text("Копировать координаты") }
             }

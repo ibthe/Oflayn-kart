@@ -78,18 +78,26 @@ internal fun Modifier.bounceClick(enabled: Boolean = true, onClick: () -> Unit):
 } 
 
 /** Dismiss a floating map panel when the user swipes it down. */
-internal fun Modifier.dismissOnSwipeDown(onDismiss: () -> Unit): Modifier = composed {
+internal fun Modifier.dismissOnSwipeDown(
+    onDismiss: () -> Unit,
+    canDismiss: () -> Boolean = { true }
+): Modifier = composed {
     val density = LocalDensity.current
     val thresholdPx = with(density) { 72.dp.toPx() }
-    this.pointerInput(thresholdPx, onDismiss) {
+    this.pointerInput(thresholdPx, onDismiss, canDismiss) {
         var downwardDistance = 0f
         detectVerticalDragGestures(
             onVerticalDrag = { change, dragAmount ->
-                if (dragAmount > 0f) downwardDistance += dragAmount
-                change.consume()
+                // Let an expanded, scrollable card consume gestures until it reaches the top.
+                if (dragAmount > 0f && canDismiss() && !change.isConsumed) {
+                    downwardDistance += dragAmount
+                    change.consume()
+                } else if (dragAmount < 0f) {
+                    downwardDistance = 0f
+                }
             },
             onDragEnd = {
-                if (downwardDistance >= thresholdPx) onDismiss()
+                if (downwardDistance >= thresholdPx && canDismiss()) onDismiss()
                 downwardDistance = 0f
             },
             onDragCancel = { downwardDistance = 0f }
@@ -131,30 +139,25 @@ internal fun Modifier.appearInOrder(): Modifier {
 @Composable
 internal fun Modifier.aurora(): Modifier {
     val scheme = MaterialTheme.colorScheme
-    val transition = rememberInfiniteTransition(label = "aurora")
-    val phase by transition.animateFloat(
-        initialValue = 0f,
-        targetValue = 1f,
-        animationSpec = infiniteRepeatable(tween(16000, easing = LinearEasing), RepeatMode.Reverse),
-        label = "phase"
-    )
     val first = scheme.primary
     val second = scheme.tertiary
     val strength = if (scheme.background.luminance() < 0.5f) 0.20f else 0.13f
+    // Keep the ambient background static: an endless animation prevents Compose
+    // UI tests from becoming idle and needlessly redraws the whole app.
     return this.drawBehind {
         val w = size.width
         val h = size.height
         drawRect(
             Brush.radialGradient(
                 colors = listOf(first.copy(alpha = strength), Color.Transparent),
-                center = Offset(w * (0.10f + 0.55f * phase), h * 0.03f),
+                center = Offset(w * 0.10f, h * 0.03f),
                 radius = w * 0.95f
             )
         )
         drawRect(
             Brush.radialGradient(
                 colors = listOf(second.copy(alpha = strength * 0.85f), Color.Transparent),
-                center = Offset(w * (0.95f - 0.55f * phase), h * 0.32f),
+                center = Offset(w * 0.95f, h * 0.32f),
                 radius = w * 0.85f
             )
         )

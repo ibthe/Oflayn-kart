@@ -7,13 +7,15 @@ import unittest
 from pathlib import Path
 
 import road_graph_format as rg
+import build_road_graph as road_builder
 
 
 def way(refs, coords, **tags):
     tags.setdefault("highway", "residential")
     info = rg.classify_way(tags)
     assert info is not None, tags
-    return rg.WayRecord(info, list(refs), [round(c[0] * 1e6) for c in coords], [round(c[1] * 1e6) for c in coords])
+    way_id = tags.pop("way_id", 0)
+    return rg.WayRecord(info, list(refs), [round(c[0] * 1e6) for c in coords], [round(c[1] * 1e6) for c in coords], way_id)
 
 
 A, B, C = (41.700, 44.800), (41.700, 44.810), (41.700, 44.820)
@@ -23,31 +25,31 @@ MID = (41.7055, 44.8155)
 
 def sample_ways():
     return [
-        way([1, 2, 3], [A, B, C], name="Main street"),
-        way([4, 2, 5], [N, B, S], name="Cross street"),
-        way([3, 6, 4], [C, MID, N], oneway="yes", name="One way road"),
+        way([1, 2, 3], [A, B, C], name="Main street", way_id=100),
+        way([4, 2, 5], [N, B, S], name="Cross street", way_id=200),
+        way([3, 6, 4], [C, MID, N], oneway="yes", name="One way road", way_id=300),
     ]
 
 
 class ClassificationTest(unittest.TestCase):
     def test_residential_is_open_to_everyone_both_ways(self):
         info = rg.classify_way({"highway": "residential"})
-        self.assertEqual(info.fwd, 15)
-        self.assertEqual(info.back, 15)
+        self.assertEqual(info.fwd, 31)
+        self.assertEqual(info.back, 31)
 
     def test_oneway_restricts_vehicles_but_not_pedestrians(self):
         info = rg.classify_way({"highway": "residential", "oneway": "yes"})
-        self.assertEqual(info.fwd, 15)
-        self.assertEqual(info.back, rg.PROFILE_FOOT | rg.PROFILE_BIKE * 0)
+        self.assertEqual(info.fwd, 31)
+        self.assertEqual(info.back, rg.PROFILE_FOOT)
 
     def test_reverse_oneway(self):
         info = rg.classify_way({"highway": "residential", "oneway": "-1"})
         self.assertEqual(info.fwd, rg.PROFILE_FOOT)
-        self.assertEqual(info.back, 15)
+        self.assertEqual(info.back, 31)
 
     def test_motorway_is_car_only_and_oneway(self):
         info = rg.classify_way({"highway": "motorway"})
-        self.assertEqual(info.fwd, rg.PROFILE_CAR | rg.PROFILE_OFFROAD)
+        self.assertEqual(info.fwd, rg.PROFILE_CAR | rg.PROFILE_OFFROAD | rg.PROFILE_MOTORCYCLE)
         self.assertEqual(info.back, 0)
 
     def test_roundabout_is_oneway_and_flagged(self):
@@ -58,6 +60,19 @@ class ClassificationTest(unittest.TestCase):
     def test_footway_is_foot_only(self):
         info = rg.classify_way({"highway": "footway"})
         self.assertEqual(info.fwd, rg.PROFILE_FOOT)
+
+    def test_motorcycle_access_uses_motorcycle_specific_tags(self):
+        default = rg.classify_way({"highway": "residential"})
+        self.assertTrue(default.fwd & rg.PROFILE_MOTORCYCLE)
+        car_only = rg.classify_way({"highway": "residential", "motorcar": "no"})
+        self.assertTrue(car_only.fwd & rg.PROFILE_MOTORCYCLE)
+        motorcycle_banned = rg.classify_way({"highway": "residential", "motorcycle": "no", "motor_vehicle": "yes"})
+        self.assertFalse(motorcycle_banned.fwd & rg.PROFILE_MOTORCYCLE)
+        self.assertTrue(motorcycle_banned.fwd & rg.PROFILE_CAR)
+        track = rg.classify_way({"highway": "track"})
+        self.assertFalse(track.fwd & rg.PROFILE_MOTORCYCLE)
+        permitted_track = rg.classify_way({"highway": "track", "motorcycle": "yes"})
+        self.assertTrue(permitted_track.fwd & rg.PROFILE_MOTORCYCLE)
 
     def test_track_is_offroad_bike_foot_and_unpaved(self):
         info = rg.classify_way({"highway": "track"})
@@ -76,8 +91,124 @@ class ClassificationTest(unittest.TestCase):
         self.assertEqual(info.fwd & rg.PROFILE_CAR, 0)
         self.assertTrue(info.fwd & rg.PROFILE_FOOT)
 
+    def test_smoothness_penalties_and_vehicle_restrictions(self):
+        bad = rg.classify_way({"highway": "residential", "smoothness": "bad"})
+        self.assertTrue(bad.flags & rg.FLAG_ROUGH)
+        self.assertTrue(bad.fwd & rg.PROFILE_CAR)
+        self.assertTrue(bad.fwd & rg.PROFILE_OFFROAD)
+
+        horrible = rg.classify_way({"highway": "residential", "smoothness": "horrible"})
+        self.assertFalse(horrible.fwd & rg.PROFILE_CAR)
+        self.assertFalse(horrible.fwd & rg.PROFILE_BIKE)
+        self.assertTrue(horrible.fwd & rg.PROFILE_OFFROAD)
+        self.assertTrue(horrible.fwd & rg.PROFILE_FOOT)
+
+        very_horrible = rg.classify_way({"highway": "residential", "smoothness": "very_horrible"})
+        self.assertTrue(very_horrible.flags & rg.FLAG_SEVERE)
+        self.assertTrue(very_horrible.fwd & rg.PROFILE_OFFROAD)
+        self.assertFalse(very_horrible.fwd & rg.PROFILE_CAR)
+
+        self.assertIsNone(rg.classify_way({"highway": "residential", "smoothness": "impassable"}))
+
+    def test_incline_tags_mark_steep_roads_and_parse_common_formats(self):
+        for value in ("8%", "-12%", "up", "down", "10°"):
+            info = rg.classify_way({"highway": "residential", "incline": value})
+            self.assertTrue(info.flags & rg.FLAG_STEEP, value)
+        directional = rg.classify_way({"highway": "residential", "incline": "0%", "incline:backward": "12%"})
+        self.assertTrue(directional.flags & rg.FLAG_STEEP)
+        moderate = rg.classify_way({"highway": "residential", "incline": "5%"})
+        self.assertFalse(moderate.flags & rg.FLAG_STEEP)
+        unknown = rg.classify_way({"highway": "residential", "incline": "variable"})
+        self.assertFalse(unknown.flags & rg.FLAG_STEEP)
+
+    def test_steep_grade_penalizes_every_routing_profile(self):
+        for profile in rg.PROFILES.values():
+            normal = rg.speed_mps(profile, 12, 0)
+            steep = rg.speed_mps(profile, 12, rg.FLAG_STEEP)
+            self.assertGreater(normal, steep)
+            self.assertGreater(steep, 0.0)
+
+    def test_incline_values_preserve_forward_and_backward_direction(self):
+        generic = rg.classify_way({"highway": "residential", "incline": "12%"})
+        self.assertEqual((generic.incline_forward, generic.incline_backward), (12, -12))
+        directional = rg.classify_way({
+            "highway": "residential",
+            "incline": "5%",
+            "incline:forward": "8%",
+            "incline:backward": "-3%",
+        })
+        self.assertEqual((directional.incline_forward, directional.incline_backward), (8, -3))
+        down = rg.classify_way({"highway": "residential", "incline": "down"})
+        self.assertEqual((down.incline_forward, down.incline_backward), (-10, 10))
+
+    def test_directional_grade_changes_route_speed(self):
+        for profile in rg.PROFILES.values():
+            flat = rg.speed_mps(profile, 12, 0, 0)
+            uphill = rg.speed_mps(profile, 12, 0, 12)
+            downhill = rg.speed_mps(profile, 12, 0, -12)
+            self.assertGreater(flat, downhill)
+            self.assertGreater(downhill, uphill)
+
+    def test_motorcycle_speed_is_positive_and_penalizes_rough_surfaces(self):
+        paved = rg.speed_mps(rg.PROFILE_MOTORCYCLE, 12, 0)
+        rough = rg.speed_mps(rg.PROFILE_MOTORCYCLE, 12, rg.FLAG_ROUGH)
+        severe = rg.speed_mps(rg.PROFILE_MOTORCYCLE, 12, rg.FLAG_SEVERE)
+        self.assertGreater(paved, rough)
+        self.assertGreater(rough, severe)
+        self.assertGreater(rg.MAX_SPEED_MPS[rg.PROFILE_MOTORCYCLE], rg.MAX_SPEED_MPS[rg.PROFILE_CAR])
+
+    def test_smoothness_reduces_route_speed(self):
+        paved = rg.speed_mps(rg.PROFILE_OFFROAD, 15, 0)
+        rough = rg.speed_mps(rg.PROFILE_OFFROAD, 15, rg.FLAG_ROUGH)
+        severe = rg.speed_mps(rg.PROFILE_OFFROAD, 15, rg.FLAG_SEVERE)
+        self.assertGreater(paved, rough)
+        self.assertGreater(rough, severe)
+
     def test_name_prefers_russian(self):
         self.assertEqual(rg.classify_way({"highway": "residential", "name": "X", "name:ru": "Икс"}).name, "Икс")
+
+
+class RestrictionParsingTest(unittest.TestCase):
+    def setUp(self):
+        self.stats = {"restrictionRelations": 0, "nodeRestrictions": 0,
+                      "unsupportedViaWayRestrictions": 0, "unsupportedRestrictionRelations": 0}
+        self.members = [("w", "from", 100), ("n", "via", 2), ("w", "to", 200)]
+
+    def test_parses_node_via_no_turn_restriction(self):
+        records = road_builder._restriction_records(
+            {"type": "restriction", "restriction": "no_left_turn"}, self.members, self.stats
+        )
+        self.assertEqual(len(records), 5)
+        self.assertTrue(all(record.kind == rg.TURN_NO for record in records))
+        self.assertEqual({record.profile_mask for record in records}, set(rg.PROFILES.values()))
+
+    def test_except_limits_restriction_to_non_exempt_profiles(self):
+        records = road_builder._restriction_records(
+            {"type": "restriction", "restriction": "no_right_turn", "except": "bicycle;foot"},
+            self.members, self.stats
+        )
+        self.assertEqual({record.profile_mask for record in records},
+                         {rg.PROFILE_CAR, rg.PROFILE_OFFROAD, rg.PROFILE_MOTORCYCLE})
+
+    def test_no_entry_and_no_exit_multiple_members_expand_all_pairs(self):
+        members = [
+            ("w", "from", 100), ("w", "from", 101), ("n", "via", 2),
+            ("w", "to", 200), ("w", "to", 201),
+        ]
+        records = road_builder._restriction_records(
+            {"type": "restriction", "restriction": "no_entry"}, members, self.stats
+        )
+        self.assertEqual(len(records), 20)
+        self.assertEqual({record.from_way for record in records}, {100, 101})
+        self.assertEqual({record.to_way for record in records}, {200, 201})
+
+    def test_via_way_is_counted_as_unsupported_not_silently_misapplied(self):
+        members = [("w", "from", 100), ("w", "via", 300), ("w", "to", 200)]
+        records = road_builder._restriction_records(
+            {"type": "restriction", "restriction": "no_left_turn"}, members, self.stats
+        )
+        self.assertEqual(records, [])
+        self.assertEqual(self.stats["unsupportedViaWayRestrictions"], 1)
 
 
 class GraphBuildTest(unittest.TestCase):
@@ -89,6 +220,55 @@ class GraphBuildTest(unittest.TestCase):
         self.assertEqual(len(shaped), 1)
         self.assertEqual(sorted(data.names), ["Cross street", "Main street", "One way road"])
 
+    def test_dem_grade_is_derived_when_osm_incline_is_missing(self):
+        road = way([10, 11], [(41.7000, 44.8000), (41.7010, 44.8000)], name="DEM slope", way_id=901)
+
+        class FakeDem:
+            def sample(self, latitude, longitude):
+                return 100.0 if latitude < 41.7005 else 120.0
+
+        data = rg.build_graph([road], dem_sampler=FakeDem())
+        edge = data.edges[0]
+        self.assertEqual(1, data.dem_grade_edges)
+        self.assertGreaterEqual(edge[9], 17)
+        self.assertLessEqual(edge[9], 19)
+        self.assertEqual(edge[10], -edge[9])
+        self.assertTrue(edge[5] & rg.FLAG_STEEP)
+
+    def test_explicit_osm_incline_is_never_overwritten_by_dem(self):
+        road = way([10, 11], [(41.7000, 44.8000), (41.7010, 44.8000)],
+                   name="Tagged slope", incline="5%", way_id=902)
+
+        class FakeDem:
+            def sample(self, latitude, longitude):
+                return 100.0 if latitude < 41.7005 else 250.0
+
+        data = rg.build_graph([road], dem_sampler=FakeDem())
+        edge = data.edges[0]
+        self.assertEqual(0, data.dem_grade_edges)
+        self.assertEqual((5, -5), (edge[9], edge[10]))
+
+    def test_dem_grade_is_not_invented_when_samples_are_missing(self):
+        road = way([10, 11], [(41.7000, 44.8000), (41.7010, 44.8000)], name="No DEM", way_id=903)
+
+        class MissingDem:
+            def sample(self, latitude, longitude):
+                return None
+
+        data = rg.build_graph([road], dem_sampler=MissingDem())
+        self.assertEqual(0, data.dem_grade_edges)
+        self.assertEqual((0, 0), (data.edges[0][9], data.edges[0][10]))
+
+    def test_binary_roundtrip_preserves_directional_incline(self):
+        steep_way = way([10, 11], [A, B], name="Steep road", incline="12%")
+        data = rg.build_graph([steep_way])
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / "roads.bin"
+            rg.write_graph(path, data)
+            graph = rg.Graph.load(path)
+        self.assertEqual(graph.edge_incline_percent(0, 0), 12)
+        self.assertEqual(graph.edge_incline_percent(0, 1), -12)
+
     def test_binary_roundtrip(self):
         data = rg.build_graph(sample_ways())
         with tempfile.TemporaryDirectory() as directory:
@@ -98,6 +278,8 @@ class GraphBuildTest(unittest.TestCase):
         self.assertEqual((graph.V, graph.E), (5, 5))
         self.assertEqual(summary["arcCount"], 10)
         self.assertEqual(len(graph.arcs), 10)
+        self.assertTrue(graph.usable(rg.PROFILE_MOTORCYCLE, 0, 0))
+        self.assertTrue(graph.usable(rg.PROFILE_MOTORCYCLE, 0, 1))
         self.assertEqual(sorted(graph.names), sorted(data.names))
         shaped = [e for e in range(graph.E) if graph.edges[e][4] > 0]
         self.assertEqual(len(shaped), 1)
@@ -126,6 +308,14 @@ class RoutingTest(unittest.TestCase):
         self.assertLess(n_to_c_foot["distance_m"], 1500)    # pedestrians ignore the one-way
         self.assertLess(c_to_n_car["seconds"], n_to_c_car["seconds"])
 
+    def test_motorcycle_obeys_oneway_and_uses_its_own_access_mask(self):
+        c_to_n = self.graph.route(rg.PROFILE_MOTORCYCLE, 41.7, 44.8199, 41.7099, 44.8101)
+        n_to_c = self.graph.route(rg.PROFILE_MOTORCYCLE, 41.7099, 44.8101, 41.7, 44.8199)
+        self.assertIsNotNone(c_to_n)
+        self.assertIsNotNone(n_to_c)
+        self.assertLess(c_to_n["distance_m"], 1500)
+        self.assertGreater(n_to_c["distance_m"], 1800)
+
     def test_route_on_the_same_edge(self):
         result = self.graph.route(rg.PROFILE_CAR, 41.7, 44.8020, 41.7, 44.8060)
         self.assertAlmostEqual(result["distance_m"], rg.dist_m(41.7, 44.802, 41.7, 44.806), delta=10)
@@ -138,6 +328,89 @@ class RoutingTest(unittest.TestCase):
         self.assertLess(forward["distance_m"], 1000)
         self.assertGreater(backward["distance_m"], 1500)
 
+    def test_no_turn_restriction_is_serialized_and_enforced(self):
+        ways = [
+            way([1, 2], [A, B], name="Approach", way_id=100),
+            way([2, 3], [B, C], name="Forbidden exit", way_id=200),
+            way([2, 4, 3], [B, N, C], name="Alternative", way_id=300),
+            way([4, 5], [N, (41.715, 44.815)], name="Crossing", way_id=400),
+        ]
+        restriction = rg.TurnRestriction(100, 200, 2, rg.PROFILE_CAR, rg.TURN_NO)
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / "turns.bin"
+            summary = rg.write_graph(path, rg.build_graph(ways, [restriction]))
+            graph = rg.Graph.load(path)
+        self.assertGreater(summary["turnRestrictionCount"], 0)
+        approach = next(i for i in range(graph.E) if graph.edge_points(i)[0] == A and graph.edge_points(i)[-1] == B)
+        forbidden = next(i for i in range(graph.E) if graph.edge_points(i)[0] == B and graph.edge_points(i)[-1] == C)
+        self.assertFalse(graph.turn_allowed(rg.PROFILE_CAR, approach << 1, forbidden << 1))
+        self.assertTrue(graph.turn_allowed(rg.PROFILE_BIKE, approach << 1, forbidden << 1))
+        self.assertEqual(len(graph.turn_records), summary["turnRestrictionCount"])
+
+    def test_only_turn_restriction_blocks_other_exits(self):
+        ways = [
+            way([1, 2], [A, B], name="Approach", way_id=100),
+            way([2, 3], [B, C], name="Required exit", way_id=200),
+            way([2, 4, 3], [B, N, C], name="Alternative", way_id=300),
+            way([4, 5], [N, (41.715, 44.815)], name="Crossing", way_id=400),
+        ]
+        restriction = rg.TurnRestriction(100, 200, 2, rg.PROFILE_CAR, rg.TURN_ONLY)
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / "only.bin"
+            rg.write_graph(path, rg.build_graph(ways, [restriction]))
+            graph = rg.Graph.load(path)
+        approach_edge = next(i for i in range(graph.E) if graph.edge_points(i)[0] == A and graph.edge_points(i)[-1] == B)
+        required_edge = next(i for i in range(graph.E) if graph.edge_points(i)[0] == B and graph.edge_points(i)[-1] == C)
+        alternative_edge = next(i for i in range(graph.E) if graph.edge_points(i)[0] == B and graph.edge_points(i)[-1] == N)
+        self.assertFalse(graph.turn_allowed(rg.PROFILE_CAR, approach_edge << 1, alternative_edge << 1))
+        self.assertTrue(graph.turn_allowed(rg.PROFILE_CAR, approach_edge << 1, required_edge << 1))
+
+    def test_no_turn_restriction_forces_a_detour(self):
+        restriction = rg.TurnRestriction(100, 200, 2, rg.PROFILE_CAR, rg.TURN_NO)
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / "no-turn.bin"
+            rg.write_graph(path, rg.build_graph(sample_ways(), [restriction]))
+            graph = rg.Graph.load(path)
+        result = graph.route(rg.PROFILE_CAR, A[0], A[1], S[0], S[1])
+        self.assertIsNotNone(result)
+        self.assertGreater(result["distance_m"], 4_500.0)
+
+    def test_only_turn_restriction_keeps_the_allowed_exit(self):
+        restriction = rg.TurnRestriction(100, 200, 2, rg.PROFILE_CAR, rg.TURN_ONLY)
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / "only-turn.bin"
+            rg.write_graph(path, rg.build_graph(sample_ways(), [restriction]))
+            graph = rg.Graph.load(path)
+        result = graph.route(rg.PROFILE_CAR, A[0], A[1], S[0], S[1])
+        self.assertIsNotNone(result)
+        self.assertLess(result["distance_m"], 2_500.0)
+
+    def test_same_way_no_u_turn_blocks_only_the_reverse_arc(self):
+        ways = [
+            way([1, 2, 3], [A, B, C], name="Main", way_id=100),
+            way([4, 2, 5], [N, B, S], name="Cross", way_id=200),
+        ]
+        restriction = rg.TurnRestriction(100, 100, 2, rg.PROFILE_CAR, rg.TURN_NO, "no_u_turn")
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / "u-turn.bin"
+            rg.write_graph(path, rg.build_graph(ways, [restriction]))
+            graph = rg.Graph.load(path)
+        self.assertFalse(graph.turn_allowed(rg.PROFILE_CAR, 0, 1))
+        self.assertTrue(graph.turn_allowed(rg.PROFILE_CAR, 0, 2))
+
+    def test_same_way_only_u_turn_blocks_continuing_straight(self):
+        ways = [
+            way([1, 2, 3], [A, B, C], name="Main", way_id=100),
+            way([4, 2, 5], [N, B, S], name="Cross", way_id=200),
+        ]
+        restriction = rg.TurnRestriction(100, 100, 2, rg.PROFILE_CAR, rg.TURN_ONLY, "only_u_turn")
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / "only-u-turn.bin"
+            rg.write_graph(path, rg.build_graph(ways, [restriction]))
+            graph = rg.Graph.load(path)
+        self.assertTrue(graph.turn_allowed(rg.PROFILE_CAR, 0, 1))
+        self.assertFalse(graph.turn_allowed(rg.PROFILE_CAR, 0, 2))
+
     def test_snap_too_far_returns_none(self):
         self.assertIsNone(self.graph.route(rg.PROFILE_CAR, 42.5, 44.8, 41.7, 44.81, max_snap_m=2000))
 
@@ -147,7 +420,7 @@ class RoutingTest(unittest.TestCase):
             path = Path(directory) / "roads.bin"
             rg.write_graph(path, rg.build_graph(ways))
             graph = rg.Graph.load(path)
-        self.assertIsNone(graph.route(rg.PROFILE_CAR, 41.6951, 44.8001, 41.6951, 44.8199, max_snap_m=300) and None)
+        self.assertIsNone(graph.route(rg.PROFILE_CAR, 41.6951, 44.8001, 41.6951, 44.8199, max_snap_m=300))
         foot = graph.route(rg.PROFILE_FOOT, 41.6951, 44.8001, 41.6951, 44.8199)
         self.assertIsNotNone(foot)
         self.assertLess(foot["distance_m"], 1800)

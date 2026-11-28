@@ -5,7 +5,7 @@ import sqlite3
 import tempfile
 import unittest
 from pathlib import Path
-from build_poi_database import ProgressReporter, PoiInput, classify_tags, create_database, insert_poi, normalise_search_text, point_in_bbox, polygon_centroid
+from build_poi_database import ProgressReporter, PoiInput, classify_tags, create_database, deduplicate_pois, insert_poi, normalise_search_text, point_in_bbox, polygon_centroid, multipolygon_centroid
 from verify_poi_database import verify
 
 
@@ -69,6 +69,47 @@ class PoiDatabaseTests(unittest.TestCase):
             self.assertEqual(hits("აეროპორტი"), {"node/3"})
             connection.close()
 
+    def test_same_place_node_way_relation_duplicates_merge_without_merging_nearby_businesses(self):
+        relation = PoiInput(
+            poi_id="relation/300", osm_type="relation", osm_id=300, category="food",
+            subcategory="cafe", name="Cafe North", name_en="Cafe North", name_ru="Кафе Север",
+            name_ka="ჩრდილოეთის კაფე", latitude=41.70000, longitude=44.80000,
+            tags_json='{"name":"Cafe North","brand":"North Coffee"}',
+        )
+        way = PoiInput(
+            poi_id="way/200", osm_type="way", osm_id=200, category="food",
+            subcategory="cafe", name="Cafe North", name_en="Cafe North", name_ru="",
+            name_ka="", latitude=41.70005, longitude=44.80003,
+            tags_json='{"name":"Cafe North","website":"https://north.example"}',
+        )
+        node = PoiInput(
+            poi_id="node/100", osm_type="node", osm_id=100, category="food",
+            subcategory="cafe", name="Cafe North", name_en="", name_ru="Кафе Север",
+            name_ka="", latitude=41.70004, longitude=44.80002,
+            tags_json='{"name":"Cafe North","phone":"+995555010203"}',
+        )
+        nearby_same_name = PoiInput(
+            poi_id="node/101", osm_type="node", osm_id=101, category="food",
+            subcategory="cafe", name="Cafe North", name_en="Cafe North", name_ru="",
+            name_ka="", latitude=41.70050, longitude=44.80050, tags_json='{"name":"Cafe North"}',
+        )
+        nearby_other_category = PoiInput(
+            poi_id="node/102", osm_type="node", osm_id=102, category="shops",
+            subcategory="bakery", name="Cafe North", name_en="Cafe North", name_ru="",
+            name_ka="", latitude=41.70001, longitude=44.80001, tags_json='{"name":"Cafe North"}',
+        )
+
+        result, removed = deduplicate_pois(
+            [node, way, relation, nearby_same_name, nearby_other_category]
+        )
+        self.assertEqual(removed, 2)
+        self.assertEqual({poi.poi_id for poi in result}, {"relation/300", "node/101", "node/102"})
+        merged = next(poi for poi in result if poi.poi_id == "relation/300")
+        self.assertEqual(merged.osm_type, "relation")
+        merged_tags = __import__("json").loads(merged.tags_json)
+        self.assertEqual(merged_tags["phone"], "+995555010203")
+        self.assertEqual(merged_tags["website"], "https://north.example")
+
     def test_polygon_centroid_is_area_weighted(self):
         square = [(0.0, 0.0), (0.0, 2.0), (2.0, 2.0), (2.0, 0.0)]
         lat, lon = polygon_centroid(square)
@@ -80,6 +121,17 @@ class PoiDatabaseTests(unittest.TestCase):
         self.assertAlmostEqual(lat, 1.0)
         self.assertAlmostEqual(lon, 1.0)
         self.assertEqual(polygon_centroid([(1.0, 1.0), (1.0, 1.0), (1.0, 1.0)]), (1.0, 1.0))
+
+    def test_multipolygon_centroid_weights_outer_rings_by_area(self):
+        large = [(0.0, 0.0), (0.0, 4.0), (4.0, 4.0), (4.0, 0.0)]
+        small = [(10.0, 10.0), (10.0, 11.0), (11.0, 11.0), (11.0, 10.0)]
+        lat, lon = multipolygon_centroid([large, small])
+        self.assertGreater(lat, 2.0)
+        self.assertLess(lat, 3.0)
+        self.assertGreater(lon, 2.0)
+        self.assertLess(lon, 3.0)
+        self.assertIsNone(multipolygon_centroid([]))
+        self.assertIsNone(multipolygon_centroid([[(1.0, 1.0), (1.0, 1.0)]]))
 
     def test_bbox(self):
         bbox = (41.0, 39.95, 43.65, 46.8)

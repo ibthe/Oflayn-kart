@@ -2,6 +2,7 @@ package app.georgia.offline.data
 
 import android.content.Context
 import android.database.sqlite.SQLiteDatabase
+import app.georgia.offline.domain.GeoMath
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import org.json.JSONObject
@@ -157,18 +158,28 @@ object PoiRepository {
 
     data class SearchResult(val database: File?, val poiCount: Int, val message: String?)
 
+    /**
+     * Installation is serialized because Map and Places screens can briefly coexist during a tab
+     * transition and both request the same bundled database.
+     */
+    private val installationLock = Any()
+
     suspend fun ensureInstalled(context: Context): SearchResult = withContext(Dispatchers.IO) {
+        synchronized(installationLock) { installBlocking(context) }
+    }
+
+    private fun installBlocking(context: Context): SearchResult {
         val manifest = readBuildManifest(context)
         val expectedHash = manifest?.optString("poiFileSha256")
             ?.takeIf { it.matches(Regex("[0-9a-fA-F]{64}")) }
         val expectedSize = manifest?.optLong("poiFileSizeBytes", -1L)?.takeIf { it > 0L }
         if (expectedHash == null || expectedSize == null) {
-            return@withContext SearchResult(null, 0, "Офлайн-база POI ещё не включена в эту сборку приложения.")
+            return SearchResult(null, 0, "Офлайн-база POI ещё не включена в эту сборку приложения.")
         }
 
         val directory = File(context.filesDir, "poi")
         if (!directory.exists() && !directory.mkdirs()) {
-            return@withContext SearchResult(null, 0, "Не удалось создать локальную папку базы объектов.")
+            return SearchResult(null, 0, "Не удалось создать локальную папку базы объектов.")
         }
         val database = File(directory, "georgia-poi.sqlite")
         val marker = File(directory, HASH_MARKER)
@@ -176,21 +187,21 @@ object PoiRepository {
             marker.readText(Charsets.UTF_8).trim().equals(expectedHash, ignoreCase = true) &&
             runCatching { validateDatabase(database) }.getOrDefault(false)
         ) {
-            return@withContext SearchResult(database, readCount(database), null)
+            return SearchResult(database, readCount(database), null)
         }
 
         val requiredSpace = expectedSize + 8L * 1024L * 1024L
         if (directory.usableSpace < requiredSpace) {
-            return@withContext SearchResult(null, 0, "Недостаточно свободного места для локального справочника объектов.")
+            return SearchResult(null, 0, "Недостаточно свободного места для локального справочника объектов.")
         }
 
         val input = try {
             context.assets.open(ASSET_DB)
         } catch (_: FileNotFoundException) {
-            return@withContext SearchResult(null, 0, "База объектов не найдена во встроенных ресурсах APK.")
+            return SearchResult(null, 0, "База объектов не найдена во встроенных ресурсах APK.")
         }
         val temporary = File(directory, "georgia-poi.sqlite.part")
-        try {
+        return try {
             val digest = MessageDigest.getInstance("SHA-256")
             input.use { source ->
                 temporary.outputStream().buffered().use { target ->
@@ -222,6 +233,7 @@ object PoiRepository {
             temporary.delete()
             SearchResult(null, 0, error.message ?: "Не удалось установить базу объектов.")
         }
+    
     }
 
     suspend fun search(
@@ -245,13 +257,30 @@ object PoiRepository {
         val sql = """
             SELECT poi_id, category, subcategory, name, name_en, name_ru, name_ka, latitude, longitude, tags_json
             FROM poi $where
-            ORDER BY CASE category
-                WHEN 'tourism' THEN 1 WHEN 'historic' THEN 2 WHEN 'nature' THEN 3
-                WHEN 'food' THEN 4 WHEN 'lodging' THEN 5 WHEN 'medical' THEN 6
-                WHEN 'transport' THEN 7 WHEN 'services' THEN 8 WHEN 'shops' THEN 9
-                ELSE 10 END, name COLLATE NOCASE
+            ORDER BY
+                CASE
+                    WHEN ? <> '' AND (
+                        lower(name) = ? OR lower(name_en) = ? OR
+                        lower(name_ru) = ? OR lower(name_ka) = ?
+                    ) THEN 0
+                    WHEN ? <> '' AND (
+                        instr(lower(name), ?) = 1 OR instr(lower(name_en), ?) = 1 OR
+                        instr(lower(name_ru), ?) = 1 OR instr(lower(name_ka), ?) = 1
+                    ) THEN 1
+                    ELSE 2
+                END,
+                CASE category
+                    WHEN 'tourism' THEN 1 WHEN 'historic' THEN 2 WHEN 'nature' THEN 3
+                    WHEN 'food' THEN 4 WHEN 'lodging' THEN 5 WHEN 'medical' THEN 6
+                    WHEN 'transport' THEN 7 WHEN 'services' THEN 8 WHEN 'shops' THEN 9
+                    WHEN 'settlement' THEN 10 ELSE 11
+                END,
+                name COLLATE NOCASE
             LIMIT ?
         """.trimIndent()
+        val primaryTerm = terms.firstOrNull().orEmpty()
+        repeat(5) { arguments += primaryTerm }
+        repeat(5) { arguments += primaryTerm }
         arguments += limit.coerceIn(1, 200).toString()
         val db = SQLiteDatabase.openDatabase(database.absolutePath, null, SQLiteDatabase.OPEN_READONLY)
         try {
@@ -272,6 +301,298 @@ object PoiRepository {
                         ))
                     }
                 }
+            }
+        } finally {
+            db.close()
+        }
+    }
+
+
+
+    /** Loads itinerary objects by their stable OSM IDs while preserving the caller's order. */
+    suspend fun byIds(database: File, poiIds: List<String>): List<PoiRecord> = withContext(Dispatchers.IO) {
+        val ids = poiIds.distinct().take(200)
+        if (ids.isEmpty()) return@withContext emptyList()
+        val placeholders = ids.joinToString(",") { "?" }
+        val sql = """
+            SELECT poi_id, category, subcategory, name, name_en, name_ru, name_ka,
+                   latitude, longitude, tags_json
+            FROM poi
+            WHERE poi_id IN ($placeholders)
+        """.trimIndent()
+        val db = SQLiteDatabase.openDatabase(database.absolutePath, null, SQLiteDatabase.OPEN_READONLY)
+        val found = try {
+            db.rawQuery(sql, ids.toTypedArray()).use { cursor ->
+                buildMap {
+                    while (cursor.moveToNext()) {
+                        val poi = PoiRecord(
+                            poiId = cursor.getString(0),
+                            category = cursor.getString(1),
+                            subcategory = cursor.getString(2),
+                            name = cursor.getString(3),
+                            nameEn = cursor.getString(4),
+                            nameRu = cursor.getString(5),
+                            nameKa = cursor.getString(6),
+                            latitude = cursor.getDouble(7),
+                            longitude = cursor.getDouble(8),
+                            tagsJson = cursor.getString(9)
+                        )
+                        put(poi.poiId, poi)
+                    }
+                }
+            }
+        } finally {
+            db.close()
+        }
+        ids.mapNotNull(found::get)
+    }
+
+    /** Search only inside the visible map rectangle; the coordinate index bounds the offline query. */
+    suspend fun searchInBounds(
+        database: File,
+        query: String,
+        north: Double,
+        south: Double,
+        east: Double,
+        west: Double,
+        category: String = "all",
+        limit: Int = 60
+    ): List<PoiRecord> = withContext(Dispatchers.IO) {
+        val conditions = mutableListOf(
+            "latitude BETWEEN ? AND ?",
+            "longitude BETWEEN ? AND ?"
+        )
+        val centerLatitude = (north + south) / 2.0
+        val centerLongitude = (east + west) / 2.0
+        val longitudeWeight = kotlin.math.cos(Math.toRadians(centerLatitude)).let { it * it }
+        val arguments = mutableListOf(
+            south.toString(), north.toString(), west.toString(), east.toString()
+        )
+        if (category != "all") {
+            conditions += "category = ?"
+            arguments += category
+        }
+        val terms = query.trim().lowercase(Locale.ROOT)
+            .split(Regex("\\s+")).filter { it.isNotBlank() }.take(5)
+        terms.forEach { term ->
+            conditions += "instr(search_text, ?) > 0"
+            arguments += term
+        }
+        val sql = """
+            SELECT poi_id, category, subcategory, name, name_en, name_ru, name_ka,
+                   latitude, longitude, tags_json
+            FROM poi
+            WHERE ${conditions.joinToString(" AND ")}
+            ORDER BY
+                ((latitude - ?) * (latitude - ?) +
+                 (longitude - ?) * (longitude - ?) * ?) ASC,
+                name COLLATE NOCASE
+            LIMIT ?
+        """.trimIndent()
+        arguments += centerLatitude.toString()
+        arguments += centerLatitude.toString()
+        arguments += centerLongitude.toString()
+        arguments += centerLongitude.toString()
+        arguments += longitudeWeight.toString()
+        arguments += limit.coerceIn(1, 120).toString()
+        val db = SQLiteDatabase.openDatabase(database.absolutePath, null, SQLiteDatabase.OPEN_READONLY)
+        try {
+            db.rawQuery(sql, arguments.toTypedArray()).use { cursor ->
+                buildList {
+                    while (cursor.moveToNext()) add(PoiRecord(
+                        poiId = cursor.getString(0), category = cursor.getString(1),
+                        subcategory = cursor.getString(2), name = cursor.getString(3),
+                        nameEn = cursor.getString(4), nameRu = cursor.getString(5),
+                        nameKa = cursor.getString(6), latitude = cursor.getDouble(7),
+                        longitude = cursor.getDouble(8), tagsJson = cursor.getString(9)
+                    ))
+                }
+            }
+        } finally {
+            db.close()
+        }
+    }
+
+
+    /**
+     * Search a narrow corridor around a planned route. Candidate SQL windows are sampled along
+     * the polyline, then every result is checked against the actual route geometry. Returned
+     * places are ordered in travel order, not by an unrelated map-viewport center.
+     */
+    suspend fun searchAlongRoute(
+        database: File,
+        query: String,
+        routePoints: List<Pair<Double, Double>>,
+        category: String = "all",
+        corridorMeters: Double = 2_500.0,
+        limit: Int = 60
+    ): List<PoiRecord> = withContext(Dispatchers.IO) {
+        if (routePoints.size < 2) return@withContext emptyList()
+        val routeLengths = DoubleArray(routePoints.size)
+        for (index in 1 until routePoints.size) {
+            routeLengths[index] = routeLengths[index - 1] + GeoMath.distanceMeters(
+                routePoints[index - 1].first, routePoints[index - 1].second,
+                routePoints[index].first, routePoints[index].second
+            )
+        }
+        val totalLength = routeLengths.last()
+        if (totalLength <= 0.0) return@withContext emptyList()
+
+        val sampleSpacing = maxOf(8_000.0, totalLength / 160.0)
+        val searchRadius = maxOf(corridorMeters.coerceIn(250.0, 10_000.0) * 2.0, sampleSpacing * 0.65)
+        val centers = mutableListOf<Pair<Double, Double>>()
+        centers += routePoints.first()
+        var nextSampleDistance = sampleSpacing
+        for (index in 1 until routePoints.size) {
+            val start = routePoints[index - 1]
+            val end = routePoints[index]
+            val segmentStart = routeLengths[index - 1]
+            val segmentLength = routeLengths[index] - segmentStart
+            if (segmentLength <= 0.1) continue
+            val segmentEnd = routeLengths[index]
+            while (nextSampleDistance <= segmentEnd) {
+                val fraction = ((nextSampleDistance - segmentStart) / segmentLength).coerceIn(0.0, 1.0)
+                centers += ((start.first + (end.first - start.first) * fraction) to
+                    (start.second + (end.second - start.second) * fraction))
+                nextSampleDistance += sampleSpacing
+            }
+        }
+        centers += routePoints.last()
+
+        val boxes = centers.distinct().map { (latitude, longitude) ->
+            val latitudeDelta = searchRadius / 110_540.0
+            val longitudeDelta = searchRadius /
+                (111_320.0 * kotlin.math.cos(Math.toRadians(latitude)).coerceAtLeast(0.05))
+            listOf(
+                (latitude - latitudeDelta).toString(),
+                (latitude + latitudeDelta).toString(),
+                (longitude - longitudeDelta).toString(),
+                (longitude + longitudeDelta).toString()
+            )
+        }
+        val conditions = mutableListOf("(" + boxes.joinToString(" OR ") {
+            "(latitude BETWEEN ? AND ? AND longitude BETWEEN ? AND ?)"
+        } + ")")
+        val arguments = boxes.flatten().toMutableList()
+        if (category != "all") {
+            conditions += "category = ?"
+            arguments += category
+        }
+        val terms = query.trim().lowercase(Locale.ROOT)
+            .split(Regex("\\s+")).filter { it.isNotBlank() }.take(5)
+        terms.forEach { term ->
+            conditions += "instr(search_text, ?) > 0"
+            arguments += term
+        }
+        val sql = """
+            SELECT poi_id, category, subcategory, name, name_en, name_ru, name_ka,
+                   latitude, longitude, tags_json
+            FROM poi
+            WHERE ${conditions.joinToString(" AND ")}
+            ORDER BY name COLLATE NOCASE
+            LIMIT ?
+        """.trimIndent()
+        arguments += 1_200.toString()
+        val databaseHandle = SQLiteDatabase.openDatabase(database.absolutePath, null, SQLiteDatabase.OPEN_READONLY)
+        val candidates = try {
+            databaseHandle.rawQuery(sql, arguments.toTypedArray()).use { cursor ->
+                buildList {
+                    while (cursor.moveToNext()) add(PoiRecord(
+                        poiId = cursor.getString(0), category = cursor.getString(1),
+                        subcategory = cursor.getString(2), name = cursor.getString(3),
+                        nameEn = cursor.getString(4), nameRu = cursor.getString(5),
+                        nameKa = cursor.getString(6), latitude = cursor.getDouble(7),
+                        longitude = cursor.getDouble(8), tagsJson = cursor.getString(9)
+                    ))
+                }
+            }
+        } finally {
+            databaseHandle.close()
+        }
+
+        candidates.mapNotNull { poi ->
+            val latitudeScale = 111_195.0
+            val longitudeScale = latitudeScale * kotlin.math.cos(Math.toRadians(poi.latitude))
+            var bestDistance = Double.MAX_VALUE
+            var bestAlong = 0.0
+            for (index in 0 until routePoints.lastIndex) {
+                val start = routePoints[index]
+                val end = routePoints[index + 1]
+                val ax = (start.second - poi.longitude) * longitudeScale
+                val ay = (start.first - poi.latitude) * latitudeScale
+                val dx = (end.second - start.second) * longitudeScale
+                val dy = (end.first - start.first) * latitudeScale
+                val denominator = dx * dx + dy * dy
+                val fraction = if (denominator <= 0.0) 0.0
+                    else (-(ax * dx + ay * dy) / denominator).coerceIn(0.0, 1.0)
+                val distance = kotlin.math.hypot(ax + dx * fraction, ay + dy * fraction)
+                if (distance < bestDistance) {
+                    bestDistance = distance
+                    bestAlong = routeLengths[index] +
+                        (routeLengths[index + 1] - routeLengths[index]) * fraction
+                }
+            }
+            if (bestDistance <= corridorMeters) Triple(poi, bestAlong, bestDistance) else null
+        }
+            .distinctBy { it.first.poiId }
+            .sortedWith(compareBy<Triple<PoiRecord, Double, Double>> { it.second }.thenBy { it.third })
+            .take(limit.coerceIn(1, 120))
+            .map { it.first }
+    }
+
+    /** Bounded offline lookup for a POI nearest to a tapped map coordinate. */
+    suspend fun nearestPoi(
+        database: File,
+        latitude: Double,
+        longitude: Double,
+        maxDistanceMeters: Double = 120.0
+    ): PoiRecord? = withContext(Dispatchers.IO) {
+        val latDelta = maxDistanceMeters / 110_540.0
+        val lonScale = (111_320.0 * kotlin.math.cos(Math.toRadians(latitude))).coerceAtLeast(1.0)
+        val lonDelta = maxDistanceMeters / lonScale
+        val sql = """
+            SELECT poi_id, category, subcategory, name, name_en, name_ru, name_ka,
+                   latitude, longitude, tags_json
+            FROM poi
+            WHERE latitude BETWEEN ? AND ? AND longitude BETWEEN ? AND ?
+            ORDER BY ABS(latitude - ?) + ABS(longitude - ?)
+            LIMIT 64
+        """.trimIndent()
+        val args = arrayOf(
+            (latitude - latDelta).toString(), (latitude + latDelta).toString(),
+            (longitude - lonDelta).toString(), (longitude + lonDelta).toString(),
+            latitude.toString(), longitude.toString()
+        )
+        val db = SQLiteDatabase.openDatabase(database.absolutePath, null, SQLiteDatabase.OPEN_READONLY)
+        try {
+            db.rawQuery(sql, args).use { cursor ->
+                var nearest: PoiRecord? = null
+                var nearestMeters = maxDistanceMeters
+                while (cursor.moveToNext()) {
+                    val candidateLat = cursor.getDouble(7)
+                    val candidateLon = cursor.getDouble(8)
+                    val dLat = Math.toRadians(candidateLat - latitude)
+                    val dLon = Math.toRadians(candidateLon - longitude)
+                    val sinLat = kotlin.math.sin(dLat / 2)
+                    val sinLon = kotlin.math.sin(dLon / 2)
+                    val a = (sinLat * sinLat +
+                        kotlin.math.cos(Math.toRadians(latitude)) *
+                        kotlin.math.cos(Math.toRadians(candidateLat)) * sinLon * sinLon).coerceIn(0.0, 1.0)
+                    val meters = 6_371_000.0 * 2.0 * kotlin.math.atan2(
+                        kotlin.math.sqrt(a), kotlin.math.sqrt((1.0 - a).coerceAtLeast(0.0))
+                    )
+                    if (meters < nearestMeters) {
+                        nearestMeters = meters
+                        nearest = PoiRecord(
+                            poiId = cursor.getString(0), category = cursor.getString(1),
+                            subcategory = cursor.getString(2), name = cursor.getString(3),
+                            nameEn = cursor.getString(4), nameRu = cursor.getString(5),
+                            nameKa = cursor.getString(6), latitude = candidateLat,
+                            longitude = candidateLon, tagsJson = cursor.getString(9)
+                        )
+                    }
+                }
+                nearest
             }
         } finally {
             db.close()

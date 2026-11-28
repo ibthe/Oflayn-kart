@@ -23,7 +23,8 @@ class Route(
     val profile: RoutingProfile,
     val points: DoubleArray,
     val durationSeconds: Double,
-    val steps: List<RouteStep>
+    val steps: List<RouteStep>,
+    val warnings: List<String> = emptyList()
 ) {
     val pointCount: Int = points.size / 2
     val cumulativeMeters: DoubleArray = DoubleArray(pointCount)

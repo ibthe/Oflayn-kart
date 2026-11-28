@@ -61,13 +61,61 @@ class NavigationState {
      */
     fun chooseMapPoint(name: String, latitude: Double, longitude: Double) {
         val point = NavigationTarget(name, latitude, longitude)
+        val editingExistingPlan = routeMenuVisible && target != null
         when (pointSelection) {
             RoutePointRole.START -> origin = point
-            RoutePointRole.DESTINATION, null -> target = point
+            RoutePointRole.DESTINATION -> target = point
+            null -> {
+                target = point
+                // A long-press from the normal map starts a fresh destination flow.
+                // When the planner is already open, changing its destination keeps
+                // the explicitly arranged intermediate stops.
+                if (!editingExistingPlan) viaPoints.clear()
+            }
         }
         pointSelection = null
         selectedPlaceId = null
         routeMenuVisible = true
+    }
+
+    /** Starts a fresh route to a destination from the current GPS position. */
+    fun startRouteTo(point: NavigationTarget) {
+        // If "Route from here" was chosen, keep that explicit origin while the person
+        // selects a destination from the map, Places catalogue, or saved places.
+        val awaitingDestination = origin != null && target == null
+        target = point
+        if (!awaitingDestination) origin = null
+        viaPoints.clear()
+        pointSelection = null
+        selectedPlaceId = null
+        routeMenuVisible = true
+    }
+
+    /**
+     * Initial planning may use the explicitly selected origin. A reroute must always
+     * use the latest GPS fix, otherwise it sends the person back to the old start.
+     */
+    fun resolveRouteStart(
+        currentLatitude: Double?,
+        currentLongitude: Double?,
+        rerouting: Boolean
+    ): Pair<Double, Double>? {
+        val current = if (currentLatitude != null && currentLongitude != null) {
+            currentLatitude to currentLongitude
+        } else {
+            null
+        }
+        return if (rerouting) current else origin?.let { it.latitude to it.longitude } ?: current
+    }
+
+    /** Selects a new route origin and waits for the person to choose a destination. */
+    fun startRouteFrom(point: NavigationTarget) {
+        target = null
+        origin = point
+        viaPoints.clear()
+        pointSelection = null
+        selectedPlaceId = null
+        routeMenuVisible = false
     }
 
     fun closeRouteMenu() {

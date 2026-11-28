@@ -1,7 +1,6 @@
 package app.georgia.offline.data
 
 import android.content.Context
-import android.net.Uri
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableStateOf
@@ -22,8 +21,9 @@ class LocalSettings(context: Context) {
     var language by mutableStateOf(readLanguage())
         private set
 
-    /** Kept for code that still asks "which languages are shown": always exactly the chosen one. */
-    val enabledLanguages: Set<String> get() = setOf(language)
+    /** Languages rendered on the map are independent from the language used in place lists. */
+    var mapLanguages by mutableStateOf(readMapLanguages())
+        private set
 
     /** Chosen colour family id. */
     var palette by mutableStateOf(
@@ -50,9 +50,6 @@ class LocalSettings(context: Context) {
     )
         private set
 
-    var storageTreeUri by mutableStateOf(preferences.getString("storage_tree_uri", null))
-        private set
-
     var mapFilePath by mutableStateOf(preferences.getString("map_file_path", null))
         private set
 
@@ -62,6 +59,10 @@ class LocalSettings(context: Context) {
 
     /** User may explicitly hide/disable the map without it being reinstalled on next launch. */
     var mapDisabled by mutableStateOf(preferences.getBoolean("map_disabled", false))
+        private set
+
+    /** Storage volume ID for large offline maps; null means app-private internal storage. */
+    var mapStorageId by mutableStateOf(preferences.getString("map_storage_id", null))
         private set
 
     var carLatitude by mutableStateOf(preferences.getString("car_latitude", null)?.toDoubleOrNull())
@@ -74,6 +75,16 @@ class LocalSettings(context: Context) {
         if (code !in SUPPORTED_LANGUAGES) return
         language = code
         preferences.edit().putString("language", code).apply()
+    }
+
+    fun updateMapLanguage(code: String, enabled: Boolean) {
+        if (code !in SUPPORTED_LANGUAGES) return
+        val updated = mapLanguages.toMutableSet().apply {
+            if (enabled) add(code) else remove(code)
+        }
+        if (updated == mapLanguages) return
+        mapLanguages = updated
+        preferences.edit().putStringSet("map_languages", updated).apply()
     }
 
     fun updatePalette(value: String) {
@@ -100,12 +111,11 @@ class LocalSettings(context: Context) {
         preferences.edit().putString("map_theme", value).apply()
     }
 
-    fun setStorageTree(uri: Uri?) {
-        storageTreeUri = uri?.toString()
-        preferences.edit().putString("storage_tree_uri", storageTreeUri).apply()
+    fun updateMapStorageId(value: String?) {
+        if (mapStorageId == value) return
+        mapStorageId = value
+        preferences.edit().putString("map_storage_id", value).apply()
     }
-
-    fun storageUri(): Uri? = storageTreeUri?.let(Uri::parse)
 
     /** Stores the active Mapsforge map path and whether it came from the APK bundle. */
     fun setMapFilePath(path: String?, bundled: Boolean = false) {
@@ -231,6 +241,12 @@ class LocalSettings(context: Context) {
         return listOf("ru", "en", "ka").firstOrNull { preferences.getBoolean("language_$it", true) } ?: "ru"
     }
 
+    private fun readMapLanguages(): Set<String> {
+        val stored = preferences.getStringSet("map_languages", null)
+        if (stored != null) return stored.filterTo(linkedSetOf()) { it in SUPPORTED_LANGUAGES }
+        return setOf(readLanguage())
+    }
+
     private fun readThemeMode(): String {
         preferences.getString("theme_mode", null)?.takeIf { it in THEME_MODES }?.let { return it }
         // Old palettes carried their own brightness: Dusk and Graphite were the dark ones.
@@ -248,6 +264,14 @@ class LocalSettings(context: Context) {
         val SUPPORTED_LANGUAGES = setOf("en", "ru", "ka")
         val PALETTES = setOf("mist", "sage", "sand", "dusk", "graphite", "hc_mono", "hc_amber")
         val THEME_MODES = setOf("system", "light", "dim", "dark")
-        val MAP_THEMES = setOf("classic", "outdoor", "motorider", "biker")
+        val MAP_THEME_CHOICES = listOf(
+            "classic" to "Классика",
+            "oflayn_natural" to "Oflayn Natural",
+            "oflayn_natural_dark" to "Oflayn Natural Dark",
+            "outdoor" to "Природа",
+            "motorider" to "Авто",
+            "biker" to "Велосипед"
+        )
+        val MAP_THEMES = MAP_THEME_CHOICES.map { it.first }.toSet()
     }
 }

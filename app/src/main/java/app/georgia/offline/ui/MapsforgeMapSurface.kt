@@ -3,13 +3,16 @@ package app.georgia.offline.ui
 import android.app.Application
 import android.content.Context
 import android.location.Location
+import app.georgia.offline.data.RasterPackageInfo
 import android.view.GestureDetector
 import android.view.MotionEvent
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
@@ -23,10 +26,23 @@ import org.mapsforge.core.model.LatLong
 import org.mapsforge.map.android.graphics.AndroidGraphicFactory
 import org.mapsforge.map.android.util.AndroidUtil
 import org.mapsforge.map.android.view.MapView
+import org.mapsforge.map.layer.cache.InMemoryTileCache
+import org.mapsforge.map.layer.cache.TileCache
+import org.mapsforge.map.layer.cache.TileStore
+import org.mapsforge.map.layer.cache.TwoLevelTileCache
+import org.mapsforge.map.layer.tilestore.TileStoreLayer
 import org.mapsforge.map.layer.overlay.Circle
 import org.mapsforge.map.layer.overlay.Marker
 import org.mapsforge.map.layer.overlay.Polyline
+import org.mapsforge.map.layer.hills.AdaptiveClasyHillShading
+import org.mapsforge.map.layer.hills.DemFolderFS
+import org.mapsforge.map.layer.hills.HillsRenderConfig
+import org.mapsforge.map.layer.hills.MemoryCachingHgtReaderTileSource
+import org.mapsforge.map.datastore.MapDataStore
+import org.mapsforge.map.datastore.MultiMapDataStore
 import org.mapsforge.map.reader.MapFile
+import org.mapsforge.map.rendertheme.ExternalRenderTheme
+import org.mapsforge.map.rendertheme.XmlRenderTheme
 import org.mapsforge.map.rendertheme.internal.MapsforgeThemes
 import java.io.File
 
@@ -52,6 +68,14 @@ enum class PlaceKind { SAVED, CAR }
 /** The route element captured by a drag gesture on the map. */
 enum class RouteDragTarget { START, DESTINATION, WAYPOINT, ROUTE_LINE }
 
+/** Geographic rectangle currently visible inside the map view. */
+data class MapViewportBounds(
+    val north: Double,
+    val south: Double,
+    val east: Double,
+    val west: Double
+)
+
 /** A saved point drawn on the map; the selected one is enlarged and haloed. */
 class MapPlace(val id: String, val latitude: Double, val longitude: Double, val kind: PlaceKind)
 
@@ -59,8 +83,13 @@ class MapPlace(val id: String, val latitude: Double, val longitude: Double, val 
 @Composable
 fun MapsforgeMapSurface(
     mapFile: File,
-    preferredLanguage: String?,
+    preferredLanguages: List<String>,
     mapTheme: String,
+    hillshadeDirectory: File? = null,
+    contoursMapFile: File? = null,
+    rasterPackage: RasterPackageInfo? = null,
+    rasterEnabled: Boolean = false,
+    rasterOpacity: Float = 0.62f,
     modifier: Modifier = Modifier,
     userLocation: Location? = null,
     destination: LatLong? = null,
@@ -70,32 +99,55 @@ fun MapsforgeMapSurface(
     zoomInToken: Int = 0,
     zoomOutToken: Int = 0,
     routePoints: DoubleArray? = null,
+    trackPoints: List<LatLong> = emptyList(),
     viaPoints: List<LatLong> = emptyList(),
     routeColor: Int = 0xFF2F6FED.toInt(),
+    trackColor: Int = 0xFF14A8A0.toInt(),
     followUser: Boolean = false,
     fitToken: Int = 0,
     places: List<MapPlace> = emptyList(),
     selectedPlaceId: String? = null,
+    selectedPoi: LatLong? = null,
+    searchResultPoints: List<LatLong> = emptyList(),
     origin: LatLong? = null,
     savedColor: Int = 0xFF7B5CFF.toInt(),
     carColor: Int = 0xFF1FB89A.toInt(),
     originColor: Int = 0xFF1FB89A.toInt(),
     focusToken: Int = 0,
     onPlaceTap: ((String?) -> Unit)? = null,
+    onMapTap: ((LatLong) -> Unit)? = null,
+    onSearchResultTap: ((Int) -> Unit)? = null,
+    onViewportChanged: ((MapViewportBounds) -> Unit)? = null,
     onLongPress: ((LatLong) -> Unit)? = null,
     onRouteDrag: ((RouteDragTarget, Int, LatLong) -> Unit)? = null
 ) {
+    // Preserve the map camera when the renderer is recreated for a style/language change
+    // or when the map tab is temporarily removed from the composition.
+    var savedCenterLatitude by rememberSaveable(mapFile.absolutePath) { mutableStateOf<Double?>(null) }
+    var savedCenterLongitude by rememberSaveable(mapFile.absolutePath) { mutableStateOf<Double?>(null) }
+    var savedZoomLevel by rememberSaveable(mapFile.absolutePath) { mutableIntStateOf(-1) }
+
     val currentLongPress by rememberUpdatedState(onLongPress)
     val currentPlaces by rememberUpdatedState(places)
     val currentPlaceTap by rememberUpdatedState(onPlaceTap)
+    val currentMapTap by rememberUpdatedState(onMapTap)
+    val currentSearchResultTap by rememberUpdatedState(onSearchResultTap)
+    val currentSearchResults by rememberUpdatedState(searchResultPoints)
+    val currentViewportChanged by rememberUpdatedState(onViewportChanged)
     val currentRoutePoints by rememberUpdatedState(routePoints)
     val currentViaPoints by rememberUpdatedState(viaPoints)
     val currentRouteDrag by rememberUpdatedState(onRouteDrag)
-    key(mapFile.absolutePath, mapFile.lastModified(), preferredLanguage, mapTheme, accentColor, routeColor) {
-        val overlays = remember { MapOverlays(accentColor, destinationColor, routeColor, savedColor, carColor, originColor) }
+    key(mapFile.absolutePath, mapFile.lastModified(), preferredLanguages, mapTheme, hillshadeDirectory?.absolutePath, contoursMapFile?.absolutePath, contoursMapFile?.lastModified(), rasterPackage?.directory?.absolutePath, rasterPackage?.extension, accentColor, destinationColor, routeColor, trackColor, savedColor, carColor, originColor) {
+        val overlays = remember { MapOverlays(accentColor, destinationColor, routeColor, trackColor, savedColor, carColor, originColor) }
         var mapViewRef by remember { mutableStateOf<MapView?>(null) }
-        var mapDataStoreRef by remember { mutableStateOf<MapFile?>(null) }
+        var mapDataStoreRef by remember { mutableStateOf<MapDataStore?>(null) }
+        var hillshadeDataStoreRef by remember { mutableStateOf<MapDataStore?>(null) }
+        var hillsRenderConfigRef by remember { mutableStateOf<HillsRenderConfig?>(null) }
+        var contoursDataStoreRef by remember { mutableStateOf<MapDataStore?>(null) }
+        var rasterLayerRef by remember { mutableStateOf<TileStoreLayer?>(null) }
+        var rasterTileCacheRef by remember { mutableStateOf<TileCache?>(null) }
         var rendererError by remember { mutableStateOf<String?>(null) }
+        var cameraRestored by remember { mutableStateOf(false) }
 
         AndroidView(
             modifier = modifier,
@@ -106,10 +158,18 @@ fun MapsforgeMapSurface(
                     getMapScaleBar().setVisible(true)
 
                     try {
-                        val dataStore = if (preferredLanguage == null) {
-                            MapFile(mapFile)
-                        } else {
-                            MapFile(mapFile, preferredLanguage)
+                        val dataStore: MapDataStore = when (preferredLanguages.size) {
+                            0 -> MapFile(mapFile)
+                            1 -> MapFile(mapFile, preferredLanguages.first())
+                            else -> MultiMapDataStore(MultiMapDataStore.DataPolicy.RETURN_ALL).apply {
+                                preferredLanguages.forEachIndexed { index, language ->
+                                    addMapDataStore(
+                                        MapFile(mapFile, language),
+                                        index == 0,
+                                        index == 0
+                                    )
+                                }
+                            }
                         }
                         val tileCache = AndroidUtil.createTileCache(
                             viewContext,
@@ -122,21 +182,135 @@ fun MapsforgeMapSurface(
                             tileCache,
                             model.mapViewPosition,
                             dataStore,
-                            resolveMapTheme(mapTheme)
+                            resolveMapTheme(mapTheme, viewContext)
                         )
                         layerManager.layers.add(renderLayer)
+                        mapDataStoreRef = dataStore
+
+                        // Hillshading is an optional renderer layer: if an HGT tile is corrupt or
+                        // unavailable, the base offline map must remain usable.
+                        val availableHillshadeDirectory = hillshadeDirectory?.takeIf { directory ->
+                            directory.isDirectory && directory.listFiles()?.any { it.name.endsWith(".hgt.zip") } == true
+                        }
+                        if (availableHillshadeDirectory != null) {
+                            var pendingHillsConfig: HillsRenderConfig? = null
+                            var pendingHillDataStore: MapDataStore? = null
+                            try {
+                                val algorithm = AdaptiveClasyHillShading()
+                                    .setAdaptiveZoomEnabled(true)
+                                    .setCustomQualityScale(1.0)
+                                val hillTileSource = MemoryCachingHgtReaderTileSource(
+                                    DemFolderFS(availableHillshadeDirectory),
+                                    algorithm,
+                                    AndroidGraphicFactory.INSTANCE
+                                )
+                                val hillsConfig = HillsRenderConfig(hillTileSource).apply {
+                                    setExternal(true)
+                                    indexOnThread()
+                                }
+                                pendingHillsConfig = hillsConfig
+                                val hillDataStore: MapDataStore = MapFile(mapFile)
+                                pendingHillDataStore = hillDataStore
+                                val hillCache = AndroidUtil.createTileCache(
+                                    viewContext,
+                                    "georgia-offline-hillshade-${hillshadeDirectory.name}",
+                                    model.displayModel.tileSize,
+                                    1f,
+                                    model.frameBufferModel.overdrawFactor
+                                )
+                                val hillLayer = AndroidUtil.createTileRendererLayer(
+                                    hillCache,
+                                    model.mapViewPosition,
+                                    hillDataStore,
+                                    MapsforgeThemes.HILLSHADING,
+                                    true,
+                                    false,
+                                    false,
+                                    hillsConfig
+                                )
+                                layerManager.layers.add(hillLayer)
+                                hillsRenderConfigRef = hillsConfig
+                                hillshadeDataStoreRef = hillDataStore
+                            } catch (_: Exception) {
+                                runCatching { pendingHillDataStore?.close() }
+                                runCatching { pendingHillsConfig?.interruptAndDestroy() }
+                            }
+                        }
+                        val availableContoursFile = contoursMapFile?.takeIf { it.isFile && it.length() > 1024L }
+                        if (availableContoursFile != null) {
+                            var pendingContoursStore: MapDataStore? = null
+                            try {
+                                val contourDataStore: MapDataStore = MapFile(availableContoursFile)
+                                pendingContoursStore = contourDataStore
+                                val contourCache = AndroidUtil.createTileCache(
+                                    viewContext,
+                                    "georgia-contours-${availableContoursFile.parentFile?.name ?: "default"}",
+                                    model.displayModel.tileSize,
+                                    1f,
+                                    model.frameBufferModel.overdrawFactor
+                                )
+                                val contourLayer = AndroidUtil.createTileRendererLayer(
+                                    contourCache,
+                                    model.mapViewPosition,
+                                    contourDataStore,
+                                    resolveContourTheme(mapTheme, viewContext),
+                                    true,
+                                    true,
+                                    false
+                                )
+                                layerManager.layers.add(contourLayer)
+                                contoursDataStoreRef = contourDataStore
+                            } catch (_: Exception) {
+                                runCatching { pendingContoursStore?.close() }
+                            }
+                        }
+                        val availableRasterPackage = rasterPackage?.takeIf {
+                            it.tileDirectory.isDirectory && it.tileDirectory.canRead()
+                        }
+                        if (availableRasterPackage != null) {
+                            try {
+                                val tileStore = TileStore(
+                                    availableRasterPackage.tileDirectory,
+                                    ".${availableRasterPackage.extension}",
+                                    AndroidGraphicFactory.INSTANCE
+                                )
+                                val cache = TwoLevelTileCache(InMemoryTileCache(96), tileStore)
+                                val layer = TileStoreLayer(
+                                    cache,
+                                    model.mapViewPosition,
+                                    AndroidGraphicFactory.INSTANCE,
+                                    true
+                                )
+                                layer.setAlpha(rasterOpacity.coerceIn(0.25f, 0.9f))
+                                rasterTileCacheRef = cache
+                                rasterLayerRef = layer
+                                if (rasterEnabled) layerManager.layers.add(layer)
+                            } catch (_: Exception) {
+                                rasterLayerRef = null
+                                runCatching { rasterTileCacheRef?.destroy() }
+                                rasterTileCacheRef = null
+                            }
+                        }
                         // The map can neither be shrunk to a speck nor dragged away from Georgia.
                         model.mapViewPosition.setZoomLevelMin(MIN_ZOOM)
                         model.mapViewPosition.setZoomLevelMax(MAX_ZOOM)
                         dataStore.boundingBox()?.let { model.mapViewPosition.setMapLimit(it) }
-                        val initialPosition = dataStore.startPosition()
-                        if (initialPosition != null) {
-                            setCenter(initialPosition)
+                        val canRestoreCamera = savedCenterLatitude != null &&
+                            savedCenterLongitude != null &&
+                            savedZoomLevel in MIN_ZOOM.toInt()..MAX_ZOOM.toInt()
+                        if (canRestoreCamera) {
+                            setCenter(LatLong(savedCenterLatitude!!, savedCenterLongitude!!))
+                            setZoomLevel(savedZoomLevel.toByte())
                         } else {
-                            setCenter(LatLong(42.0, 43.5))
+                            val initialPosition = dataStore.startPosition()
+                            if (initialPosition != null) {
+                                setCenter(initialPosition)
+                            } else {
+                                setCenter(LatLong(42.0, 43.5))
+                            }
+                            val initialZoom = dataStore.startZoomLevel()
+                            setZoomLevel(initialZoom?.takeIf { it.toInt() in MIN_ZOOM..MAX_ZOOM } ?: 7.toByte())
                         }
-                        val initialZoom = dataStore.startZoomLevel()
-                        setZoomLevel(initialZoom?.takeIf { it.toInt() in MIN_ZOOM..MAX_ZOOM } ?: 7.toByte())
                         mapDataStoreRef = dataStore
                     } catch (error: Exception) {
                         rendererError = error.message ?: "Не удалось открыть карту."
@@ -187,9 +361,28 @@ fun MapsforgeMapSurface(
                     val detector = GestureDetector(viewContext, object : GestureDetector.SimpleOnGestureListener() {
                         // A tap near a saved point selects it; a tap on empty map clears the selection.
                         override fun onSingleTapConfirmed(event: MotionEvent): Boolean {
-                            val callback = currentPlaceTap ?: return false
+                            val callback = currentPlaceTap
+                            val mapTap = currentMapTap
+                            val searchTap = currentSearchResultTap
+                            if (callback == null && mapTap == null && searchTap == null) return false
                             val density = viewContext.resources.displayMetrics.density
                             val reach = 30f * density
+                            var searchHit: Int? = null
+                            var searchDistance = (reach * reach).toDouble()
+                            currentSearchResults.take(6).forEachIndexed { index, point ->
+                                val pixel = mapViewProjection.toPixels(point) ?: return@forEachIndexed
+                                val dx = pixel.x - event.x
+                                val dy = pixel.y - 18f * density - event.y
+                                val squared = dx * dx + dy * dy
+                                if (squared < searchDistance) {
+                                    searchDistance = squared
+                                    searchHit = index
+                                }
+                            }
+                            if (searchHit != null) {
+                                searchTap?.invoke(searchHit!!)
+                                return false
+                            }
                             var best: String? = null
                             var bestSquared = (reach * reach).toDouble()
                             for (place in currentPlaces) {
@@ -203,7 +396,10 @@ fun MapsforgeMapSurface(
                                     best = place.id
                                 }
                             }
-                            callback(best)
+                            callback?.invoke(best)
+                            if (best == null) {
+                                mapViewProjection.fromPixels(event.x.toDouble(), event.y.toDouble())?.let { mapTap?.invoke(it) }
+                            }
                             return false
                         }
 
@@ -212,7 +408,32 @@ fun MapsforgeMapSurface(
                             if (point != null) currentLongPress?.invoke(point)
                         }
                     })
-                    setOnTouchListener { _, event ->
+                    fun saveCameraPosition() {
+                        runCatching {
+                            val camera = model.mapViewPosition.mapPosition
+                            savedCenterLatitude = camera.latLong.latitude
+                            savedCenterLongitude = camera.latLong.longitude
+                            savedZoomLevel = camera.zoomLevel.toInt()
+                        }
+                    }
+                    fun publishVisibleBounds() {
+                        postDelayed({
+                            saveCameraPosition()
+                            val topLeft = mapViewProjection.fromPixels(0.0, 0.0)
+                            val bottomRight = mapViewProjection.fromPixels(width.toDouble(), height.toDouble())
+                            if (topLeft != null && bottomRight != null) {
+                                currentViewportChanged?.invoke(
+                                    MapViewportBounds(
+                                        north = maxOf(topLeft.latitude, bottomRight.latitude),
+                                        south = minOf(topLeft.latitude, bottomRight.latitude),
+                                        east = maxOf(topLeft.longitude, bottomRight.longitude),
+                                        west = minOf(topLeft.longitude, bottomRight.longitude)
+                                    )
+                                )
+                            }
+                        }, 260L)
+                    }
+                    setOnTouchListener { touchedView, event ->
                         when (event.actionMasked) {
                             MotionEvent.ACTION_DOWN -> {
                                 activeDrag = hitRouteElement(event.x, event.y)
@@ -253,6 +474,7 @@ fun MapsforgeMapSurface(
                                     true
                                 } else {
                                     detector.onTouchEvent(event)
+                                    touchedView.post { publishVisibleBounds() }
                                     false
                                 }
                             }
@@ -262,9 +484,11 @@ fun MapsforgeMapSurface(
                                     dragPreview = null
                                     activeDrag = null
                                     layerManager.redrawLayers()
+                                    publishVisibleBounds()
                                     true
                                 } else {
                                     detector.onTouchEvent(event)
+                                    touchedView.post { publishVisibleBounds() }
                                     false
                                 }
                             }
@@ -278,10 +502,61 @@ fun MapsforgeMapSurface(
                 }
             },
             update = { view ->
+                // The old renderer's DisposableEffect may save its camera after the
+                // replacement view is created. Apply the saved camera once it arrives.
+                if (!cameraRestored && savedCenterLatitude != null &&
+                    savedCenterLongitude != null &&
+                    savedZoomLevel in MIN_ZOOM.toInt()..MAX_ZOOM.toInt()
+                ) {
+                    view.model.mapViewPosition.mapPosition = MapPosition(
+                        LatLong(savedCenterLatitude!!, savedCenterLongitude!!),
+                        savedZoomLevel.toByte()
+                    )
+                    cameraRestored = true
+                }
                 overlays.sync(
                     view,
-                    OverlayState(userLocation, destination, recenterToken, zoomInToken, zoomOutToken, routePoints, viaPoints, followUser, fitToken, places, selectedPlaceId, origin, focusToken)
+                    OverlayState(userLocation, destination, recenterToken, zoomInToken, zoomOutToken, routePoints, trackPoints, viaPoints, followUser, fitToken, places, selectedPlaceId, selectedPoi, searchResultPoints, origin, focusToken)
                 )
+                rasterLayerRef?.let { layer ->
+                    val layers = view.layerManager.layers
+                    val targetAlpha = rasterOpacity.coerceIn(0.25f, 0.9f)
+                    var needsRedraw = false
+                    if (layer.alpha != targetAlpha) {
+                        layer.setAlpha(targetAlpha)
+                        needsRedraw = true
+                    }
+                    if (rasterEnabled && !layers.contains(layer)) {
+                        layers.add(layer)
+                        needsRedraw = true
+                    } else if (!rasterEnabled && layers.contains(layer)) {
+                        layers.remove(layer)
+                        needsRedraw = true
+                    }
+                    if (needsRedraw) view.invalidate()
+                }
+                // Wait until Mapsforge has applied a pan/zoom before reading the visible corners.
+                view.postDelayed({
+                    runCatching {
+                        val camera = view.model.mapViewPosition.mapPosition
+                        savedCenterLatitude = camera.latLong.latitude
+                        savedCenterLongitude = camera.latLong.longitude
+                        savedZoomLevel = camera.zoomLevel.toInt()
+                    }
+                    val projection = view.mapViewProjection
+                    val topLeft = projection.fromPixels(0.0, 0.0)
+                    val bottomRight = projection.fromPixels(view.width.toDouble(), view.height.toDouble())
+                    if (topLeft != null && bottomRight != null) {
+                        currentViewportChanged?.invoke(
+                            MapViewportBounds(
+                                north = maxOf(topLeft.latitude, bottomRight.latitude),
+                                south = minOf(topLeft.latitude, bottomRight.latitude),
+                                east = maxOf(topLeft.longitude, bottomRight.longitude),
+                                west = minOf(topLeft.longitude, bottomRight.longitude)
+                            )
+                        )
+                    }
+                }, 320L)
             }
         )
 
@@ -294,8 +569,20 @@ fun MapsforgeMapSurface(
 
         DisposableEffect(Unit) {
             onDispose {
-                runCatching { mapViewRef?.destroyAll() }
+                mapViewRef?.let { view ->
+                    runCatching {
+                        val camera = view.model.mapViewPosition.mapPosition
+                        savedCenterLatitude = camera.latLong.latitude
+                        savedCenterLongitude = camera.latLong.longitude
+                        savedZoomLevel = camera.zoomLevel.toInt()
+                    }
+                    runCatching { view.destroyAll() }
+                }
                 runCatching { mapDataStoreRef?.close() }
+                runCatching { hillshadeDataStoreRef?.close() }
+                runCatching { contoursDataStoreRef?.close() }
+                runCatching { rasterTileCacheRef?.destroy() }
+                runCatching { hillsRenderConfigRef?.interruptAndDestroy() }
                 AndroidGraphicFactory.clearResourceMemoryCache()
             }
         }
@@ -303,14 +590,46 @@ fun MapsforgeMapSurface(
 }
 
 
-private fun resolveMapTheme(value: String) = when (value) {
-    // The built-in HILLSHADING style draws only elevation shading and needs elevation (DEM) tiles; the offline
-    // data has none, so it rendered a blank white map. "outdoor" now uses the nature-oriented Osmarender style.
-    "outdoor" -> MapsforgeThemes.OSMARENDER
-    "motorider" -> MapsforgeThemes.MOTORIDER
-    "biker" -> MapsforgeThemes.BIKER
-    "osmarender" -> MapsforgeThemes.OSMARENDER
-    else -> MapsforgeThemes.DEFAULT
+
+private fun resolveContourTheme(value: String, context: Context): XmlRenderTheme {
+    val bundledThemeName = if (value == "oflayn_natural_dark") {
+        "oflayn-contours-dark.xml"
+    } else {
+        "oflayn-contours-light.xml"
+    }
+    val themeFile = File(context.filesDir, bundledThemeName)
+    val bundledTheme = context.assets.open("themes/$bundledThemeName").use { it.readBytes() }
+    if (!themeFile.isFile || !themeFile.readBytes().contentEquals(bundledTheme)) {
+        themeFile.writeBytes(bundledTheme)
+    }
+    return ExternalRenderTheme(themeFile)
+}
+
+private fun resolveMapTheme(value: String, context: Context): XmlRenderTheme {
+    // Both Natural variants are bundled assets and are refreshed in the app-private copy on update.
+    val bundledThemeName = when (value) {
+        "oflayn_natural" -> "oflayn-natural.xml"
+        "oflayn_natural_dark" -> "oflayn-natural-dark.xml"
+        else -> null
+    }
+    if (bundledThemeName != null) {
+        val themeFile = File(context.filesDir, bundledThemeName)
+        // Keep the private copy in sync with the bundled asset after app updates.
+        val bundledTheme = context.assets.open("themes/$bundledThemeName").use { it.readBytes() }
+        val needsUpdate = !themeFile.isFile || !themeFile.readBytes().contentEquals(bundledTheme)
+        if (needsUpdate) {
+            themeFile.writeBytes(bundledTheme)
+        }
+        return ExternalRenderTheme(themeFile)
+    }
+    return when (value) {
+        // The built-in HILLSHADING style needs elevation (DEM) data, which is not bundled with this map.
+        "outdoor" -> MapsforgeThemes.OSMARENDER
+        "motorider" -> MapsforgeThemes.MOTORIDER
+        "biker" -> MapsforgeThemes.BIKER
+        "osmarender" -> MapsforgeThemes.OSMARENDER
+        else -> MapsforgeThemes.DEFAULT
+    }
 }
 
 
@@ -322,11 +641,14 @@ private class OverlayState(
     val zoomInToken: Int,
     val zoomOutToken: Int,
     val routePoints: DoubleArray?,
+    val trackPoints: List<LatLong>,
     val viaPoints: List<LatLong>,
     val followUser: Boolean,
     val fitToken: Int,
     val places: List<MapPlace>,
     val selectedPlaceId: String?,
+    val selectedPoi: LatLong?,
+    val searchResultPoints: List<LatLong>,
     val origin: LatLong?,
     val focusToken: Int
 )
@@ -336,6 +658,7 @@ private class MapOverlays(
     private val accentColor: Int,
     private val destinationColor: Int,
     private val routeColor: Int,
+    private val trackColor: Int,
     private val savedColor: Int,
     private val carColor: Int,
     private val originColor: Int
@@ -346,6 +669,10 @@ private class MapOverlays(
     private var originAt: LatLong? = null
     private var handledFocus = 0
     private var focusedPlace: String? = null
+    private var selectedPoiMarker: Marker? = null
+    private var selectedPoiAt: LatLong? = null
+    private val searchResultMarkers = ArrayList<Marker>()
+    private var searchResultKey = ""
     private var me: Marker? = null
     private var accuracy: Circle? = null
     private var destinationMarker: Marker? = null
@@ -356,6 +683,8 @@ private class MapOverlays(
     private var line: Polyline? = null
     private var routeCasing: Polyline? = null
     private var routeLine: Polyline? = null
+    private var trackLine: Polyline? = null
+    private var lastTrackKey = ""
     private var lastRoute: DoubleArray? = null
     private var handledRecenter = 0
     private var handledZoomIn = 0
@@ -453,6 +782,35 @@ private class MapOverlays(
                 layers.add(marker)
             }
         }
+        // Numbered pins identify the first six current offline search results on the map.
+        val searchKey = state.searchResultPoints.take(6).joinToString("|") { "${it.latitude}:${it.longitude}" }
+        if (searchKey != searchResultKey) {
+            searchResultKey = searchKey
+            searchResultMarkers.forEach { layers.remove(it) }
+            searchResultMarkers.clear()
+            state.searchResultPoints.take(6).forEachIndexed { index, point ->
+                val (bitmap, offset) = pinBitmap(view.context, accentColor, (index + 1).toString(), false, density)
+                val marker = Marker(point, bitmap, 0, offset)
+                searchResultMarkers.add(marker)
+                layers.add(marker)
+            }
+        }
+
+        // A tapped POI remains visibly anchored to its geographic coordinate while the map pans or zooms.
+        val selectedPoi = state.selectedPoi
+        if (selectedPoi != null) {
+            if (selectedPoiMarker == null || selectedPoiAt != selectedPoi) {
+                selectedPoiMarker?.let { layers.remove(it) }
+                val (bitmap, offset) = pinBitmap(view.context, accentColor, "•", true, density)
+                selectedPoiMarker = Marker(selectedPoi, bitmap, 0, offset).also { layers.add(it) }
+                selectedPoiAt = selectedPoi
+            }
+        } else if (selectedPoiMarker != null) {
+            layers.remove(selectedPoiMarker!!)
+            selectedPoiMarker = null
+            selectedPoiAt = null
+        }
+
         // Bring a newly selected point into view.
         val selectedPlace = state.places.firstOrNull { it.id == state.selectedPlaceId }
         if (selectedPlace != null && (focusedPlace != selectedPlace.id || state.focusToken != handledFocus)) {
@@ -462,6 +820,20 @@ private class MapOverlays(
             if (view.model.mapViewPosition.zoomLevel.toInt() < 13) view.setZoomLevel(14.toByte())
         } else if (selectedPlace == null) {
             focusedPlace = null
+        }
+
+        // Imported or recorded GPX track, kept visually distinct from the active route.
+        val trackKey = state.trackPoints.joinToString("|") { "${it.latitude},${it.longitude}" }
+        if (trackKey != lastTrackKey) {
+            lastTrackKey = trackKey
+            trackLine?.let { layers.remove(it) }
+            trackLine = null
+            if (state.trackPoints.size >= 2) {
+                val line = Polyline(paint(trackColor, Style.STROKE, 4.5f * density), AndroidGraphicFactory.INSTANCE)
+                state.trackPoints.forEach { line.latLongs.add(it) }
+                trackLine = line
+                layers.add(1, line)
+            }
         }
 
         // Road route: a white casing under a coloured line, inserted below the markers.
@@ -545,32 +917,27 @@ private class MapOverlays(
             view.setCenter(here)
             if (view.model.mapViewPosition.zoomLevel.toInt() < 14) view.setZoomLevel(15.toByte())
         }
-        if (state.fitToken != handledFit && route != null && route.size >= 4) {
-            handledFit = state.fitToken
-            var minLat = Double.MAX_VALUE
-            var maxLat = -Double.MAX_VALUE
-            var minLon = Double.MAX_VALUE
-            var maxLon = -Double.MAX_VALUE
-            for (i in 0 until route.size / 2) {
-                minLat = minOf(minLat, route[2 * i])
-                maxLat = maxOf(maxLat, route[2 * i])
-                minLon = minOf(minLon, route[2 * i + 1])
-                maxLon = maxOf(maxLon, route[2 * i + 1])
+        if (state.fitToken != handledFit) {
+            val fitPoints: List<LatLong>? = when {
+                route != null && route.size >= 4 -> (0 until route.size / 2).map { LatLong(route[2 * it], route[2 * it + 1]) }
+                state.trackPoints.size >= 2 -> state.trackPoints
+                else -> null
             }
-            val box = BoundingBox(minLat, minLon, maxLat, maxLon)
-            val zoom = LatLongUtils.zoomForBounds(view.dimension, box, view.model.displayModel.tileSize).toInt() - 1
-            view.model.mapViewPosition.mapPosition = MapPosition(box.centerPoint, zoom.coerceIn(MIN_ZOOM.toInt(), 17).toByte())
+            if (fitPoints != null) {
+                handledFit = state.fitToken
+                val minLat = fitPoints.minOf { it.latitude }
+                val maxLat = fitPoints.maxOf { it.latitude }
+                val minLon = fitPoints.minOf { it.longitude }
+                val maxLon = fitPoints.maxOf { it.longitude }
+                val box = BoundingBox(minLat, minLon, maxLat, maxLon)
+                val zoom = LatLongUtils.zoomForBounds(view.dimension, box, view.model.displayModel.tileSize).toInt() - 1
+                view.model.mapViewPosition.mapPosition = MapPosition(box.centerPoint, zoom.coerceIn(MIN_ZOOM.toInt(), 17).toByte())
+            }
         }
         if (state.followUser && here != null) {
             view.setCenter(here)
             val speedKmh = if (location?.hasSpeed() == true) location.speed * 3.6f else 0f
-            val desiredZoom = when {
-                speedKmh >= 90f -> 11
-                speedKmh >= 60f -> 12
-                speedKmh >= 35f -> 13
-                speedKmh >= 15f -> 14
-                else -> 16
-            }
+            val desiredZoom = speedBasedZoomLevel(speedKmh).toInt()
             if (followZoomLevel != desiredZoom) {
                 followZoomLevel = desiredZoom
                 view.setZoomLevel(desiredZoom.toByte())

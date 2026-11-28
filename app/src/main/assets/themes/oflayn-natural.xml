@@ -1,0 +1,305 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<rendertheme xmlns="http://mapsforge.org/renderTheme"
+    xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+    xsi:schemaLocation="http://mapsforge.org/renderTheme https://raw.githubusercontent.com/mapsforge/mapsforge/master/resources/renderTheme.xsd"
+    version="5"
+    map-background="#F3F5EF"
+    map-background-outside="#E4E9E0">
+
+    <!-- Water: calm blue with subtle shoreline contrast. -->
+    <rule e="way" k="natural" v="water|bay">
+        <area fill="#B9DCEB" stroke="#A6CFDF" stroke-width="0.45"/>
+    </rule>
+    <rule e="way" k="waterway" v="riverbank|dock">
+        <area fill="#B9DCEB" stroke="#A6CFDF" stroke-width="0.35"/>
+    </rule>
+    <rule e="way" k="waterway" v="river|canal">
+        <line stroke="#A9D4E5" stroke-width="1.15" />
+    </rule>
+    <rule e="way" k="waterway" v="stream|ditch|drain">
+        <line stroke="#B5DCEB" stroke-width="0.55" />
+    </rule>
+
+    <!-- Natural and green areas. -->
+    <rule e="way" k="natural" v="wood|forest">
+        <area fill="#D5E6D0" stroke="#C6DCC1" stroke-width="0.35"/>
+    </rule>
+    <rule e="way" k="landuse" v="forest">
+        <area fill="#D1E3CC" stroke="#C1D8BC" stroke-width="0.35"/>
+    </rule>
+    <rule e="way" k="landuse" v="grass|meadow|farmland|farm|orchard|vineyard">
+        <area fill="#E7EFDC"/>
+    </rule>
+    <rule e="way" k="leisure" v="park|garden|nature_reserve|golf_course|recreation_ground">
+        <area fill="#DCEBD4" stroke="#C9DFC2" stroke-width="0.35"/>
+    </rule>
+    <rule e="way" k="natural" v="scrub|heath">
+        <area fill="#E2EBD8"/>
+    </rule>
+    <rule e="way" k="natural" v="beach">
+        <area fill="#F2E8CB"/>
+    </rule>
+    <rule e="way" k="natural" v="wetland|mud">
+        <area fill="#DDE8D8" stroke="#C8D8C7" stroke-width="0.35"/>
+    </rule>
+    <rule e="way" k="natural" v="bare_rock|scree">
+        <area fill="#E7E4DA"/>
+    </rule>
+    <rule e="way" k="landuse" v="allotments|cemetery">
+        <area fill="#E0EBD8"/>
+    </rule>
+    <rule e="way" k="landuse" v="quarry|brownfield|construction">
+        <area fill="#E8E4D9"/>
+    </rule>
+    <rule e="way" k="leisure" v="pitch|sports_centre|stadium">
+        <area fill="#DCE8D7" stroke="#C9D9C5" stroke-width="0.35"/>
+    </rule>
+    <rule e="way" k="natural" v="glacier|snowfield">
+        <area fill="#F8FBFC" stroke="#D9E8ED" stroke-width="0.4"/>
+    </rule>
+
+    <!-- Built-up areas and buildings. -->
+    <rule e="way" k="landuse" v="residential|commercial|retail|industrial">
+        <area fill="#ECEDE7"/>
+    </rule>
+    <rule e="way" k="building" v="*" zoom-min="13">
+        <area fill="#D9DAD4" stroke="#C7C9C1" stroke-width="0.35"/>
+    </rule>
+
+    <!-- Airports and transport infrastructure. -->
+    <rule e="way" k="aeroway" v="runway">
+        <line stroke="#D2D4D0" stroke-width="3.2"/>
+    </rule>
+    <rule e="way" k="aeroway" v="taxiway">
+        <line stroke="#DADBD6" stroke-width="1.4"/>
+    </rule>
+    <rule e="way" k="aeroway" v="apron|aerodrome">
+        <area fill="#E4E5DF"/>
+    </rule>
+
+    <!-- Roads are layered: soft casing first, then a warm, readable centre. -->
+    <rule e="way" k="highway" v="motorway|motorway_link|trunk|trunk_link|primary|primary_link|secondary|secondary_link|tertiary|tertiary_link|unclassified|residential|living_street|service|track|path|footway|cycleway|pedestrian">
+        <line stroke="#FFFFFF" stroke-width="3.2"/>
+    </rule>
+    <rule e="way" k="highway" v="motorway|motorway_link|trunk|trunk_link">
+        <line stroke="#E8B978" stroke-width="2.25"/>
+    </rule>
+    <rule e="way" k="highway" v="primary|primary_link">
+        <line stroke="#F0C98F" stroke-width="1.9"/>
+    </rule>
+    <rule e="way" k="highway" v="secondary|secondary_link">
+        <line stroke="#F5D9AD" stroke-width="1.55"/>
+    </rule>
+    <rule e="way" k="highway" v="tertiary|tertiary_link|unclassified">
+        <line stroke="#FFFFFF" stroke-width="1.25"/>
+    </rule>
+    <rule e="way" k="highway" v="residential|living_street|service">
+        <line stroke="#FFFFFF" stroke-width="0.95"/>
+    </rule>
+    <rule e="way" k="highway" v="track">
+        <line stroke="#D6C9A9" stroke-width="0.85" stroke-dasharray="3,2"/>
+    </rule>
+    <rule e="way" k="highway" v="path|footway|cycleway|pedestrian">
+        <line stroke="#C5B99F" stroke-width="0.55" stroke-dasharray="2,2"/>
+    </rule>
+    <rule e="way" k="highway" v="steps">
+        <line stroke="#BFB7A6" stroke-width="0.55" stroke-dasharray="1,1"/>
+    </rule>
+    <rule e="way" k="highway" v="bridleway">
+        <line stroke="#CBBE9F" stroke-width="0.55" stroke-dasharray="3,2"/>
+    </rule>
+    <rule e="way" k="tunnel" v="yes">
+        <line stroke="#C9C8C0" stroke-width="0.7" stroke-dasharray="2,2"/>
+    </rule>
+
+    <!-- Railways and administrative borders. -->
+    <rule e="way" k="railway" v="rail|light_rail|subway">
+        <line stroke="#A9A9A3" stroke-width="0.65" stroke-dasharray="4,2"/>
+    </rule>
+    <rule e="way" k="boundary" v="administrative">
+        <line stroke="#C7A6A6" stroke-width="0.45" stroke-dasharray="5,3"/>
+    </rule>
+    <rule e="way" k="power" v="line">
+        <line stroke="#C8C9C2" stroke-width="0.45" stroke-dasharray="2,2"/>
+    </rule>
+    <rule e="way" k="barrier" v="fence|wall">
+        <line stroke="#C9C8BF" stroke-width="0.35"/>
+    </rule>
+
+    <!-- POI symbols use the bundled Mapsforge theme assets; no network resources. -->
+    <rule e="node" k="amenity" v="fuel" zoom-min="15">
+        <symbol src="jar:symbols/transport/fuel.svg"/>
+        <caption k="name" font-size="8" fill="#687268" stroke="#F3F5EF" stroke-width="1.8" priority="4"/>
+    </rule>
+    <rule e="node" k="amenity" v="parking|bicycle_parking|motorcycle_parking" zoom-min="16">
+        <symbol src="jar:symbols/transport/parking.svg"/>
+        <caption k="name" font-size="8" fill="#687268" stroke="#F3F5EF" stroke-width="1.8" priority="4"/>
+    </rule>
+    <rule e="node" k="amenity" v="atm" zoom-min="16">
+        <symbol src="jar:symbols/money/atm2.svg"/>
+        <caption k="name" font-size="8" fill="#687268" stroke="#F3F5EF" stroke-width="1.8" priority="4"/>
+    </rule>
+    <rule e="node" k="amenity" v="bank" zoom-min="16">
+        <symbol src="jar:symbols/money/bank2.svg"/>
+        <caption k="name" font-size="8" fill="#687268" stroke="#F3F5EF" stroke-width="1.8" priority="4"/>
+    </rule>
+    <rule e="node" k="amenity" v="restaurant" zoom-min="16">
+        <symbol src="jar:symbols/food/restaurant.svg"/>
+        <caption k="name" font-size="8" fill="#687268" stroke="#F3F5EF" stroke-width="1.8" priority="4"/>
+    </rule>
+    <rule e="node" k="amenity" v="cafe" zoom-min="16">
+        <symbol src="jar:symbols/food/cafe.svg"/>
+        <caption k="name" font-size="8" fill="#687268" stroke="#F3F5EF" stroke-width="1.8" priority="4"/>
+    </rule>
+    <rule e="node" k="amenity" v="fast_food|food_court" zoom-min="16">
+        <symbol src="jar:symbols/food/fastfood.svg"/>
+        <caption k="name" font-size="8" fill="#687268" stroke="#F3F5EF" stroke-width="1.8" priority="4"/>
+    </rule>
+    <rule e="node" k="amenity" v="pharmacy" zoom-min="16">
+        <symbol src="jar:symbols/health/pharmacy.svg"/>
+        <caption k="name" font-size="8" fill="#687268" stroke="#F3F5EF" stroke-width="1.8" priority="4"/>
+    </rule>
+    <rule e="node" k="amenity" v="hospital|clinic" zoom-min="16">
+        <symbol src="jar:symbols/health/hospital.svg"/>
+        <caption k="name" font-size="8" fill="#687268" stroke="#F3F5EF" stroke-width="1.8" priority="4"/>
+    </rule>
+    <rule e="node" k="amenity" v="doctors|dentist" zoom-min="16">
+        <symbol src="jar:symbols/health/doctors2.svg"/>
+        <caption k="name" font-size="8" fill="#687268" stroke="#F3F5EF" stroke-width="1.8" priority="4"/>
+    </rule>
+    <rule e="node" k="shop" v="supermarket" zoom-min="16">
+        <symbol src="jar:symbols/shopping/supermarket.svg"/>
+        <caption k="name" font-size="8" fill="#687268" stroke="#F3F5EF" stroke-width="1.8" priority="4"/>
+    </rule>
+    <rule e="node" k="shop" v="convenience" zoom-min="16">
+        <symbol src="jar:symbols/shopping/convenience.svg"/>
+        <caption k="name" font-size="8" fill="#687268" stroke="#F3F5EF" stroke-width="1.8" priority="4"/>
+    </rule>
+    <rule e="node" k="tourism" v="attraction" zoom-min="15">
+        <symbol src="jar:symbols/tourist/attraction.svg"/>
+        <caption k="name" font-size="8" fill="#687268" stroke="#F3F5EF" stroke-width="1.8" priority="4"/>
+    </rule>
+    <rule e="node" k="tourism" v="museum" zoom-min="15">
+        <symbol src="jar:symbols/tourist/museum.svg"/>
+        <caption k="name" font-size="8" fill="#687268" stroke="#F3F5EF" stroke-width="1.8" priority="4"/>
+    </rule>
+    <rule e="node" k="tourism" v="viewpoint" zoom-min="15">
+        <symbol src="jar:symbols/tourist/view_point.svg"/>
+        <caption k="name" font-size="8" fill="#687268" stroke="#F3F5EF" stroke-width="1.8" priority="4"/>
+    </rule>
+    <rule e="node" k="tourism" v="zoo" zoom-min="15">
+        <symbol src="jar:symbols/tourist/zoo.svg"/>
+        <caption k="name" font-size="8" fill="#687268" stroke="#F3F5EF" stroke-width="1.8" priority="4"/>
+    </rule>
+    <rule e="node" k="historic" v="monument" zoom-min="15">
+        <symbol src="jar:symbols/tourist/monument.svg"/>
+        <caption k="name" font-size="8" fill="#687268" stroke="#F3F5EF" stroke-width="1.8" priority="4"/>
+    </rule>
+    <rule e="node" k="historic" v="memorial" zoom-min="15">
+        <symbol src="jar:symbols/tourist/memorial.svg"/>
+        <caption k="name" font-size="8" fill="#687268" stroke="#F3F5EF" stroke-width="1.8" priority="4"/>
+    </rule>
+    <rule e="node" k="historic" v="castle" zoom-min="15">
+        <symbol src="jar:symbols/tourist/castle2.svg"/>
+        <caption k="name" font-size="8" fill="#687268" stroke="#F3F5EF" stroke-width="1.8" priority="4"/>
+    </rule>
+    <rule e="node" k="historic" v="ruins|archaeological_site" zoom-min="15">
+        <symbol src="jar:symbols/tourist/ruin.svg"/>
+        <caption k="name" font-size="8" fill="#687268" stroke="#F3F5EF" stroke-width="1.8" priority="4"/>
+    </rule>
+    <!-- Closed OSM features (shops, facilities and attractions mapped as areas). -->
+    <rule e="way" k="amenity" v="fuel" closed="yes" zoom-min="16">
+        <symbol src="jar:symbols/transport/fuel.svg"/>
+        <caption k="name" font-size="8" fill="#687268" stroke="#F3F5EF" stroke-width="1.8" priority="4"/>
+    </rule>
+    <rule e="way" k="amenity" v="parking|bicycle_parking|motorcycle_parking" closed="yes" zoom-min="16">
+        <symbol src="jar:symbols/transport/parking.svg"/>
+        <caption k="name" font-size="8" fill="#687268" stroke="#F3F5EF" stroke-width="1.8" priority="4"/>
+    </rule>
+    <rule e="way" k="amenity" v="atm" closed="yes" zoom-min="16">
+        <symbol src="jar:symbols/money/atm2.svg"/>
+        <caption k="name" font-size="8" fill="#687268" stroke="#F3F5EF" stroke-width="1.8" priority="4"/>
+    </rule>
+    <rule e="way" k="amenity" v="bank" closed="yes" zoom-min="16">
+        <symbol src="jar:symbols/money/bank2.svg"/>
+        <caption k="name" font-size="8" fill="#687268" stroke="#F3F5EF" stroke-width="1.8" priority="4"/>
+    </rule>
+    <rule e="way" k="amenity" v="restaurant" closed="yes" zoom-min="16">
+        <symbol src="jar:symbols/food/restaurant.svg"/>
+        <caption k="name" font-size="8" fill="#687268" stroke="#F3F5EF" stroke-width="1.8" priority="4"/>
+    </rule>
+    <rule e="way" k="amenity" v="cafe" closed="yes" zoom-min="16">
+        <symbol src="jar:symbols/food/cafe.svg"/>
+        <caption k="name" font-size="8" fill="#687268" stroke="#F3F5EF" stroke-width="1.8" priority="4"/>
+    </rule>
+    <rule e="way" k="amenity" v="fast_food|food_court" closed="yes" zoom-min="16">
+        <symbol src="jar:symbols/food/fastfood.svg"/>
+        <caption k="name" font-size="8" fill="#687268" stroke="#F3F5EF" stroke-width="1.8" priority="4"/>
+    </rule>
+    <rule e="way" k="amenity" v="pharmacy" closed="yes" zoom-min="16">
+        <symbol src="jar:symbols/health/pharmacy.svg"/>
+        <caption k="name" font-size="8" fill="#687268" stroke="#F3F5EF" stroke-width="1.8" priority="4"/>
+    </rule>
+    <rule e="way" k="amenity" v="hospital|clinic" closed="yes" zoom-min="16">
+        <symbol src="jar:symbols/health/hospital.svg"/>
+        <caption k="name" font-size="8" fill="#687268" stroke="#F3F5EF" stroke-width="1.8" priority="4"/>
+    </rule>
+    <rule e="way" k="amenity" v="doctors|dentist" closed="yes" zoom-min="16">
+        <symbol src="jar:symbols/health/doctors2.svg"/>
+        <caption k="name" font-size="8" fill="#687268" stroke="#F3F5EF" stroke-width="1.8" priority="4"/>
+    </rule>
+    <rule e="way" k="shop" v="supermarket" closed="yes" zoom-min="16">
+        <symbol src="jar:symbols/shopping/supermarket.svg"/>
+        <caption k="name" font-size="8" fill="#687268" stroke="#F3F5EF" stroke-width="1.8" priority="4"/>
+    </rule>
+    <rule e="way" k="shop" v="convenience" closed="yes" zoom-min="16">
+        <symbol src="jar:symbols/shopping/convenience.svg"/>
+        <caption k="name" font-size="8" fill="#687268" stroke="#F3F5EF" stroke-width="1.8" priority="4"/>
+    </rule>
+    <rule e="way" k="tourism" v="attraction" closed="yes" zoom-min="16">
+        <symbol src="jar:symbols/tourist/attraction.svg"/>
+        <caption k="name" font-size="8" fill="#687268" stroke="#F3F5EF" stroke-width="1.8" priority="4"/>
+    </rule>
+    <rule e="way" k="tourism" v="museum" closed="yes" zoom-min="16">
+        <symbol src="jar:symbols/tourist/museum.svg"/>
+        <caption k="name" font-size="8" fill="#687268" stroke="#F3F5EF" stroke-width="1.8" priority="4"/>
+    </rule>
+    <rule e="way" k="tourism" v="viewpoint" closed="yes" zoom-min="16">
+        <symbol src="jar:symbols/tourist/view_point.svg"/>
+        <caption k="name" font-size="8" fill="#687268" stroke="#F3F5EF" stroke-width="1.8" priority="4"/>
+    </rule>
+    <rule e="way" k="tourism" v="zoo" closed="yes" zoom-min="16">
+        <symbol src="jar:symbols/tourist/zoo.svg"/>
+        <caption k="name" font-size="8" fill="#687268" stroke="#F3F5EF" stroke-width="1.8" priority="4"/>
+    </rule>
+    <rule e="way" k="historic" v="monument" closed="yes" zoom-min="16">
+        <symbol src="jar:symbols/tourist/monument.svg"/>
+        <caption k="name" font-size="8" fill="#687268" stroke="#F3F5EF" stroke-width="1.8" priority="4"/>
+    </rule>
+    <rule e="way" k="historic" v="memorial" closed="yes" zoom-min="16">
+        <symbol src="jar:symbols/tourist/memorial.svg"/>
+        <caption k="name" font-size="8" fill="#687268" stroke="#F3F5EF" stroke-width="1.8" priority="4"/>
+    </rule>
+    <rule e="way" k="historic" v="castle" closed="yes" zoom-min="16">
+        <symbol src="jar:symbols/tourist/castle2.svg"/>
+        <caption k="name" font-size="8" fill="#687268" stroke="#F3F5EF" stroke-width="1.8" priority="4"/>
+    </rule>
+    <rule e="way" k="historic" v="ruins|archaeological_site" closed="yes" zoom-min="16">
+        <symbol src="jar:symbols/tourist/ruin.svg"/>
+        <caption k="name" font-size="8" fill="#687268" stroke="#F3F5EF" stroke-width="1.8" priority="4"/>
+    </rule>
+
+    <!-- Labels: restrained ink and a light halo for legibility. -->
+    <rule e="node" k="place" v="city|town|village|hamlet|suburb|neighbourhood">
+        <caption k="name" font-size="12" fill="#46564B" stroke="#F3F5EF" stroke-width="2.2" />
+    </rule>
+    <rule e="way" k="waterway" v="river|canal" zoom-min="12">
+        <pathText k="name" font-size="9" fill="#5E9DB8" stroke="#F3F5EF" stroke-width="2.0"/>
+    </rule>
+    <rule e="way" k="highway" v="motorway|trunk|primary|secondary" zoom-min="13">
+        <pathText k="name" font-size="8" fill="#8A8170" stroke="#FFFFFF" stroke-width="1.8"/>
+    </rule>
+    <rule e="node" k="natural" v="peak|volcano|saddle" zoom-min="11">
+        <caption k="name" font-size="9" fill="#6D7165" stroke="#F3F5EF" stroke-width="2.0"/>
+    </rule>
+</rendertheme>

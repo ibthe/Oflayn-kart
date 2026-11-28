@@ -19,7 +19,7 @@ permissions:
 
 
 concurrency:
-  group: android-ci-${{ github.ref }}
+  group: android-ci-build-${{ github.ref }}
   cancel-in-progress: false
 
 jobs:
@@ -49,6 +49,12 @@ jobs:
         with:
           gradle-version: '9.6.0'
 
+      - name: Install offline DEM build dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install --yes python3-rasterio python3-contourpy python3-pyosmium
+          python3 -c "import contourpy, numpy, osmium, rasterio; print('Rasterio', rasterio.__version__, 'NumPy', numpy.__version__, 'ContourPy', contourpy.__version__, 'PyOsmium ready')"
+
       - name: Verify source manifest is offline
         run: python3 scripts/verify_offline_manifest.py
 
@@ -58,8 +64,23 @@ jobs:
       - name: Test offline POI extractor and progress logging
         run: python3 scripts/test_build_poi_database.py
 
+      - name: Test offline DEM tile selection and encoding
+        run: python3 scripts/test_build_dem.py
+
+      - name: Test offline DEM elevation sampling
+        run: python3 scripts/test_dem_sampler.py
+
+      - name: Test offline elevation contour generation
+        run: python3 scripts/test_build_contours.py
+
       - name: Test offline road graph builder and reference router
         run: python3 scripts/test_build_road_graph.py
+
+      - name: Smoke-test OSM turn restriction extraction
+        run: python3 scripts/test_road_turn_restriction_smoke.py
+
+      - name: Generate tiny routing fixtures for Android tests
+        run: python3 scripts/make_road_graph_fixture.py
 
       - name: Test verified OSM PBF cache and retry behavior
         run: python3 scripts/test_prepare_georgia_pbf.py
@@ -77,10 +98,11 @@ jobs:
             app/src/main/assets/offline/georgia.map
             app/src/main/assets/offline/georgia-poi.sqlite
             app/src/main/assets/offline/georgia-map-build.json
-          key: mapsforge-georgia-v0.25.0-poi-v3-${{ runner.os }}-${{ github.run_id }}
+          key: mapsforge-georgia-v0.25.0-poi-v4-${{ runner.os }}-${{ hashFiles('scripts/build_georgia_map.sh', 'scripts/build_poi_database.py', 'scripts/verify_poi_database.py', 'scripts/road_graph_format.py', 'scripts/verify_bundled_map.py') }}-${{ github.run_id }}
           restore-keys: |
-            mapsforge-georgia-v0.25.0-poi-v3-${{ runner.os }}-
-            mapsforge-georgia-v0.25.0-poi-v3-
+            mapsforge-georgia-v0.25.0-poi-v4-${{ runner.os }}-${{ hashFiles('scripts/build_georgia_map.sh', 'scripts/build_poi_database.py', 'scripts/verify_poi_database.py', 'scripts/road_graph_format.py', 'scripts/verify_bundled_map.py') }}-
+            mapsforge-georgia-v0.25.0-poi-v4-${{ runner.os }}-
+            mapsforge-georgia-v0.25.0-poi-v4-
 
       - name: Validate restored map cache
         id: map-state
@@ -143,20 +165,34 @@ jobs:
           echo "Installed Osmosis Debian package: ${osmosis_package_version}"
           echo "Installed PyOsmium Debian package: ${pyosmium_package_version}"
 
+      - name: Restore or cache Georgia Copernicus DEM tiles
+        id: georgia_dem_cache
+        uses: actions/cache@v4
+        with:
+          path: app/src/main/assets/dem
+          key: georgia-dem-glo90-v1-${{ runner.os }}-${{ hashFiles('scripts/build_dem.py') }}
+
+      - name: Build Georgia Copernicus GLO-90 elevation tiles
+        if: ${{ steps.georgia_dem_cache.outputs['cache-hit'] != 'true' }}
+        run: python3 scripts/build_dem.py --output app/src/main/assets/dem
+
+      - name: Verify Georgia DEM package
+        run: python3 scripts/verify_dem.py app/src/main/assets/dem
+
       - name: Restore most recent offline road graph
         uses: actions/cache/restore@v4
         with:
           path: app/src/main/assets/offline/georgia-roads.bin
-          key: georgia-roads-v1-${{ runner.os }}-restore-only
+          key: georgia-roads-v7-${{ runner.os }}-${{ hashFiles('scripts/road_graph_format.py', 'scripts/build_road_graph.py', 'scripts/verify_road_graph.py', 'scripts/dem_sampler.py', 'scripts/build_dem.py', 'app/src/main/assets/dem/manifest.json') }}-restore-only
           restore-keys: |
-            georgia-roads-v1-${{ runner.os }}-
+            georgia-roads-v7-${{ runner.os }}-
 
       - name: Check restored road graph
         id: roads-state
         shell: bash
         run: |
           roads=app/src/main/assets/offline/georgia-roads.bin
-          if [[ -s "$roads" && "$(head -c 4 "$roads")" == "GRT1" ]]; then
+          if [[ -s "$roads" ]] && python3 scripts/verify_road_graph.py "$roads"; then
             echo "exists=true" >> "$GITHUB_OUTPUT"
             echo "Restored road graph: $(stat -c %s "$roads") bytes"
           else
@@ -183,7 +219,7 @@ jobs:
               bash scripts/prepare_georgia_pbf.sh || return 1
             fi
             local out="${RUNNER_TEMP}/georgia-roads.bin"
-            python3 scripts/build_road_graph.py data/cache/georgia-latest.osm.pbf "$out" --summary "${RUNNER_TEMP}/georgia-roads-summary.json" || return 1
+            python3 scripts/build_road_graph.py data/cache/georgia-latest.osm.pbf "$out" --dem-dir app/src/main/assets/dem --summary "${RUNNER_TEMP}/georgia-roads-summary.json" || return 1
             python3 scripts/verify_road_graph.py "$out" || return 1
             mkdir -p app/src/main/assets/offline || return 1
             mv "$out" app/src/main/assets/offline/georgia-roads.bin || return 1
@@ -201,7 +237,7 @@ jobs:
         uses: actions/cache/save@v4
         with:
           path: app/src/main/assets/offline/georgia-roads.bin
-          key: georgia-roads-v1-${{ runner.os }}-${{ github.run_id }}
+          key: georgia-roads-v7-${{ runner.os }}-${{ hashFiles('scripts/road_graph_format.py', 'scripts/build_road_graph.py', 'scripts/verify_road_graph.py', 'scripts/dem_sampler.py', 'scripts/build_dem.py', 'app/src/main/assets/dem/manifest.json') }}-${{ github.run_id }}
 
       - name: Build Mapsforge map-writer plugin
         if: ${{ success() && (steps.map-state.outputs.exists != 'true' || github.event_name == 'schedule' || inputs.refresh_map == true) }}
@@ -233,13 +269,99 @@ jobs:
             app/src/main/assets/offline/georgia.map
             app/src/main/assets/offline/georgia-poi.sqlite
             app/src/main/assets/offline/georgia-map-build.json
-          key: mapsforge-georgia-v0.25.0-poi-v3-${{ runner.os }}-${{ steps.generate-map.outputs.provider }}-${{ steps.generate-map.outputs.source-md5 }}-${{ github.run_id }}
+          key: mapsforge-georgia-v0.25.0-poi-v4-${{ runner.os }}-${{ hashFiles('scripts/build_georgia_map.sh', 'scripts/build_poi_database.py', 'scripts/verify_poi_database.py', 'scripts/road_graph_format.py', 'scripts/verify_bundled_map.py') }}-${{ steps.generate-map.outputs.provider }}-${{ steps.generate-map.outputs.source-md5 }}-${{ github.run_id }}
 
       - name: Verify generated country map and multilingual metadata
         run: python3 scripts/verify_bundled_map.py
 
+      - name: Report full-country POI coverage and deduplication
+        run: |
+          python3 - <<'PY'
+          import json
+          import sqlite3
+          from pathlib import Path
+          manifest = json.loads(Path("app/src/main/assets/offline/georgia-map-build.json").read_text())
+          print("Full-country POI count:", manifest.get("poiCount", 0))
+          print("Multipolygon relation POIs:", manifest.get("poiRelationsWritten", 0))
+          print("Cross-geometry duplicates removed:", manifest.get("poiDuplicatesRemoved", 0))
+          print("POI coverage:", manifest.get("poiGeometryCoverage", "not reported"))
+          print("Deduplication:", manifest.get("poiDeduplication", "not reported"))
+          connection = sqlite3.connect("app/src/main/assets/offline/georgia-poi.sqlite")
+          try:
+              rows = connection.execute("SELECT category, subcategory, COUNT(*) FROM poi GROUP BY category, subcategory ORDER BY COUNT(*) DESC").fetchall()
+              print("POI category/subcategory distribution:")
+              for category, subcategory, count in rows:
+                  print(f"  {category}/{subcategory}: {count}")
+          finally:
+              connection.close()
+          PY
+
+      - name: Restore or cache Georgia elevation contour map
+        id: contours_cache
+        uses: actions/cache@v4
+        with:
+          path: |
+            app/src/main/assets/offline/georgia-contours.map
+            app/src/main/assets/offline/georgia-contours-manifest.json
+          key: georgia-contours-v1-${{ runner.os }}-${{ hashFiles('scripts/build_contours.py', 'scripts/build_contours_map.sh', 'scripts/verify_contours_map.py', 'scripts/install_mapsforge_writer.sh', 'scripts/build_georgia_map.sh') }}-${{ hashFiles('app/src/main/assets/dem/manifest.json') }}
+
+      - name: Install Osmosis for contour map build
+        if: ${{ success() && steps.contours_cache.outputs['cache-hit'] != 'true' && steps.map-state.outputs.exists == 'true' }}
+        run: |
+          sudo apt-get update
+          sudo apt-get install --yes osmosis
+
+      - name: Build Mapsforge map-writer plugin for contour layer
+        if: ${{ success() && steps.contours_cache.outputs['cache-hit'] != 'true' && steps.map-state.outputs.exists == 'true' }}
+        run: bash scripts/install_mapsforge_writer.sh
+
+      - name: Generate elevation contour geometry
+        if: ${{ steps.contours_cache.outputs['cache-hit'] != 'true' }}
+        run: |
+          python3 scripts/build_contours.py \
+            --dem-dir app/src/main/assets/dem \
+            --output-osm build/georgia-contours.osm \
+            --manifest build/georgia-contours-manifest.json
+
+      - name: Build separate Mapsforge contour map
+        if: ${{ steps.contours_cache.outputs['cache-hit'] != 'true' }}
+        run: |
+          bash scripts/build_contours_map.sh \
+            build/georgia-contours.osm \
+            app/src/main/assets/offline/georgia-contours.map \
+            build/georgia-contours-manifest.json \
+            app/src/main/assets/offline/georgia-contours-manifest.json
+
+      - name: Save generated contour map cache
+        if: ${{ success() && steps.contours_cache.outputs['cache-hit'] != 'true' }}
+        uses: actions/cache/save@v4
+        with:
+          path: |
+            app/src/main/assets/offline/georgia-contours.map
+            app/src/main/assets/offline/georgia-contours-manifest.json
+          key: georgia-contours-v1-${{ runner.os }}-${{ hashFiles('scripts/build_contours.py', 'scripts/build_contours_map.sh', 'scripts/verify_contours_map.py', 'scripts/install_mapsforge_writer.sh', 'scripts/build_georgia_map.sh') }}-${{ hashFiles('app/src/main/assets/dem/manifest.json') }}
+
+      - name: Verify offline contour map
+        run: |
+          python3 scripts/verify_contours_map.py \
+            --map app/src/main/assets/offline/georgia-contours.map \
+            --existing-manifest app/src/main/assets/offline/georgia-contours-manifest.json
+
       - name: Assemble debug APK with the complete offline map
         run: gradle --no-daemon --stacktrace --console=plain :app:assembleDebug
+
+      - name: Inspect packaged DEM asset paths
+        run: |
+          python3 - <<'PY'
+          import glob, zipfile
+          apk = glob.glob("app/build/outputs/apk/debug/*.apk")[0]
+          with zipfile.ZipFile(apk) as archive:
+              entries = sorted(name for name in archive.namelist() if name.startswith("assets/dem/"))
+          print("APK DEM entries:", len(entries))
+          for name in entries[:40]:
+              print(name)
+          PY
+          find app/build -path "*/merged_assets/*/out/dem/*" -type f | head -40 || true
 
       - name: Verify the APK contains the full offline map
         run: python3 scripts/verify_apk_bundle.py
@@ -247,10 +369,57 @@ jobs:
       - name: Verify merged manifest remains offline
         run: python3 scripts/verify_offline_manifest.py --include-merged
 
-      - name: Upload APK
+      - name: Assemble Android UI regression tests
+        run: gradle --no-daemon --stacktrace --console=plain :app:assembleDebugAndroidTest
+
+      - name: Upload APKs for emulator validation
         uses: actions/upload-artifact@v4
         with:
           name: GeorgiaOffline-debug-apk
-          path: app/build/outputs/apk/debug/*.apk
+          path: |
+            app/build/outputs/apk/debug/*.apk
+            app/build/outputs/apk/androidTest/debug/*.apk
           if-no-files-found: error
+          retention-days: 14
+
+  emulator-smoke:
+    name: Android emulator smoke and UI regression
+    needs: build
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - name: Checkout smoke-test scripts
+        uses: actions/checkout@v6
+
+      - name: Download APK artifacts
+        uses: actions/download-artifact@v4
+        with:
+          name: GeorgiaOffline-debug-apk
+          path: artifacts/apks
+
+      - name: Run instrumentation tests and capture map screenshot
+        uses: reactivecircus/android-emulator-runner@v2
+        env:
+          ANDROID_I_WANT_MY_TCG: "yes"
+        with:
+          api-level: 35
+          # Android Test Devices image omits most consumer Google services.
+          # This keeps the emulator lighter and avoids unrelated background ANRs.
+          target: aosp_atd
+          arch: x86_64
+          profile: pixel_2
+          cores: 4
+          ram-size: 4096M
+          heap-size: 512M
+          disable-animations: true
+          disable-spellchecker: true
+          script: bash .github/scripts/android-emulator-smoke.sh
+
+      - name: Upload emulator screenshots and logs
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: GeorgiaOffline-emulator-smoke
+          path: artifacts/apks
+          if-no-files-found: warn
           retention-days: 14

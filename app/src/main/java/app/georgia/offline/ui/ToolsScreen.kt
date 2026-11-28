@@ -1,7 +1,18 @@
 package app.georgia.offline.ui
 
 import android.content.Context
+import android.content.Intent
+import android.content.IntentFilter
+import android.os.BatteryManager
+import android.net.ConnectivityManager
+import android.net.NetworkCapabilities
 import android.location.Location
+import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.rememberCoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -11,13 +22,18 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.background
 import androidx.compose.material3.ButtonDefaults
+import androidx.compose.material3.Checkbox
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.OutlinedButton
+import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -26,17 +42,217 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import app.georgia.offline.data.LocalSettings
+import app.georgia.offline.data.SafetyChecklistRepository
+import app.georgia.offline.data.GpxCodec
+import app.georgia.offline.data.TrackRepository
+import app.georgia.offline.data.SavedTrackInfo
+import app.georgia.offline.data.TrackPoint
+import app.georgia.offline.data.GpxTrack
 import app.georgia.offline.domain.GeoFormatting
 import app.georgia.offline.domain.Qibla
 import app.georgia.offline.ui.theme.Space
-import java.util.Locale
 import kotlin.math.abs
 import kotlin.math.roundToInt
+import java.util.Locale
+
+
+private data class DeviceStatus(
+    val batteryPercent: Int?,
+    val charging: Boolean?,
+    val internetAvailable: Boolean?,
+)
+
+private fun readDeviceStatus(context: Context): DeviceStatus {
+    val batteryIntent = context.registerReceiver(null, IntentFilter(Intent.ACTION_BATTERY_CHANGED))
+    val level = batteryIntent?.getIntExtra(BatteryManager.EXTRA_LEVEL, -1) ?: -1
+    val scale = batteryIntent?.getIntExtra(BatteryManager.EXTRA_SCALE, -1) ?: -1
+    val batteryManager = context.getSystemService(Context.BATTERY_SERVICE) as? BatteryManager
+    val fallbackCapacity = batteryManager?.getIntProperty(BatteryManager.BATTERY_PROPERTY_CAPACITY) ?: -1
+    val percent = when {
+        level >= 0 && scale > 0 -> (level * 100 / scale).coerceIn(0, 100)
+        fallbackCapacity in 0..100 -> fallbackCapacity
+        else -> null
+    }
+    val batteryStatus = batteryIntent?.getIntExtra(BatteryManager.EXTRA_STATUS, -1) ?: -1
+    val charging = when (batteryStatus) {
+        BatteryManager.BATTERY_STATUS_CHARGING, BatteryManager.BATTERY_STATUS_FULL -> true
+        BatteryManager.BATTERY_STATUS_DISCHARGING, BatteryManager.BATTERY_STATUS_NOT_CHARGING -> false
+        else -> null
+    }
+    val internetAvailable = runCatching {
+        val connectivity = context.getSystemService(Context.CONNECTIVITY_SERVICE) as? ConnectivityManager
+        if (connectivity == null) {
+            null
+        } else {
+            val network = connectivity.activeNetwork
+            val capabilities = network?.let(connectivity::getNetworkCapabilities)
+            capabilities?.hasCapability(NetworkCapabilities.NET_CAPABILITY_VALIDATED) == true
+        }
+    }.getOrNull()
+    return DeviceStatus(percent, charging, internetAvailable)
+}
 
 @Composable
-fun ToolsScreen(modifier: Modifier = Modifier, settings: LocalSettings, tracker: LocationTracker) {
+private fun DeviceStatusPanel(context: Context) {
+    var status by remember { mutableStateOf(readDeviceStatus(context)) }
+    val batteryPercent = status.batteryPercent
+    Panel(padding = 0.dp) {
+        Column(
+            Modifier.fillMaxWidth().padding(Space.card),
+            verticalArrangement = Arrangement.spacedBy(Space.xs)
+        ) {
+            Row(
+                Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Text("Состояние устройства", style = MaterialTheme.typography.titleMedium)
+                OutlinedButton(onClick = { status = readDeviceStatus(context) }) {
+                    Text("Обновить")
+                }
+            }
+            MetricRow(
+                "Заряд батареи",
+                status.batteryPercent?.let { "${it}%" } ?: "нет данных"
+            )
+            MetricRow(
+                "Питание",
+                when (status.charging) {
+                    true -> "зарядка"
+                    false -> "от батареи"
+                    null -> "нет данных"
+                }
+            )
+            MetricRow(
+                "Сеть",
+                when (status.internetAvailable) {
+                    true -> "интернет доступен"
+                    false -> "нет сети · офлайн-карты доступны"
+                    null -> "статус недоступен"
+                }
+            )
+            if (batteryPercent != null && batteryPercent <= 20 && status.charging != true) {
+                Text(
+                    "Низкий заряд. Для длительной поездки подключите питание или включите энергосбережение.",
+                    color = MaterialTheme.colorScheme.error,
+                    style = MaterialTheme.typography.bodySmall
+                )
+            }
+            Text(
+                "Проверка выполняется на устройстве вручную. Приложение не запрашивает доступ к интернету.",
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                style = MaterialTheme.typography.bodySmall
+            )
+        }
+    }
+}
+
+@Composable
+private fun IncidentResponsePanel() {
+    var expanded by rememberSaveable { mutableStateOf(false) }
+    Panel(padding = 0.dp) {
+        Column(
+            Modifier.fillMaxWidth().padding(Space.card),
+            verticalArrangement = Arrangement.spacedBy(Space.xs)
+        ) {
+            Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                    Text("Если произошло ДТП", style = MaterialTheme.typography.titleMedium)
+                    Text(
+                        "Краткая памятка до прибытия экстренных служб",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+                TextButton(onClick = { expanded = !expanded }) {
+                    Text(if (expanded) "Свернуть" else "Открыть")
+                }
+            }
+            if (expanded) {
+                SafetyChecklistRepository.incidentSteps.forEachIndexed { index, item ->
+                    if (index > 0) HorizontalDivider()
+                    Column(Modifier.fillMaxWidth().padding(vertical = Space.xs), verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                        Text("${index + 1}. ${item.title}", style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.SemiBold)
+                        Text(item.detail, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    }
+                }
+                Text(
+                    "Это краткая справка, а не обучение первой помощи. Не подвергай себя опасности и выполняй указания оператора 112.",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun PreRideSafetyChecklist(context: Context) {
+    val items = SafetyChecklistRepository.items
+    var checkedIds by remember { mutableStateOf(SafetyChecklistRepository.load(context)) }
+
+    Panel(padding = 0.dp) {
+        Column(
+            Modifier.fillMaxWidth().padding(Space.card),
+            verticalArrangement = Arrangement.spacedBy(Space.xs)
+        ) {
+            Row(
+                Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.SpaceBetween
+            ) {
+                Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                    Text("Проверка перед поездкой", style = MaterialTheme.typography.titleMedium)
+                    Text(
+                        "${checkedIds.size} из ${items.size} пунктов отмечено · хранится только на устройстве",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+                OutlinedButton(
+                    onClick = {
+                        checkedIds = emptySet()
+                        SafetyChecklistRepository.clear(context)
+                    },
+                    enabled = checkedIds.isNotEmpty()
+                ) {
+                    Text("Сбросить")
+                }
+            }
+            items.forEachIndexed { index, item ->
+                Row(
+                    Modifier.fillMaxWidth(),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Checkbox(
+                        checked = item.id in checkedIds,
+                        onCheckedChange = { isChecked ->
+                            checkedIds = if (isChecked) checkedIds + item.id else checkedIds - item.id
+                            SafetyChecklistRepository.save(context, checkedIds)
+                        }
+                    )
+                    Column(
+                        Modifier.weight(1f).padding(vertical = Space.xs),
+                        verticalArrangement = Arrangement.spacedBy(2.dp)
+                    ) {
+                        Text(item.title, style = MaterialTheme.typography.bodyMedium)
+                        Text(
+                            item.detail,
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
+                }
+                if (index != items.lastIndex) HorizontalDivider()
+            }
+        }
+    }
+}
+
+@Composable
+fun ToolsScreen(modifier: Modifier = Modifier, settings: LocalSettings, tracker: LocationTracker, trackRecorder: TrackRecorder, trackRepository: TrackRepository, recoveryLoaded: Boolean, onShowTrack: (List<TrackPoint>) -> Unit, onFollowTrack: (GpxTrack) -> Unit) {
     val context = LocalContext.current
-    val currentLocation = tracker.location
+    val currentLocation = tracker.location?.takeIf { tracker.hasFreshFix() }
     val compass = rememberCompass(currentLocation)
     val heading = compass.heading
     val qiblaBearing = currentLocation?.let { Qibla.bearing(it.latitude, it.longitude).toFloat() }
@@ -44,7 +260,12 @@ fun ToolsScreen(modifier: Modifier = Modifier, settings: LocalSettings, tracker:
     PageColumn(modifier) {
         PageTitle("Утилиты", "Датчики телефона. Всё работает без интернета.")
 
+        EmergencyPanel(context, currentLocation)
+        IncidentResponsePanel()
+        PreRideSafetyChecklist(context)
+        DeviceStatusPanel(context)
         GpsPanel(settings, tracker, currentLocation, context)
+        TrackRecorderPanel(context, tracker, trackRecorder, trackRepository, recoveryLoaded, onShowTrack, onFollowTrack)
 
         // ----- Compass -----
         Panel(padding = 0.dp) {
@@ -183,6 +404,264 @@ fun ToolsScreen(modifier: Modifier = Modifier, settings: LocalSettings, tracker:
                     style = MaterialTheme.typography.bodySmall
                 )
             }
+        }
+    }
+}
+
+@Composable
+private fun TrackRecorderPanel(context: Context, tracker: LocationTracker, recorder: TrackRecorder, repository: TrackRepository, recoveryLoaded: Boolean, onShowTrack: (List<TrackPoint>) -> Unit, onFollowTrack: (GpxTrack) -> Unit) {
+    val scope = rememberCoroutineScope()
+    var savedTracks by remember { mutableStateOf(emptyList<SavedTrackInfo>()) }
+    var message by remember { mutableStateOf<String?>(null) }
+    var pendingExportId by remember { mutableStateOf<String?>(null) }
+
+    LaunchedEffect(repository) {
+        savedTracks = withContext(Dispatchers.IO) { repository.list() }
+    }
+
+    val exportLauncher = androidx.activity.compose.rememberLauncherForActivityResult(
+        ActivityResultContracts.CreateDocument("application/gpx+xml")
+    ) { uri ->
+        val id = pendingExportId
+        pendingExportId = null
+        if (uri != null && id != null) {
+            scope.launch {
+                try {
+                    val xml = withContext(Dispatchers.IO) { GpxCodec.write(repository.load(id)) }
+                    withContext(Dispatchers.IO) {
+                        context.contentResolver.openOutputStream(uri)?.use { it.write(xml.toByteArray(Charsets.UTF_8)) }
+                            ?: error("Не удалось создать GPX-файл.")
+                    }
+                    message = "GPX экспортирован."
+                } catch (error: Exception) {
+                    message = error.message ?: "Не удалось экспортировать GPX."
+                }
+            }
+        }
+    }
+    val importLauncher = androidx.activity.compose.rememberLauncherForActivityResult(
+        ActivityResultContracts.OpenDocument()
+    ) { uri ->
+        if (uri != null) {
+            scope.launch {
+                try {
+                    withContext(Dispatchers.IO) {
+                        context.contentResolver.openInputStream(uri)?.use { input ->
+                            repository.save(GpxCodec.parse(input))
+                        } ?: error("Не удалось открыть выбранный файл.")
+                    }
+                    savedTracks = withContext(Dispatchers.IO) { repository.list() }
+                    message = "GPX импортирован в локальные треки."
+                } catch (error: Exception) {
+                    message = error.message ?: "Не удалось импортировать GPX."
+                }
+            }
+        }
+    }
+
+    Panel(padding = 0.dp) {
+        Column(Modifier.fillMaxWidth().padding(Space.card), verticalArrangement = Arrangement.spacedBy(Space.xs)) {
+            Text("Запись и GPX-треки", style = MaterialTheme.typography.titleMedium)
+            OutlinedTextField(
+                value = recorder.note,
+                onValueChange = { recorder.note = it.take(1_000) },
+                modifier = Modifier.fillMaxWidth(),
+                label = { Text("Заметка к треку") },
+                maxLines = 2,
+                singleLine = false
+            )
+            Text(
+                if (recorder.recording) {
+                    "Запись активна · точек: ${recorder.points.size}"
+                } else {
+                    "Записывайте маршрут по GPS и храните GPX-файлы только на этом устройстве."
+                },
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+            if (!recoveryLoaded) {
+                Text("Проверяю незавершённую запись…", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            } else if (recorder.hasRecovery && !recorder.recording) {
+                Text(
+                    "Найдена незавершённая запись · ${recorder.points.size} точек. Можно продолжить или сохранить её.",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.tertiary
+                )
+                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(Space.xxs)) {
+                    GradientButton(
+                        text = "Продолжить",
+                        onClick = {
+                            if (!tracker.hasPermission() || !tracker.providerEnabled()) {
+                                tracker.start()
+                                message = "После разрешения геолокации нажмите «Продолжить» ещё раз."
+                            } else {
+                                tracker.start()
+                                recorder.start()
+                                message = "Запись восстановлена и продолжается."
+                            }
+                        },
+                        modifier = Modifier.weight(1f)
+                    )
+                    androidx.compose.material3.TextButton(
+                        onClick = {
+                            val recovered = recorder.finish()
+                            if (recovered != null) {
+                                scope.launch {
+                                    try {
+                                        withContext(Dispatchers.IO) {
+                                            repository.save(recovered)
+                                            repository.clearRecovery()
+                                        }
+                                        savedTracks = withContext(Dispatchers.IO) { repository.list() }
+                                        message = "Восстановленный трек сохранён."
+                                    } catch (error: Exception) {
+                                        recorder.restore(recovered)
+                                        message = error.message ?: "Не удалось сохранить восстановленный трек."
+                                    }
+                                }
+                            }
+                        },
+                        modifier = Modifier.weight(1f)
+                    ) { Text("Сохранить") }
+                }
+                androidx.compose.material3.TextButton(
+                    onClick = {
+                        recorder.cancel()
+                        scope.launch { withContext(Dispatchers.IO) { repository.clearRecovery() } }
+                        message = "Незавершённый трек удалён."
+                    },
+                    modifier = Modifier.align(Alignment.End)
+                ) { Text("Удалить запись") }
+            } else if (recorder.recording) {
+                GradientButton(
+                    text = "Завершить и сохранить трек",
+                    onClick = {
+                        val track = recorder.finish()
+                        if (track == null) {
+                            message = "Недостаточно точек GPS: нужно не менее двух."
+                        } else {
+                            scope.launch {
+                                try {
+                                    withContext(Dispatchers.IO) {
+                                        repository.save(track)
+                                        repository.clearRecovery()
+                                    }
+                                    savedTracks = withContext(Dispatchers.IO) { repository.list() }
+                                    message = "Трек сохранён на устройстве."
+                                } catch (error: Exception) {
+                                    recorder.restore(track)
+                                    message = error.message ?: "Не удалось сохранить трек."
+                                }
+                            }
+                        }
+                    }
+                )
+            } else {
+                GradientButton(
+                    text = if (!tracker.active) "Начать запись · включить GPS" else "Начать запись трека",
+                    enabled = recoveryLoaded,
+                    onClick = {
+                        if (!tracker.hasPermission() || !tracker.providerEnabled()) {
+                            tracker.start()
+                            message = "После разрешения геолокации нажмите «Начать запись» ещё раз."
+                        } else {
+                            tracker.start()
+                            recorder.start()
+                            message = "Запись начнётся после получения точного GPS-сигнала."
+                        }
+                    }
+                )
+            }
+            Row(horizontalArrangement = Arrangement.spacedBy(Space.xs)) {
+                OutlinedButton(onClick = { importLauncher.launch(arrayOf("application/gpx+xml", "application/xml", "text/xml")) }) {
+                    Text("Импорт GPX")
+                }
+            }
+            message?.let {
+                Text(it, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            }
+            if (savedTracks.isNotEmpty()) {
+                Text("Сохранённые треки", style = MaterialTheme.typography.titleSmall)
+                savedTracks.forEach { track ->
+                    Column(
+                        Modifier.fillMaxWidth(),
+                        verticalArrangement = Arrangement.spacedBy(Space.xxs)
+                    ) {
+                        Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                            Text(track.name, style = MaterialTheme.typography.bodyMedium, maxLines = 1)
+                            track.description?.takeIf { it.isNotBlank() }?.let {
+                                Text(it, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 2)
+                            }
+                            Text("${track.pointCount} точек", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                        }
+                        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(Space.xxs)) {
+                            androidx.compose.material3.TextButton(
+                                onClick = {
+                                    scope.launch {
+                                        try {
+                                            val gpx = withContext(Dispatchers.IO) { repository.load(track.id) }
+                                            val segments = gpx.segments.filter { it.size >= 2 }
+                                            val longest = segments.maxByOrNull { it.size }
+                                                ?: error("В треке нет непрерывного участка с двумя точками.")
+                                            onShowTrack(longest)
+                                            message = if (segments.size > 1) {
+                                                "На карте показан самый длинный непрерывный сегмент трека."
+                                            } else {
+                                                "Трек показан на карте."
+                                            }
+                                        } catch (error: Exception) {
+                                            message = error.message ?: "Не удалось открыть трек."
+                                        }
+                                    }
+                                },
+                                modifier = Modifier.weight(1f)
+                            ) { Text("На карте", maxLines = 1) }
+                            androidx.compose.material3.TextButton(
+                                onClick = {
+                                    scope.launch {
+                                        try {
+                                            val gpx = withContext(Dispatchers.IO) { repository.load(track.id) }
+                                            onFollowTrack(gpx)
+                                        } catch (error: Exception) {
+                                            message = error.message ?: "Не удалось открыть GPX-трек."
+                                        }
+                                    }
+                                },
+                                modifier = Modifier.weight(1f)
+                            ) { Text("Возврат", maxLines = 1) }
+                        }
+                        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(Space.xxs)) {
+                            androidx.compose.material3.TextButton(
+                                onClick = {
+                                    pendingExportId = track.id
+                                    exportLauncher.launch("${track.name.replace(Regex("[^A-Za-zА-Яа-я0-9_-]"), "_").take(40)}.gpx")
+                                },
+                                modifier = Modifier.weight(1f)
+                            ) { Text("Экспорт", maxLines = 1) }
+                            androidx.compose.material3.TextButton(
+                                onClick = {
+                                    scope.launch {
+                                        try {
+                                            withContext(Dispatchers.IO) { repository.delete(track.id) }
+                                            savedTracks = withContext(Dispatchers.IO) { repository.list() }
+                                            message = "Трек удалён."
+                                        } catch (error: Exception) {
+                                            message = error.message ?: "Не удалось удалить трек."
+                                        }
+                                    }
+                                },
+                                modifier = Modifier.weight(1f)
+                            ) { Text("Удалить", maxLines = 1) }
+                        }
+                    }
+                    HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
+                }
+            }
+            Text(
+                "Запись работает только пока приложение открыто. При сворачивании приложения GPS обновления приостанавливаются; фоновое отслеживание не используется.",
+                style = MaterialTheme.typography.labelSmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
         }
     }
 }
